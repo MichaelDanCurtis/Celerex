@@ -112,38 +112,24 @@ export function BlockSuiteEditor({ mode, workspace, docId }: BlockSuiteEditorPro
     if (!store || !ready) return;
 
     const root = store.root;
-    if (!root || !root.title) return;
+    if (!root) return;
 
-    // Set initial title from the editor
-    const initialTitle = root.title.toString();
-    if (initialTitle) {
-      updateDocTitle({ docId, title: initialTitle });
-    }
+    // Title is stored as a Yjs Text in the yBlock map
+    const yText = root.yBlock?.get("prop:title");
+    if (!yText) return;
+
+    const syncTitle = () => {
+      const newTitle = yText.toString();
+      updateDocTitle({ docId, title: newTitle });
+    };
+
+    // Set initial title
+    syncTitle();
 
     // Observe the Yjs Text object for real-time changes
-    const yText = root.title.yText;
-    if (yText) {
-      const observer = () => {
-        const newTitle = root.title.toString();
-        updateDocTitle({ docId, title: newTitle });
-      };
-      yText.observe(observer);
-      return () => {
-        yText.unobserve(observer);
-      };
-    }
-
-    // Fallback: listen via store slot if yText is not available
-    const disposable = store.slots.blockUpdated.on(
-      (event: { type: string; id: string }) => {
-        if (event.type === "update" && event.id === root.id) {
-          const newTitle = root.title.toString();
-          updateDocTitle({ docId, title: newTitle });
-        }
-      }
-    );
+    yText.observe(syncTitle);
     return () => {
-      disposable.dispose();
+      yText.unobserve(syncTitle);
     };
   }, [ready, docId, updateDocTitle]);
 
