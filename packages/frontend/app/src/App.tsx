@@ -7,6 +7,8 @@ import { themeAtom, engagementsAtom, activeDocIdAtom, genId, editorStoreAtom, op
 import { exportDocAsMarkdown } from "./utils/export";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useApiSync } from "./hooks/useApiSync";
+import { useDocRouter } from "./hooks/useDocRouter";
+import { usePersistence } from "./hooks/usePersistence";
 
 export function App() {
   const [mode, setMode] = useState<"page" | "edgeless">("page");
@@ -17,6 +19,7 @@ export function App() {
   const [, setActiveDocId] = useAtom(activeDocIdAtom);
   const openDoc = useSetAtom(openDocAtom);
 
+  usePersistence();
   const { synced, error } = useApiSync();
   const [showSynced, setShowSynced] = useState(true);
 
@@ -62,6 +65,8 @@ export function App() {
   const handleToggleSidebar = useCallback(() => {
     setSidebarCollapsed((prev) => !prev);
   }, []);
+
+  useDocRouter();
 
   useKeyboardShortcuts({
     onNewDoc: handleNewDoc,

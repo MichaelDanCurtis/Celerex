@@ -50,6 +50,29 @@ export function Sidebar({
     setActiveDocId(docId);
   }
 
+  function handleDuplicateDoc(engagementId: string, docId: string) {
+    const eng = engagements.find((e) => e.id === engagementId);
+    if (!eng) return;
+    const sourceDoc = eng.docs.find((d) => d.id === docId);
+    if (!sourceDoc) return;
+    const newDocId = genId("doc");
+    const sourceIndex = eng.docs.indexOf(sourceDoc);
+    setEngagements((prev) =>
+      prev.map((e) => {
+        if (e.id !== engagementId) return e;
+        const docs = [...e.docs];
+        docs.splice(sourceIndex + 1, 0, {
+          id: newDocId,
+          title: `${sourceDoc.title || "Untitled"} (copy)`,
+          engagementId,
+          createdAt: Date.now(),
+        });
+        return { ...e, docs };
+      })
+    );
+    openDoc(newDocId);
+  }
+
   function handleDeleteDoc(engagementId: string, docId: string) {
     setEngagements((prev) =>
       prev.map((eng) =>
@@ -177,6 +200,7 @@ export function Sidebar({
                     }}
                     onCreateDoc={(title) => handleCreateDoc(eng.id, title)}
                     onDeleteDoc={(docId) => handleDeleteDoc(eng.id, docId)}
+                    onDuplicateDoc={(docId) => handleDuplicateDoc(eng.id, docId)}
                     onDeleteEngagement={() => handleDeleteEngagement(eng.id)}
                     onRename={(newName) =>
                       handleRenameEngagement(eng.id, newName)
@@ -250,6 +274,7 @@ function EngagementGroup({
   onSelectDoc,
   onCreateDoc,
   onDeleteDoc,
+  onDuplicateDoc,
   onDeleteEngagement,
   onRename,
   onReorderDocs,
@@ -259,6 +284,7 @@ function EngagementGroup({
   onSelectDoc: (id: string) => void;
   onCreateDoc: (title: string) => void;
   onDeleteDoc: (docId: string) => void;
+  onDuplicateDoc: (docId: string) => void;
   onDeleteEngagement: () => void;
   onRename: (newName: string) => void;
   onReorderDocs: (fromIndex: number, toIndex: number) => void;
@@ -390,6 +416,7 @@ function EngagementGroup({
               active={doc.id === activeDocId}
               onClick={() => onSelectDoc(doc.id)}
               onDelete={() => onDeleteDoc(doc.id)}
+              onDuplicate={() => onDuplicateDoc(doc.id)}
               draggable
               isDragging={draggingDocId === doc.id}
               dropIndicator={
@@ -505,6 +532,7 @@ function SidebarItem({
   muted,
   onClick,
   onDelete,
+  onDuplicate,
   draggable: isDraggable,
   isDragging,
   dropIndicator,
@@ -519,6 +547,7 @@ function SidebarItem({
   muted?: boolean;
   onClick?: () => void;
   onDelete?: () => void;
+  onDuplicate?: () => void;
   draggable?: boolean;
   isDragging?: boolean;
   dropIndicator?: "above" | "below";
@@ -564,6 +593,25 @@ function SidebarItem({
       <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {label}
       </span>
+      {onDuplicate && hovered && (
+        <span
+          onClick={(e) => {
+            e.stopPropagation();
+            onDuplicate();
+          }}
+          style={{
+            marginLeft: 4,
+            fontSize: 14,
+            lineHeight: 1,
+            opacity: 0.5,
+            cursor: "pointer",
+            flexShrink: 0,
+          }}
+          title="Duplicate"
+        >
+          ⊕
+        </span>
+      )}
       {onDelete && hovered && (
         <span
           onClick={(e) => {
