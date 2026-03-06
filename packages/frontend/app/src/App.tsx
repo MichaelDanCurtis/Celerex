@@ -1,11 +1,18 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useAtom } from "jotai";
 import { Sidebar } from "./layout/Sidebar";
 import { EditorArea } from "./layout/EditorArea";
 import { AIPanel } from "./layout/AIPanel";
+import { themeAtom } from "./state/atoms";
 
 export function App() {
   const [mode, setMode] = useState<"page" | "edgeless">("page");
   const [aiPanelOpen, setAiPanelOpen] = useState(true);
+  const [theme, setTheme] = useAtom(themeAtom);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
 
   return (
     <div style={{ display: "flex", height: "100vh", width: "100vw" }}>
@@ -16,6 +23,8 @@ export function App() {
           onModeChange={setMode}
           aiPanelOpen={aiPanelOpen}
           onToggleAI={() => setAiPanelOpen(!aiPanelOpen)}
+          theme={theme}
+          onToggleTheme={() => setTheme(theme === "light" ? "dark" : "light")}
         />
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
           <EditorArea mode={mode} />
@@ -31,11 +40,15 @@ function Toolbar({
   onModeChange,
   aiPanelOpen,
   onToggleAI,
+  theme,
+  onToggleTheme,
 }: {
   mode: "page" | "edgeless";
   onModeChange: (mode: "page" | "edgeless") => void;
   aiPanelOpen: boolean;
   onToggleAI: () => void;
+  theme: "light" | "dark";
+  onToggleTheme: () => void;
 }) {
   return (
     <div
@@ -83,6 +96,23 @@ function Toolbar({
       </div>
 
       <div style={{ flex: 1 }} />
+
+      <button
+        onClick={onToggleTheme}
+        style={{
+          padding: "6px 12px",
+          borderRadius: 6,
+          border: "1px solid var(--celerex-border)",
+          cursor: "pointer",
+          fontSize: 13,
+          fontWeight: 500,
+          background: "transparent",
+          color: "var(--celerex-text-secondary)",
+        }}
+        title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+      >
+        {theme === "light" ? "\u263D Dark" : "\u2600 Light"}
+      </button>
 
       <button
         onClick={onToggleAI}

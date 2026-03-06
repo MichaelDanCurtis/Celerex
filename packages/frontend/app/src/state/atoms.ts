@@ -36,8 +36,45 @@ const defaultEngagement: Engagement = {
   ],
 };
 
+export const themeAtom = atom<"light" | "dark">("light");
+
 export const engagementsAtom = atom<Engagement[]>([defaultEngagement]);
 export const activeDocIdAtom = atom<string>(defaultDocId);
+
+// Write atom: update a doc's title by docId
+export const updateDocTitleAtom = atom(
+  null,
+  (get, set, { docId, title }: { docId: string; title: string }) => {
+    const engagements = get(engagementsAtom);
+    set(
+      engagementsAtom,
+      engagements.map((eng) => ({
+        ...eng,
+        docs: eng.docs.map((d) =>
+          d.id === docId ? { ...d, title } : d
+        ),
+      }))
+    );
+  }
+);
+
+// Chat messages
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  timestamp: number;
+}
+
+export const chatMessagesAtom = atom<ChatMessage[]>([
+  {
+    id: "msg:welcome",
+    role: "system",
+    content:
+      "Welcome to Celerex. I'm your AI co-pilot with full context of your workspace — documents, diagrams, agent outputs, and more.\n\nHow can I help?",
+    timestamp: Date.now(),
+  },
+]);
 
 // Derived: get the active doc's metadata
 export const activeDocAtom = atom<DocMeta | undefined>((get) => {

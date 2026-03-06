@@ -11,6 +11,17 @@
   --celerex-ai-panel-width: 340px;
 }
 
+:root[data-theme="dark"] {
+  --celerex-bg-primary: #1a1a1a;
+  --celerex-bg-secondary: #2a2a2a;
+  --celerex-bg-sidebar: #1e1e1e;
+  --celerex-text-primary: #e5e5e5;
+  --celerex-text-secondary: #9ca3af;
+  --celerex-border: #333333;
+  --celerex-accent: #60a5fa;
+  --celerex-accent-hover: #3b82f6;
+}
+
 * {
   margin: 0;
   padding: 0;

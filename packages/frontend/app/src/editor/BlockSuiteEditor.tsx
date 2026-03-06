@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { useSetAtom } from "jotai";
 import type { TestWorkspace } from "@blocksuite/affine/store/test";
+import { updateDocTitleAtom } from "../state/atoms";
 
 interface BlockSuiteEditorProps {
   mode: "page" | "edgeless";
@@ -26,8 +28,10 @@ export function BlockSuiteEditor({ mode, workspace, docId }: BlockSuiteEditorPro
   // This ref is exclusively for the web component — React never renders children into it
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<any>(null);
+  const storeRef = useRef<any>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const updateDocTitle = useSetAtom(updateDocTitleAtom);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -55,6 +59,8 @@ export function BlockSuiteEditor({ mode, workspace, docId }: BlockSuiteEditorPro
         if (!store.root) {
           initEmptyDoc(store);
         }
+
+        storeRef.current = store;
 
         const editor = document.createElement("affine-editor-container") as any;
         editor.autofocus = true;
@@ -86,6 +92,7 @@ export function BlockSuiteEditor({ mode, workspace, docId }: BlockSuiteEditorPro
     return () => {
       cancelled = true;
       editorRef.current = null;
+      storeRef.current = null;
       // Directly clean up DOM — this div is not managed by React
       while (container.firstChild) {
         container.removeChild(container.firstChild);
@@ -98,6 +105,47 @@ export function BlockSuiteEditor({ mode, workspace, docId }: BlockSuiteEditorPro
       editorRef.current.mode = mode;
     }
   }, [mode, ready]);
+
+  // Sync editor title changes back to Jotai state
+  useEffect(() => {
+    const store = storeRef.current;
+    if (!store || !ready) return;
+
+    const root = store.root;
+    if (!root || !root.title) return;
+
+    // Set initial title from the editor
+    const initialTitle = root.title.toString();
+    if (initialTitle) {
+      updateDocTitle({ docId, title: initialTitle });
+    }
+
+    // Observe the Yjs Text object for real-time changes
+    const yText = root.title.yText;
+    if (yText) {
+      const observer = () => {
+        const newTitle = root.title.toString();
+        updateDocTitle({ docId, title: newTitle });
+      };
+      yText.observe(observer);
+      return () => {
+        yText.unobserve(observer);
+      };
+    }
+
+    // Fallback: listen via store slot if yText is not available
+    const disposable = store.slots.blockUpdated.on(
+      (event: { type: string; id: string }) => {
+        if (event.type === "update" && event.id === root.id) {
+          const newTitle = root.title.toString();
+          updateDocTitle({ docId, title: newTitle });
+        }
+      }
+    );
+    return () => {
+      disposable.dispose();
+    };
+  }, [ready, docId, updateDocTitle]);
 
   return (
     <div style={{ width: "100%", height: "100%", position: "relative" }}>
