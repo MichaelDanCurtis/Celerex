@@ -7,7 +7,13 @@ import {
   type Engagement,
 } from "../state/atoms";
 
-export function Sidebar() {
+export function Sidebar({
+  collapsed,
+  onToggleCollapse,
+}: {
+  collapsed: boolean;
+  onToggleCollapse: () => void;
+}) {
   const [engagements, setEngagements] = useAtom(engagementsAtom);
   const [activeDocId, setActiveDocId] = useAtom(activeDocIdAtom);
   const [creatingEngagement, setCreatingEngagement] = useState(false);
@@ -65,7 +71,8 @@ export function Sidebar() {
   return (
     <aside
       style={{
-        width: "var(--celerex-sidebar-width)",
+        width: collapsed ? 48 : "var(--celerex-sidebar-width)",
+        minWidth: collapsed ? 48 : undefined,
         height: "100%",
         borderRight: "1px solid var(--celerex-border)",
         background: "var(--celerex-bg-sidebar)",
@@ -79,63 +86,83 @@ export function Sidebar() {
           height: 48,
           display: "flex",
           alignItems: "center",
-          padding: "0 16px",
+          justifyContent: collapsed ? "center" : "flex-start",
+          padding: collapsed ? 0 : "0 16px",
           borderBottom: "1px solid var(--celerex-border)",
           fontWeight: 700,
           fontSize: 16,
           letterSpacing: "-0.02em",
         }}
       >
-        Celerex
+        {collapsed ? "C" : "Celerex"}
       </div>
 
-      <div style={{ flex: 1, padding: "12px 8px", overflow: "auto" }}>
-        <SidebarSection title="Engagements">
-          {engagements.map((eng) => (
-            <EngagementGroup
-              key={eng.id}
-              engagement={eng}
-              activeDocId={activeDocId}
-              onSelectDoc={setActiveDocId}
-              onCreateDoc={(title) => handleCreateDoc(eng.id, title)}
-              onDeleteDoc={(docId) => handleDeleteDoc(eng.id, docId)}
-              onDeleteEngagement={() => handleDeleteEngagement(eng.id)}
-            />
-          ))}
-          {creatingEngagement ? (
-            <InlineInput
-              placeholder="Engagement name..."
-              onSubmit={handleCreateEngagement}
-              onCancel={() => setCreatingEngagement(false)}
-            />
-          ) : (
-            <SidebarItem
-              label="+ New Engagement"
-              muted
-              onClick={() => setCreatingEngagement(true)}
-            />
-          )}
-        </SidebarSection>
+      {!collapsed && (
+        <div style={{ flex: 1, padding: "12px 8px", overflow: "auto" }}>
+          <SidebarSection title="Engagements">
+            {engagements.map((eng) => (
+              <EngagementGroup
+                key={eng.id}
+                engagement={eng}
+                activeDocId={activeDocId}
+                onSelectDoc={setActiveDocId}
+                onCreateDoc={(title) => handleCreateDoc(eng.id, title)}
+                onDeleteDoc={(docId) => handleDeleteDoc(eng.id, docId)}
+                onDeleteEngagement={() => handleDeleteEngagement(eng.id)}
+              />
+            ))}
+            {creatingEngagement ? (
+              <InlineInput
+                placeholder="Engagement name..."
+                onSubmit={handleCreateEngagement}
+                onCancel={() => setCreatingEngagement(false)}
+              />
+            ) : (
+              <SidebarItem
+                label="+ New Engagement"
+                muted
+                onClick={() => setCreatingEngagement(true)}
+              />
+            )}
+          </SidebarSection>
 
-        <SidebarSection title="Agents">
-          <SidebarItem label="Agent Dashboard" />
-          <SidebarItem label="Task Queue" />
-        </SidebarSection>
+          <SidebarSection title="Agents">
+            <SidebarItem label="Agent Dashboard" />
+            <SidebarItem label="Task Queue" />
+          </SidebarSection>
 
-        <SidebarSection title="Plugins">
-          <SidebarItem label="Plugin Manager" />
-        </SidebarSection>
-      </div>
+          <SidebarSection title="Plugins">
+            <SidebarItem label="Plugin Manager" />
+          </SidebarSection>
+        </div>
+      )}
+      {collapsed && <div style={{ flex: 1 }} />}
 
       <div
+        onClick={onToggleCollapse}
         style={{
-          padding: "12px 16px",
+          padding: collapsed ? "8px 0" : "8px 16px",
+          borderTop: "1px solid var(--celerex-border)",
+          fontSize: 14,
+          color: "var(--celerex-text-secondary)",
+          cursor: "pointer",
+          textAlign: collapsed ? "center" : "right",
+          userSelect: "none",
+        }}
+        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      >
+        {collapsed ? "\u00BB" : "\u00AB"}
+      </div>
+      <div
+        style={{
+          padding: collapsed ? "4px 0" : "4px 16px",
           borderTop: "1px solid var(--celerex-border)",
           fontSize: 12,
           color: "var(--celerex-text-secondary)",
+          textAlign: collapsed ? "center" : "left",
         }}
       >
-        Celerex v0.1.0
+        {collapsed ? "v0.1" : "Celerex v0.1.0"}
       </div>
     </aside>
   );

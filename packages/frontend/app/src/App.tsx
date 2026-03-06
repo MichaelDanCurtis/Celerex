@@ -9,6 +9,7 @@ import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 export function App() {
   const [mode, setMode] = useState<"page" | "edgeless">("page");
   const [aiPanelOpen, setAiPanelOpen] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [theme, setTheme] = useAtom(themeAtom);
   const [engagements, setEngagements] = useAtom(engagementsAtom);
   const [, setActiveDocId] = useAtom(activeDocIdAtom);
@@ -45,15 +46,20 @@ export function App() {
     setTheme((prev) => (prev === "light" ? "dark" : "light"));
   }, [setTheme]);
 
+  const handleToggleSidebar = useCallback(() => {
+    setSidebarCollapsed((prev) => !prev);
+  }, []);
+
   useKeyboardShortcuts({
     onNewDoc: handleNewDoc,
     onToggleAI: handleToggleAI,
     onToggleTheme: handleToggleTheme,
+    onToggleSidebar: handleToggleSidebar,
   });
 
   return (
     <div style={{ display: "flex", height: "100vh", width: "100vw" }}>
-      <Sidebar />
+      <Sidebar collapsed={sidebarCollapsed} onToggleCollapse={handleToggleSidebar} />
       <main style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <Toolbar
           mode={mode}

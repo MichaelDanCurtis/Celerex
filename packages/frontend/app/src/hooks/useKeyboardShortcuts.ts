@@ -4,6 +4,7 @@ export interface KeyboardShortcutCallbacks {
   onNewDoc?: () => void;
   onToggleAI?: () => void;
   onToggleTheme?: () => void;
+  onToggleSidebar?: () => void;
 }
 
 export function useKeyboardShortcuts(callbacks: KeyboardShortcutCallbacks) {
@@ -22,6 +23,13 @@ export function useKeyboardShortcuts(callbacks: KeyboardShortcutCallbacks) {
       if (mod && e.key === "\\" && !e.shiftKey) {
         e.preventDefault();
         callbacks.onToggleAI?.();
+        return;
+      }
+
+      // Cmd/Ctrl+B — toggle sidebar
+      if (mod && e.key === "b" && !e.shiftKey) {
+        e.preventDefault();
+        callbacks.onToggleSidebar?.();
         return;
       }
 
