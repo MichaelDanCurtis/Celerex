@@ -1,18 +1,55 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAtom } from "jotai";
 import { Sidebar } from "./layout/Sidebar";
 import { EditorArea } from "./layout/EditorArea";
 import { AIPanel } from "./layout/AIPanel";
-import { themeAtom } from "./state/atoms";
+import { themeAtom, engagementsAtom, activeDocIdAtom, genId } from "./state/atoms";
+import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 
 export function App() {
   const [mode, setMode] = useState<"page" | "edgeless">("page");
   const [aiPanelOpen, setAiPanelOpen] = useState(true);
   const [theme, setTheme] = useAtom(themeAtom);
+  const [engagements, setEngagements] = useAtom(engagementsAtom);
+  const [, setActiveDocId] = useAtom(activeDocIdAtom);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+
+  const handleNewDoc = useCallback(() => {
+    const eng = engagements[0];
+    if (!eng) return;
+    const docId = genId("doc");
+    setEngagements((prev) =>
+      prev.map((e) =>
+        e.id === eng.id
+          ? {
+              ...e,
+              docs: [
+                ...e.docs,
+                { id: docId, title: "Untitled", engagementId: eng.id, createdAt: Date.now() },
+              ],
+            }
+          : e
+      )
+    );
+    setActiveDocId(docId);
+  }, [engagements, setEngagements, setActiveDocId]);
+
+  const handleToggleAI = useCallback(() => {
+    setAiPanelOpen((prev) => !prev);
+  }, []);
+
+  const handleToggleTheme = useCallback(() => {
+    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  }, [setTheme]);
+
+  useKeyboardShortcuts({
+    onNewDoc: handleNewDoc,
+    onToggleAI: handleToggleAI,
+    onToggleTheme: handleToggleTheme,
+  });
 
   return (
     <div style={{ display: "flex", height: "100vh", width: "100vw" }}>
@@ -22,9 +59,9 @@ export function App() {
           mode={mode}
           onModeChange={setMode}
           aiPanelOpen={aiPanelOpen}
-          onToggleAI={() => setAiPanelOpen(!aiPanelOpen)}
+          onToggleAI={handleToggleAI}
           theme={theme}
-          onToggleTheme={() => setTheme(theme === "light" ? "dark" : "light")}
+          onToggleTheme={handleToggleTheme}
         />
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
           <EditorArea mode={mode} />

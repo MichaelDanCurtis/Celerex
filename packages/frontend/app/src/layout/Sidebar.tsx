@@ -213,6 +213,7 @@ function EngagementGroup({
               label={doc.title || "Untitled"}
               active={doc.id === activeDocId}
               onClick={() => onSelectDoc(doc.id)}
+              onDelete={() => onDeleteDoc(doc.id)}
             />
           ))}
           {creatingDoc && (
@@ -311,16 +312,24 @@ function SidebarItem({
   active,
   muted,
   onClick,
+  onDelete,
 }: {
   label: string;
   active?: boolean;
   muted?: boolean;
   onClick?: () => void;
+  onDelete?: () => void;
 }) {
+  const [hovered, setHovered] = useState(false);
+
   return (
     <div
       onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
+        display: "flex",
+        alignItems: "center",
         padding: "5px 8px",
         borderRadius: 6,
         fontSize: 13,
@@ -334,7 +343,28 @@ function SidebarItem({
         fontWeight: active ? 500 : 400,
       }}
     >
-      {label}
+      <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {label}
+      </span>
+      {onDelete && hovered && (
+        <span
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          style={{
+            marginLeft: 4,
+            fontSize: 14,
+            lineHeight: 1,
+            opacity: 0.5,
+            cursor: "pointer",
+            flexShrink: 0,
+          }}
+          title="Delete"
+        >
+          ×
+        </span>
+      )}
     </div>
   );
 }
