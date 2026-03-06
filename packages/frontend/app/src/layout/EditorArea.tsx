@@ -4,6 +4,7 @@ import { BlockSuiteEditor } from "../editor/BlockSuiteEditor";
 import { getWorkspace } from "../editor/setup";
 import { activeDocIdAtom } from "../state/atoms";
 import { TabBar } from "./TabBar";
+import { StatusBar } from "./StatusBar";
 
 interface EditorAreaProps {
   mode: "page" | "edgeless";
@@ -47,6 +48,7 @@ export function EditorArea({ mode }: EditorAreaProps) {
       <div style={{ flex: 1, overflow: "hidden" }}>
         <BlockSuiteEditor mode={mode} workspace={workspace} docId={activeDocId} />
       </div>
+      <StatusBar mode={mode} />
     </div>
   );
 }

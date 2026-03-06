@@ -104,3 +104,19 @@ export async function deleteDoc(
     method: "DELETE",
   });
 }
+
+// ---- Chat endpoint -------------------------------------------------------
+
+export async function sendChatMessage(message: string, context?: string): Promise<string> {
+  const res = await fetch(`${API_BASE}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, context }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Chat request failed" }));
+    throw new Error(err.error || "Chat request failed");
+  }
+  const data = await res.json();
+  return data.reply;
+}

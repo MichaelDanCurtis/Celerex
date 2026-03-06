@@ -71,6 +71,14 @@ export function Sidebar({
     setEngagements((prev) => prev.filter((e) => e.id !== engId));
   }
 
+  function handleRenameEngagement(engId: string, newName: string) {
+    setEngagements((prev) =>
+      prev.map((eng) =>
+        eng.id === engId ? { ...eng, name: newName } : eng
+      )
+    );
+  }
+
   function handleReorderDocs(engagementId: string, fromIndex: number, toIndex: number) {
     if (fromIndex === toIndex) return;
     setEngagements((prev) =>
@@ -170,6 +178,9 @@ export function Sidebar({
                     onCreateDoc={(title) => handleCreateDoc(eng.id, title)}
                     onDeleteDoc={(docId) => handleDeleteDoc(eng.id, docId)}
                     onDeleteEngagement={() => handleDeleteEngagement(eng.id)}
+                    onRename={(newName) =>
+                      handleRenameEngagement(eng.id, newName)
+                    }
                     onReorderDocs={(fromIndex, toIndex) =>
                       handleReorderDocs(eng.id, fromIndex, toIndex)
                     }
@@ -240,6 +251,7 @@ function EngagementGroup({
   onCreateDoc,
   onDeleteDoc,
   onDeleteEngagement,
+  onRename,
   onReorderDocs,
 }: {
   engagement: Engagement;
@@ -248,10 +260,12 @@ function EngagementGroup({
   onCreateDoc: (title: string) => void;
   onDeleteDoc: (docId: string) => void;
   onDeleteEngagement: () => void;
+  onRename: (newName: string) => void;
   onReorderDocs: (fromIndex: number, toIndex: number) => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [creatingDoc, setCreatingDoc] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [dragOverDocId, setDragOverDocId] = useState<string | null>(null);
   const [dragPosition, setDragPosition] = useState<"above" | "below">("above");
   const [draggingDocId, setDraggingDocId] = useState<string | null>(null);
@@ -328,9 +342,28 @@ function EngagementGroup({
         >
           {collapsed ? "▸" : "▾"}
         </span>
-        <span onClick={() => setCollapsed(!collapsed)} style={{ flex: 1 }}>
-          {engagement.name}
-        </span>
+        {editing ? (
+          <InlineInput
+            placeholder="Engagement name..."
+            defaultValue={engagement.name}
+            onSubmit={(val) => {
+              onRename(val);
+              setEditing(false);
+            }}
+            onCancel={() => setEditing(false)}
+          />
+        ) : (
+          <span
+            onClick={() => setCollapsed(!collapsed)}
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              setEditing(true);
+            }}
+            style={{ flex: 1 }}
+          >
+            {engagement.name}
+          </span>
+        )}
         <span
           onClick={(e) => {
             e.stopPropagation();
@@ -387,23 +420,29 @@ function EngagementGroup({
 
 function InlineInput({
   placeholder,
+  defaultValue,
   onSubmit,
   onCancel,
 }: {
   placeholder: string;
+  defaultValue?: string;
   onSubmit: (value: string) => void;
   onCancel: () => void;
 }) {
   const ref = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    ref.current?.focus();
+    if (ref.current) {
+      ref.current.focus();
+      if (defaultValue) ref.current.select();
+    }
   }, []);
 
   return (
     <input
       ref={ref}
       placeholder={placeholder}
+      defaultValue={defaultValue}
       style={{
         display: "block",
         width: "100%",

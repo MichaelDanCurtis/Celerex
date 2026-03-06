@@ -3,9 +3,11 @@ import { useAtom, useAtomValue } from "jotai";
 import {
   chatMessagesAtom,
   activeDocAtom,
+  editorStoreAtom,
   genId,
   type ChatMessage,
 } from "../state/atoms";
+import { sendChatMessage } from "../api/client";
 
 function formatTime(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString([], {
@@ -79,8 +81,10 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 
 export function AIPanel() {
   const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useAtom(chatMessagesAtom);
   const activeDoc = useAtomValue(activeDocAtom);
+  const editorStore = useAtomValue(editorStoreAtom);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -89,9 +93,9 @@ export function AIPanel() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback(async () => {
     const trimmed = input.trim();
-    if (!trimmed) return;
+    if (!trimmed || loading) return;
 
     const userMessage: ChatMessage = {
       id: genId("msg"),
@@ -102,22 +106,62 @@ export function AIPanel() {
 
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
+    setLoading(true);
 
     // Focus back on textarea
     textareaRef.current?.focus();
 
-    // Mock assistant response after 500ms
-    const docTitle = activeDoc?.title ?? "your document";
-    setTimeout(() => {
+    // Build document context from the editor store
+    let docContext: string | undefined;
+    try {
+      if (editorStore) {
+        const root = editorStore.document;
+        if (root && Array.isArray(root)) {
+          const textParts: string[] = [];
+          for (const block of root) {
+            if (block.content && Array.isArray(block.content)) {
+              for (const inline of block.content) {
+                if (typeof inline === "string") {
+                  textParts.push(inline);
+                } else if (inline?.text) {
+                  textParts.push(inline.text);
+                }
+              }
+            }
+          }
+          const fullText = textParts.join(" ").trim();
+          if (fullText) {
+            docContext = fullText.slice(0, 500);
+          }
+        }
+      }
+    } catch {
+      // Ignore context extraction errors
+    }
+
+    try {
+      const reply = await sendChatMessage(trimmed, docContext);
       const assistantMessage: ChatMessage = {
         id: genId("msg"),
         role: "assistant",
-        content: `I'm not connected to an AI backend yet, but I can see you're working on "${docTitle}". This is where contextual AI assistance will appear.`,
+        content: reply,
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, assistantMessage]);
-    }, 500);
-  }, [input, activeDoc, setMessages]);
+    } catch {
+      // Fall back to mock response when backend is unavailable
+      const docTitle = activeDoc?.title ?? "your document";
+      const assistantMessage: ChatMessage = {
+        id: genId("msg"),
+        role: "assistant",
+        content: `I'm not connected to an AI backend yet, but I can see you're working on "${docTitle}". This is where contextual AI assistance will appear once the backend is running.`,
+        timestamp: Date.now(),
+      };
+      setMessages((prev) => [...prev, assistantMessage]);
+    } finally {
+      setLoading(false);
+    }
+  }, [input, loading, activeDoc, editorStore, setMessages]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -129,7 +173,7 @@ export function AIPanel() {
     [handleSend]
   );
 
-  const isEmpty = input.trim().length === 0;
+  const isDisabled = input.trim().length === 0 || loading;
 
   return (
     <aside
@@ -174,6 +218,21 @@ export function AIPanel() {
         {messages.map((msg) => (
           <MessageBubble key={msg.id} message={msg} />
         ))}
+        {loading && (
+          <div
+            style={{
+              alignSelf: "flex-start",
+              background: "var(--celerex-bg-secondary)",
+              color: "var(--celerex-text-secondary)",
+              borderRadius: 8,
+              padding: "8px 12px",
+              fontSize: 13,
+              lineHeight: 1.5,
+            }}
+          >
+            ...
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
 
@@ -212,19 +271,19 @@ export function AIPanel() {
             }}
           />
           <button
-            disabled={isEmpty}
+            disabled={isDisabled}
             onClick={handleSend}
             style={{
               padding: "8px 16px",
               borderRadius: 8,
               border: "none",
-              background: isEmpty ? "var(--celerex-border)" : "var(--celerex-accent)",
+              background: isDisabled ? "var(--celerex-border)" : "var(--celerex-accent)",
               color: "#fff",
-              cursor: isEmpty ? "not-allowed" : "pointer",
+              cursor: isDisabled ? "not-allowed" : "pointer",
               fontSize: 13,
               fontWeight: 500,
               whiteSpace: "nowrap",
-              opacity: isEmpty ? 0.6 : 1,
+              opacity: isDisabled ? 0.6 : 1,
               transition: "background 0.15s, opacity 0.15s",
             }}
           >
