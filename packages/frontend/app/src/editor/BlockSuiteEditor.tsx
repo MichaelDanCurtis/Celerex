@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSetAtom } from "jotai";
 import type { TestWorkspace } from "@blocksuite/affine/store/test";
-import { updateDocTitleAtom } from "../state/atoms";
+import { updateDocTitleAtom, editorStoreAtom } from "../state/atoms";
 
 interface BlockSuiteEditorProps {
   mode: "page" | "edgeless";
@@ -32,6 +32,7 @@ export function BlockSuiteEditor({ mode, workspace, docId }: BlockSuiteEditorPro
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const updateDocTitle = useSetAtom(updateDocTitleAtom);
+  const setEditorStore = useSetAtom(editorStoreAtom);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -61,6 +62,7 @@ export function BlockSuiteEditor({ mode, workspace, docId }: BlockSuiteEditorPro
         }
 
         storeRef.current = store;
+        setEditorStore(store);
 
         const editor = document.createElement("affine-editor-container") as any;
         editor.autofocus = true;
@@ -93,6 +95,7 @@ export function BlockSuiteEditor({ mode, workspace, docId }: BlockSuiteEditorPro
       cancelled = true;
       editorRef.current = null;
       storeRef.current = null;
+      setEditorStore(null);
       // Directly clean up DOM — this div is not managed by React
       while (container.firstChild) {
         container.removeChild(container.firstChild);

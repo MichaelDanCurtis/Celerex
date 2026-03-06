@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
-import { useAtom } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { Sidebar } from "./layout/Sidebar";
 import { EditorArea } from "./layout/EditorArea";
 import { AIPanel } from "./layout/AIPanel";
-import { themeAtom, engagementsAtom, activeDocIdAtom, genId } from "./state/atoms";
+import { themeAtom, engagementsAtom, activeDocIdAtom, genId, editorStoreAtom } from "./state/atoms";
+import { exportDocAsMarkdown } from "./utils/export";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
+import { useApiSync } from "./hooks/useApiSync";
 
 export function App() {
   const [mode, setMode] = useState<"page" | "edgeless">("page");
@@ -13,6 +15,16 @@ export function App() {
   const [theme, setTheme] = useAtom(themeAtom);
   const [engagements, setEngagements] = useAtom(engagementsAtom);
   const [, setActiveDocId] = useAtom(activeDocIdAtom);
+
+  const { synced, error } = useApiSync();
+  const [showSynced, setShowSynced] = useState(true);
+
+  useEffect(() => {
+    if (synced && !error) {
+      const timer = setTimeout(() => setShowSynced(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [synced, error]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -68,6 +80,15 @@ export function App() {
           onToggleAI={handleToggleAI}
           theme={theme}
           onToggleTheme={handleToggleTheme}
+          syncStatus={
+            error
+              ? "offline"
+              : synced
+                ? showSynced
+                  ? "synced"
+                  : "hidden"
+                : "syncing"
+          }
         />
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
           <EditorArea mode={mode} />
@@ -85,6 +106,7 @@ function Toolbar({
   onToggleAI,
   theme,
   onToggleTheme,
+  syncStatus,
 }: {
   mode: "page" | "edgeless";
   onModeChange: (mode: "page" | "edgeless") => void;
@@ -92,7 +114,10 @@ function Toolbar({
   onToggleAI: () => void;
   theme: "light" | "dark";
   onToggleTheme: () => void;
+  syncStatus: "syncing" | "synced" | "offline" | "hidden";
 }) {
+  const editorStore = useAtomValue(editorStoreAtom);
+
   return (
     <div
       style={{
@@ -138,6 +163,45 @@ function Toolbar({
         </button>
       </div>
 
+      {syncStatus !== "hidden" && (
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            fontSize: 11,
+            color:
+              syncStatus === "offline"
+                ? "#d97706"
+                : syncStatus === "synced"
+                  ? "#22c55e"
+                  : "#9ca3af",
+            opacity: syncStatus === "synced" ? 0.8 : 0.7,
+            transition: "opacity 0.3s ease",
+            userSelect: "none",
+          }}
+        >
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              background:
+                syncStatus === "offline"
+                  ? "#d97706"
+                  : syncStatus === "synced"
+                    ? "#22c55e"
+                    : "#9ca3af",
+            }}
+          />
+          {syncStatus === "syncing"
+            ? "Syncing\u2026"
+            : syncStatus === "synced"
+              ? "Synced"
+              : "Offline"}
+        </span>
+      )}
+
       <div style={{ flex: 1 }} />
 
       <button
@@ -155,6 +219,25 @@ function Toolbar({
         title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
       >
         {theme === "light" ? "\u263D Dark" : "\u2600 Light"}
+      </button>
+
+      <button
+        onClick={() => editorStore && exportDocAsMarkdown(editorStore)}
+        disabled={!editorStore}
+        style={{
+          padding: "6px 12px",
+          borderRadius: 6,
+          border: "1px solid var(--celerex-border)",
+          cursor: editorStore ? "pointer" : "not-allowed",
+          fontSize: 13,
+          fontWeight: 500,
+          background: "transparent",
+          color: "var(--celerex-text-secondary)",
+          opacity: editorStore ? 1 : 0.5,
+        }}
+        title="Export document as Markdown"
+      >
+        Export
       </button>
 
       <button

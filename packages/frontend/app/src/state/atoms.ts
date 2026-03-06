@@ -38,6 +38,8 @@ const defaultEngagement: Engagement = {
 
 export const themeAtom = atom<"light" | "dark">("light");
 
+export const editorStoreAtom = atom<any>(null);
+
 export const engagementsAtom = atom<Engagement[]>([defaultEngagement]);
 export const activeDocIdAtom = atom<string>(defaultDocId);
 

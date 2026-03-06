@@ -17,6 +17,7 @@ export function Sidebar({
   const [engagements, setEngagements] = useAtom(engagementsAtom);
   const [activeDocId, setActiveDocId] = useAtom(activeDocIdAtom);
   const [creatingEngagement, setCreatingEngagement] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   function handleCreateEngagement(name: string) {
     const eng: Engagement = {
@@ -98,19 +99,65 @@ export function Sidebar({
       </div>
 
       {!collapsed && (
+        <div style={{ padding: "8px 8px 0" }}>
+          <input
+            type="text"
+            placeholder="Search docs..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setSearchQuery("");
+            }}
+            style={{
+              display: "block",
+              width: "100%",
+              height: 30,
+              padding: "0 8px",
+              fontSize: 12,
+              border: "1px solid var(--celerex-border)",
+              borderRadius: 6,
+              outline: "none",
+              background: "var(--celerex-bg-primary)",
+              color: "var(--celerex-text-primary)",
+              boxSizing: "border-box",
+            }}
+          />
+        </div>
+      )}
+      {!collapsed && (
         <div style={{ flex: 1, padding: "12px 8px", overflow: "auto" }}>
           <SidebarSection title="Engagements">
-            {engagements.map((eng) => (
-              <EngagementGroup
-                key={eng.id}
-                engagement={eng}
-                activeDocId={activeDocId}
-                onSelectDoc={setActiveDocId}
-                onCreateDoc={(title) => handleCreateDoc(eng.id, title)}
-                onDeleteDoc={(docId) => handleDeleteDoc(eng.id, docId)}
-                onDeleteEngagement={() => handleDeleteEngagement(eng.id)}
-              />
-            ))}
+            {engagements
+              .filter((eng) => {
+                if (!searchQuery.trim()) return true;
+                const q = searchQuery.trim().toLowerCase();
+                return eng.docs.some((d) =>
+                  (d.title || "Untitled").toLowerCase().includes(q)
+                );
+              })
+              .map((eng) => {
+                const filteredDocs = searchQuery.trim()
+                  ? eng.docs.filter((d) =>
+                      (d.title || "Untitled")
+                        .toLowerCase()
+                        .includes(searchQuery.trim().toLowerCase())
+                    )
+                  : eng.docs;
+                return (
+                  <EngagementGroup
+                    key={eng.id}
+                    engagement={{ ...eng, docs: filteredDocs }}
+                    activeDocId={activeDocId}
+                    onSelectDoc={(id) => {
+                      setActiveDocId(id);
+                      setSearchQuery("");
+                    }}
+                    onCreateDoc={(title) => handleCreateDoc(eng.id, title)}
+                    onDeleteDoc={(docId) => handleDeleteDoc(eng.id, docId)}
+                    onDeleteEngagement={() => handleDeleteEngagement(eng.id)}
+                  />
+                );
+              })}
             {creatingEngagement ? (
               <InlineInput
                 placeholder="Engagement name..."
