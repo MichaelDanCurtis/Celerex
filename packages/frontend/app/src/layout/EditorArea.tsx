@@ -3,6 +3,7 @@ import { useAtomValue } from "jotai";
 import { BlockSuiteEditor } from "../editor/BlockSuiteEditor";
 import { getWorkspace } from "../editor/setup";
 import { activeDocIdAtom } from "../state/atoms";
+import { TabBar } from "./TabBar";
 
 interface EditorAreaProps {
   mode: "page" | "edgeless";
@@ -36,11 +37,16 @@ export function EditorArea({ mode }: EditorAreaProps) {
         flex: 1,
         height: "100%",
         overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
         background:
           mode === "edgeless" ? "#f8f9fa" : "var(--celerex-bg-primary)",
       }}
     >
-      <BlockSuiteEditor mode={mode} workspace={workspace} docId={activeDocId} />
+      <TabBar />
+      <div style={{ flex: 1, overflow: "hidden" }}>
+        <BlockSuiteEditor mode={mode} workspace={workspace} docId={activeDocId} />
+      </div>
     </div>
   );
 }

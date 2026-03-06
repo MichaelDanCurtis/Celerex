@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { useAtom, useAtomValue } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { Sidebar } from "./layout/Sidebar";
 import { EditorArea } from "./layout/EditorArea";
 import { AIPanel } from "./layout/AIPanel";
-import { themeAtom, engagementsAtom, activeDocIdAtom, genId, editorStoreAtom } from "./state/atoms";
+import { themeAtom, engagementsAtom, activeDocIdAtom, genId, editorStoreAtom, openDocAtom } from "./state/atoms";
 import { exportDocAsMarkdown } from "./utils/export";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useApiSync } from "./hooks/useApiSync";
@@ -15,6 +15,7 @@ export function App() {
   const [theme, setTheme] = useAtom(themeAtom);
   const [engagements, setEngagements] = useAtom(engagementsAtom);
   const [, setActiveDocId] = useAtom(activeDocIdAtom);
+  const openDoc = useSetAtom(openDocAtom);
 
   const { synced, error } = useApiSync();
   const [showSynced, setShowSynced] = useState(true);
@@ -47,8 +48,8 @@ export function App() {
           : e
       )
     );
-    setActiveDocId(docId);
-  }, [engagements, setEngagements, setActiveDocId]);
+    openDoc(docId);
+  }, [engagements, setEngagements, openDoc]);
 
   const handleToggleAI = useCallback(() => {
     setAiPanelOpen((prev) => !prev);

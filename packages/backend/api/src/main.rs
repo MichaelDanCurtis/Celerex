@@ -8,6 +8,7 @@ use axum::{
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::env;
 use std::sync::{Arc, Mutex};
 use tower_http::cors::CorsLayer;
 use uuid::Uuid;
@@ -39,6 +40,12 @@ struct DocMeta {
 #[derive(Debug, Deserialize)]
 struct CreateEngagement {
     name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ChatRequest {
+    message: String,
+    context: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -97,6 +104,8 @@ async fn main() -> anyhow::Result<()> {
             "/api/engagements/{id}/docs/{doc_id}",
             delete(delete_doc),
         )
+        // Chat proxy
+        .route("/api/chat", post(chat_handler))
         .with_state(state)
         .layer(CorsLayer::permissive());
 
@@ -245,4 +254,89 @@ async fn delete_doc(
     };
     let removed = engagement.docs.remove(pos);
     (StatusCode::OK, Json(json!(removed)))
+}
+
+// ---------------------------------------------------------------------------
+// Chat proxy handler
+// ---------------------------------------------------------------------------
+
+async fn chat_handler(Json(body): Json<ChatRequest>) -> impl IntoResponse {
+    let api_key = match env::var("ANTHROPIC_API_KEY") {
+        Ok(key) => key,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "ANTHROPIC_API_KEY is not set" })),
+            );
+        }
+    };
+
+    let user_content = match &body.context {
+        Some(ctx) if !ctx.is_empty() => format!("{}\n\n{}", ctx, body.message),
+        _ => body.message.clone(),
+    };
+
+    let request_body = json!({
+        "model": "claude-sonnet-4-20250514",
+        "max_tokens": 1024,
+        "messages": [
+            {
+                "role": "user",
+                "content": user_content
+            }
+        ]
+    });
+
+    let client = reqwest::Client::new();
+    let response = match client
+        .post("https://api.anthropic.com/v1/messages")
+        .header("x-api-key", &api_key)
+        .header("anthropic-version", "2023-06-01")
+        .header("content-type", "application/json")
+        .json(&request_body)
+        .send()
+        .await
+    {
+        Ok(resp) => resp,
+        Err(e) => {
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({ "error": format!("Failed to reach Anthropic API: {}", e) })),
+            );
+        }
+    };
+
+    let status = response.status();
+    let resp_body: Value = match response.json().await {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({ "error": format!("Failed to parse Anthropic response: {}", e) })),
+            );
+        }
+    };
+
+    if !status.is_success() {
+        let api_error = resp_body
+            .get("error")
+            .and_then(|e| e.get("message"))
+            .and_then(|m| m.as_str())
+            .unwrap_or("Unknown Anthropic API error");
+        return (
+            StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY),
+            Json(json!({ "error": api_error })),
+        );
+    }
+
+    let reply = resp_body
+        .get("content")
+        .and_then(|c| c.as_array())
+        .and_then(|arr| arr.first())
+        .and_then(|block| block.get("text"))
+        .and_then(|t| t.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    (StatusCode::OK, Json(json!({ "reply": reply })))
 }

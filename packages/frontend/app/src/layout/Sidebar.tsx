@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from "react";
-import { useAtom, useAtomValue } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import {
   engagementsAtom,
   activeDocIdAtom,
+  openDocAtom,
   genId,
   type Engagement,
 } from "../state/atoms";
@@ -16,6 +17,7 @@ export function Sidebar({
 }) {
   const [engagements, setEngagements] = useAtom(engagementsAtom);
   const [activeDocId, setActiveDocId] = useAtom(activeDocIdAtom);
+  const openDoc = useSetAtom(openDocAtom);
   const [creatingEngagement, setCreatingEngagement] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -67,6 +69,19 @@ export function Sidebar({
     const eng = engagements.find((e) => e.id === engId);
     if (!eng || eng.docs.length > 0) return; // Only delete empty engagements
     setEngagements((prev) => prev.filter((e) => e.id !== engId));
+  }
+
+  function handleReorderDocs(engagementId: string, fromIndex: number, toIndex: number) {
+    if (fromIndex === toIndex) return;
+    setEngagements((prev) =>
+      prev.map((eng) => {
+        if (eng.id !== engagementId) return eng;
+        const docs = [...eng.docs];
+        const [moved] = docs.splice(fromIndex, 1);
+        docs.splice(toIndex, 0, moved);
+        return { ...eng, docs };
+      })
+    );
   }
 
   return (
@@ -149,12 +164,15 @@ export function Sidebar({
                     engagement={{ ...eng, docs: filteredDocs }}
                     activeDocId={activeDocId}
                     onSelectDoc={(id) => {
-                      setActiveDocId(id);
+                      openDoc(id);
                       setSearchQuery("");
                     }}
                     onCreateDoc={(title) => handleCreateDoc(eng.id, title)}
                     onDeleteDoc={(docId) => handleDeleteDoc(eng.id, docId)}
                     onDeleteEngagement={() => handleDeleteEngagement(eng.id)}
+                    onReorderDocs={(fromIndex, toIndex) =>
+                      handleReorderDocs(eng.id, fromIndex, toIndex)
+                    }
                   />
                 );
               })}
@@ -222,6 +240,7 @@ function EngagementGroup({
   onCreateDoc,
   onDeleteDoc,
   onDeleteEngagement,
+  onReorderDocs,
 }: {
   engagement: Engagement;
   activeDocId: string;
@@ -229,9 +248,59 @@ function EngagementGroup({
   onCreateDoc: (title: string) => void;
   onDeleteDoc: (docId: string) => void;
   onDeleteEngagement: () => void;
+  onReorderDocs: (fromIndex: number, toIndex: number) => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [creatingDoc, setCreatingDoc] = useState(false);
+  const [dragOverDocId, setDragOverDocId] = useState<string | null>(null);
+  const [dragPosition, setDragPosition] = useState<"above" | "below">("above");
+  const [draggingDocId, setDraggingDocId] = useState<string | null>(null);
+
+  function handleDragStart(e: React.DragEvent, docId: string, index: number) {
+    setDraggingDocId(docId);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", JSON.stringify({
+      docId,
+      engagementId: engagement.id,
+      fromIndex: index,
+    }));
+  }
+
+  function handleDragOver(e: React.DragEvent, docId: string) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    setDragOverDocId(docId);
+    setDragPosition(e.clientY < midY ? "above" : "below");
+  }
+
+  function handleDragLeave() {
+    setDragOverDocId(null);
+  }
+
+  function handleDrop(e: React.DragEvent, targetIndex: number) {
+    e.preventDefault();
+    setDragOverDocId(null);
+    setDraggingDocId(null);
+    try {
+      const data = JSON.parse(e.dataTransfer.getData("text/plain"));
+      if (data.engagementId !== engagement.id) return;
+      const fromIndex: number = data.fromIndex;
+      let toIndex = targetIndex;
+      if (dragPosition === "below") toIndex += 1;
+      // Adjust if moving downward
+      if (fromIndex < toIndex) toIndex -= 1;
+      onReorderDocs(fromIndex, toIndex);
+    } catch {
+      // ignore invalid data
+    }
+  }
+
+  function handleDragEnd() {
+    setDraggingDocId(null);
+    setDragOverDocId(null);
+  }
 
   return (
     <div style={{ marginBottom: 4 }}>
@@ -281,13 +350,23 @@ function EngagementGroup({
       </div>
       {!collapsed && (
         <div style={{ paddingLeft: 12 }}>
-          {engagement.docs.map((doc) => (
+          {engagement.docs.map((doc, index) => (
             <SidebarItem
               key={doc.id}
               label={doc.title || "Untitled"}
               active={doc.id === activeDocId}
               onClick={() => onSelectDoc(doc.id)}
               onDelete={() => onDeleteDoc(doc.id)}
+              draggable
+              isDragging={draggingDocId === doc.id}
+              dropIndicator={
+                dragOverDocId === doc.id ? dragPosition : undefined
+              }
+              onDragStart={(e) => handleDragStart(e, doc.id, index)}
+              onDragOver={(e) => handleDragOver(e, doc.id)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, index)}
+              onDragEnd={handleDragEnd}
             />
           ))}
           {creatingDoc && (
@@ -387,12 +466,28 @@ function SidebarItem({
   muted,
   onClick,
   onDelete,
+  draggable: isDraggable,
+  isDragging,
+  dropIndicator,
+  onDragStart,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  onDragEnd,
 }: {
   label: string;
   active?: boolean;
   muted?: boolean;
   onClick?: () => void;
   onDelete?: () => void;
+  draggable?: boolean;
+  isDragging?: boolean;
+  dropIndicator?: "above" | "below";
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDragLeave?: () => void;
+  onDrop?: (e: React.DragEvent) => void;
+  onDragEnd?: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
 
@@ -401,13 +496,19 @@ function SidebarItem({
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      draggable={isDraggable}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
       style={{
         display: "flex",
         alignItems: "center",
         padding: "5px 8px",
         borderRadius: 6,
         fontSize: 13,
-        cursor: onClick ? "pointer" : "default",
+        cursor: isDraggable ? "grab" : onClick ? "pointer" : "default",
         background: active ? "rgba(59, 130, 246, 0.08)" : "transparent",
         color: active
           ? "var(--celerex-accent)"
@@ -415,6 +516,10 @@ function SidebarItem({
             ? "var(--celerex-text-secondary)"
             : "var(--celerex-text-primary)",
         fontWeight: active ? 500 : 400,
+        opacity: isDragging ? 0.5 : 1,
+        borderTop: dropIndicator === "above" ? "2px solid #3b82f6" : "2px solid transparent",
+        borderBottom: dropIndicator === "below" ? "2px solid #3b82f6" : "2px solid transparent",
+        transition: "opacity 0.15s ease",
       }}
     >
       <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

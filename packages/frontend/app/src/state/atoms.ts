@@ -43,6 +43,38 @@ export const editorStoreAtom = atom<any>(null);
 export const engagementsAtom = atom<Engagement[]>([defaultEngagement]);
 export const activeDocIdAtom = atom<string>(defaultDocId);
 
+// Tracks which docs are open as tabs
+export const openDocIdsAtom = atom<string[]>([defaultDocId]);
+
+// Write atom: open a doc as a tab and make it active
+export const openDocAtom = atom(
+  null,
+  (get, set, docId: string) => {
+    const openIds = get(openDocIdsAtom);
+    if (!openIds.includes(docId)) {
+      set(openDocIdsAtom, [...openIds, docId]);
+    }
+    set(activeDocIdAtom, docId);
+  }
+);
+
+// Write atom: close a tab and switch to a neighbor if it was active
+export const closeDocAtom = atom(
+  null,
+  (get, set, docId: string) => {
+    const openIds = get(openDocIdsAtom);
+    if (openIds.length <= 1) return; // don't close the last tab
+    const idx = openIds.indexOf(docId);
+    const next = openIds.filter((id) => id !== docId);
+    set(openDocIdsAtom, next);
+    if (get(activeDocIdAtom) === docId) {
+      // switch to the next tab, or previous if it was last
+      const newIdx = Math.min(idx, next.length - 1);
+      set(activeDocIdAtom, next[newIdx]);
+    }
+  }
+);
+
 // Write atom: update a doc's title by docId
 export const updateDocTitleAtom = atom(
   null,
