@@ -1,10 +1,11 @@
 import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import {
-  allAgents,
+  getAllAgents,
   CATEGORIES,
   type AgentDef,
   type CategoryId,
 } from "../data/agents";
+import { SUBCATEGORIES, classifyAgent } from "../data/subcategories";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                             */
@@ -144,18 +145,26 @@ export function PipelineEditor() {
   /* ---- palette state ---- */
   const [paletteSearch, setPaletteSearch] = useState("");
   const [collapsedCats, setCollapsedCats] = useState<Record<string, boolean>>({});
+  const [collapsedSubcats, setCollapsedSubcats] = useState<Record<string, boolean>>({});
   const [loadMoreCounts, setLoadMoreCounts] = useState<Record<string, number>>({});
 
   /* ---- run simulation ---- */
   const [running, setRunning] = useState(false);
   const [litNodeId, setLitNodeId] = useState<string | null>(null);
 
-  /* ---- palette agents grouped by category ---- */
-  const agentsByCategory = useMemo(() => {
+  /* ---- palette agents grouped by category → subcategory ---- */
+  const paletteData = useMemo(() => {
     const q = paletteSearch.toLowerCase().trim();
-    const groups: Record<string, AgentDef[]> = {};
+    const allAgents = getAllAgents();
+    const result: {
+      catId: CategoryId;
+      catLabel: string;
+      subcats: { id: string; label: string; agents: AgentDef[] }[];
+      totalCount: number;
+    }[] = [];
+
     for (const cat of CATEGORIES) {
-      groups[cat.id] = allAgents.filter((a) => {
+      const catAgents = allAgents.filter((a) => {
         if (a.category !== cat.id) return false;
         if (!q) return true;
         return (
@@ -163,8 +172,41 @@ export function PipelineEditor() {
           a.description.toLowerCase().includes(q)
         );
       });
+
+      const subs = SUBCATEGORIES[cat.id] ?? [];
+      const bySubcat = new Map<string, AgentDef[]>();
+      const otherAgents: AgentDef[] = [];
+
+      for (const agent of catAgents) {
+        const subId = classifyAgent(agent.name, agent.description, cat.id);
+        if (subId === "other") {
+          otherAgents.push(agent);
+        } else {
+          if (!bySubcat.has(subId)) bySubcat.set(subId, []);
+          bySubcat.get(subId)!.push(agent);
+        }
+      }
+
+      const subcats: { id: string; label: string; agents: AgentDef[] }[] = [];
+      for (const sub of subs) {
+        const agents = bySubcat.get(sub.id);
+        if (agents && agents.length > 0) {
+          subcats.push({ id: sub.id, label: sub.label, agents });
+        }
+      }
+      if (otherAgents.length > 0) {
+        subcats.push({ id: "other", label: "Other", agents: otherAgents });
+      }
+
+      result.push({
+        catId: cat.id,
+        catLabel: cat.label,
+        subcats,
+        totalCount: catAgents.length,
+      });
     }
-    return groups;
+
+    return result;
   }, [paletteSearch]);
 
   /* ---- keyboard delete ---- */
@@ -536,25 +578,20 @@ export function PipelineEditor() {
             />
           </div>
 
-          {/* categories */}
+          {/* categories → subcategories */}
           <div style={{ flex: 1, overflowY: "auto", padding: "0 12px 12px" }}>
-            {CATEGORIES.map((cat) => {
-              const agents = agentsByCategory[cat.id] ?? [];
-              const collapsed = !!collapsedCats[cat.id];
-              const limit =
-                (loadMoreCounts[cat.id] ?? 1) * PALETTE_LIMIT;
-              const visible = agents.slice(0, limit);
-              const hasMore = agents.length > limit;
-              const color = CATEGORY_COLORS[cat.id as PipelineNode["agentCategory"]];
+            {paletteData.map((catGroup) => {
+              const collapsed = !!collapsedCats[catGroup.catId];
+              const color = CATEGORY_COLORS[catGroup.catId as PipelineNode["agentCategory"]];
 
               return (
-                <div key={cat.id} style={{ marginTop: 10 }}>
+                <div key={catGroup.catId} style={{ marginTop: 10 }}>
                   {/* category header */}
                   <button
                     onClick={() =>
                       setCollapsedCats((p) => ({
                         ...p,
-                        [cat.id]: !p[cat.id],
+                        [catGroup.catId]: !p[catGroup.catId],
                       }))
                     }
                     style={{
@@ -584,7 +621,7 @@ export function PipelineEditor() {
                       }}
                     />
                     <span style={{ flex: 1, textAlign: "left" }}>
-                      {cat.label}
+                      {catGroup.catLabel}
                     </span>
                     <span
                       style={{
@@ -593,7 +630,7 @@ export function PipelineEditor() {
                         fontWeight: 500,
                       }}
                     >
-                      {agents.length}
+                      {catGroup.totalCount}
                     </span>
                     <span
                       style={{
@@ -608,71 +645,133 @@ export function PipelineEditor() {
                     </span>
                   </button>
 
-                  {!collapsed && (
-                    <div
-                      style={{
-                        display: "flex",
-                        flexWrap: "wrap",
-                        gap: 4,
-                        marginTop: 4,
-                      }}
-                    >
-                      {visible.map((agent) => (
-                        <div
-                          key={agent.id}
-                          draggable
-                          onDragStart={(e) => {
-                            e.dataTransfer.setData(
-                              "application/celerex-agent",
-                              JSON.stringify(agent)
-                            );
-                            e.dataTransfer.effectAllowed = "copy";
-                          }}
-                          title={agent.description}
-                          style={{
-                            padding: "3px 9px",
-                            borderRadius: 12,
-                            fontSize: 11,
-                            fontWeight: 500,
-                            background: color + "1a",
-                            color: color,
-                            border: `1px solid ${color}44`,
-                            cursor: "grab",
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            maxWidth: "100%",
-                            userSelect: "none",
-                          }}
-                        >
-                          {agent.name}
-                        </div>
-                      ))}
+                  {!collapsed &&
+                    catGroup.subcats.map((subcat) => {
+                      const subKey = `${catGroup.catId}:${subcat.id}`;
+                      const subCollapsed = !!collapsedSubcats[subKey];
+                      const limit =
+                        (loadMoreCounts[subKey] ?? 1) * PALETTE_LIMIT;
+                      const visible = subcat.agents.slice(0, limit);
+                      const hasMore = subcat.agents.length > limit;
 
-                      {hasMore && (
-                        <button
-                          onClick={() =>
-                            setLoadMoreCounts((p) => ({
-                              ...p,
-                              [cat.id]: (p[cat.id] ?? 1) + 1,
-                            }))
-                          }
-                          style={{
-                            padding: "3px 10px",
-                            borderRadius: 12,
-                            fontSize: 11,
-                            fontWeight: 600,
-                            background: "var(--celerex-bg-primary)",
-                            color: "var(--celerex-text-secondary)",
-                            border: "1px solid var(--celerex-border)",
-                            cursor: "pointer",
-                          }}
-                        >
-                          +{agents.length - limit} more
-                        </button>
-                      )}
-                    </div>
-                  )}
+                      return (
+                        <div key={subcat.id} style={{ marginLeft: 10, marginTop: 6 }}>
+                          {/* subcategory header */}
+                          <button
+                            onClick={() =>
+                              setCollapsedSubcats((p) => ({
+                                ...p,
+                                [subKey]: !p[subKey],
+                              }))
+                            }
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 5,
+                              width: "100%",
+                              background: "none",
+                              border: "none",
+                              cursor: "pointer",
+                              padding: "2px 0",
+                              color: "var(--celerex-text-secondary)",
+                              fontSize: 11,
+                              fontWeight: 600,
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: 8,
+                                transform: subCollapsed
+                                  ? "rotate(-90deg)"
+                                  : "rotate(0deg)",
+                                transition: "transform 0.15s",
+                              }}
+                            >
+                              \u25BC
+                            </span>
+                            <span style={{ flex: 1, textAlign: "left" }}>
+                              {subcat.label}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: 10,
+                                color: "var(--celerex-text-secondary)",
+                                opacity: 0.7,
+                              }}
+                            >
+                              {subcat.agents.length}
+                            </span>
+                          </button>
+
+                          {!subCollapsed && (
+                            <div
+                              style={{
+                                display: "flex",
+                                flexWrap: "wrap",
+                                gap: 4,
+                                marginTop: 3,
+                                marginLeft: 4,
+                              }}
+                            >
+                              {visible.map((agent) => (
+                                <div
+                                  key={agent.id}
+                                  draggable
+                                  onDragStart={(e) => {
+                                    e.dataTransfer.setData(
+                                      "application/celerex-agent",
+                                      JSON.stringify(agent)
+                                    );
+                                    e.dataTransfer.effectAllowed = "copy";
+                                  }}
+                                  title={agent.description}
+                                  style={{
+                                    padding: "3px 9px",
+                                    borderRadius: 12,
+                                    fontSize: 11,
+                                    fontWeight: 500,
+                                    background: color + "1a",
+                                    color: color,
+                                    border: `1px solid ${color}44`,
+                                    cursor: "grab",
+                                    whiteSpace: "nowrap",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    maxWidth: "100%",
+                                    userSelect: "none",
+                                  }}
+                                >
+                                  {agent.name}
+                                </div>
+                              ))}
+
+                              {hasMore && (
+                                <button
+                                  onClick={() =>
+                                    setLoadMoreCounts((p) => ({
+                                      ...p,
+                                      [subKey]: (p[subKey] ?? 1) + 1,
+                                    }))
+                                  }
+                                  style={{
+                                    padding: "3px 10px",
+                                    borderRadius: 12,
+                                    fontSize: 11,
+                                    fontWeight: 600,
+                                    background: "var(--celerex-bg-primary)",
+                                    color: "var(--celerex-text-secondary)",
+                                    border: "1px solid var(--celerex-border)",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  +{subcat.agents.length - limit} more
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                 </div>
               );
             })}
