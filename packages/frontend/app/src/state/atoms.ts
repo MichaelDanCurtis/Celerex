@@ -38,6 +38,9 @@ const defaultEngagement: Engagement = {
 
 export const themeAtom = atom<"light" | "dark">("light");
 
+export const accentColorAtom = atom<string>("#3b82f6");
+export const fontSizeAtom = atom<"small" | "medium" | "large">("medium");
+
 export const activeViewAtom = atom<"editor" | "agent-dashboard" | "task-queue" | "plugin-manager" | "settings" | "timeline">("editor");
 
 export const editorStoreAtom = atom<any>(null);

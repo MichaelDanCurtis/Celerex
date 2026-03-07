@@ -1,13 +1,20 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAtom } from "jotai";
-import { themeAtom } from "../state/atoms";
+import { themeAtom, accentColorAtom, fontSizeAtom } from "../state/atoms";
 
 const ACCENT_COLORS = [
   { name: "Blue", value: "#3b82f6" },
   { name: "Purple", value: "#8b5cf6" },
   { name: "Green", value: "#22c55e" },
   { name: "Orange", value: "#f97316" },
+  { name: "Pink", value: "#ec4899" },
   { name: "Red", value: "#ef4444" },
+];
+
+const FONT_SIZES = [
+  { label: "Small", value: "small" as const, px: "13px" },
+  { label: "Medium", value: "medium" as const, px: "14px" },
+  { label: "Large", value: "large" as const, px: "16px" },
 ];
 
 const SHORTCUTS = [
@@ -59,8 +66,20 @@ function ToggleSwitch({
 
 export function Settings() {
   const [theme, setTheme] = useAtom(themeAtom);
-  const [selectedAccent, setSelectedAccent] = useState(0);
+  const [accentColor, setAccentColor] = useAtom(accentColorAtom);
+  const [fontSize, setFontSize] = useAtom(fontSizeAtom);
   const [defaultMode, setDefaultMode] = useState<"page" | "edgeless">("page");
+
+  // Apply accent color CSS custom property
+  useEffect(() => {
+    document.documentElement.style.setProperty("--celerex-accent", accentColor);
+  }, [accentColor]);
+
+  // Apply font size CSS custom property
+  useEffect(() => {
+    const px = FONT_SIZES.find((f) => f.value === fontSize)?.px ?? "14px";
+    document.documentElement.style.setProperty("--celerex-font-size", px);
+  }, [fontSize]);
   const [autoSave, setAutoSave] = useState(true);
   const [spellCheck, setSpellCheck] = useState(true);
   const [aiUrl, setAiUrl] = useState("http://localhost:3001");
@@ -151,30 +170,81 @@ export function Settings() {
           <div style={{ ...rowStyle, alignItems: "center" }}>
             <span style={labelStyle}>Accent Color</span>
             <div style={{ display: "flex", gap: 8 }}>
-              {ACCENT_COLORS.map((color, i) => (
-                <button
-                  key={color.name}
-                  onClick={() => setSelectedAccent(i)}
-                  title={color.name}
-                  style={{
-                    width: 24,
-                    height: 24,
-                    borderRadius: "50%",
-                    border:
-                      selectedAccent === i
+              {ACCENT_COLORS.map((color) => {
+                const isActive = accentColor === color.value;
+                return (
+                  <button
+                    key={color.name}
+                    onClick={() => setAccentColor(color.value)}
+                    title={color.name}
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: "50%",
+                      border: isActive
                         ? "2px solid var(--celerex-text-primary)"
                         : "2px solid transparent",
-                    background: color.value,
-                    cursor: "pointer",
-                    padding: 0,
-                    outline: "none",
-                    boxShadow:
-                      selectedAccent === i
+                      background: color.value,
+                      cursor: "pointer",
+                      padding: 0,
+                      outline: "none",
+                      boxShadow: isActive
                         ? `0 0 0 2px var(--celerex-bg-primary), 0 0 0 4px ${color.value}`
                         : "none",
-                    transition: "box-shadow 0.15s ease",
+                      transition: "box-shadow 0.15s ease",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      position: "relative",
+                    }}
+                  >
+                    {isActive && (
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="#fff"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{ ...rowStyle, alignItems: "center" }}>
+            <span style={labelStyle}>Font Size</span>
+            <div style={{ display: "flex", gap: 4 }}>
+              {FONT_SIZES.map((fs) => (
+                <button
+                  key={fs.value}
+                  onClick={() => setFontSize(fs.value)}
+                  style={{
+                    padding: "5px 14px",
+                    borderRadius: 6,
+                    border: "1px solid var(--celerex-border)",
+                    cursor: "pointer",
+                    fontSize: 13,
+                    fontWeight: 500,
+                    background:
+                      fontSize === fs.value
+                        ? "var(--celerex-accent)"
+                        : "transparent",
+                    color:
+                      fontSize === fs.value
+                        ? "#fff"
+                        : "var(--celerex-text-secondary)",
+                    transition: "background 0.15s ease, color 0.15s ease",
                   }}
-                />
+                >
+                  {fs.label}
+                </button>
               ))}
             </div>
           </div>

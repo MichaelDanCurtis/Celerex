@@ -61,14 +61,21 @@ export function StatusBar({ mode }: StatusBarProps) {
       <div style={{ display: "flex", gap: 12 }}>
         {store ? (
           <>
-            <span>{stats.words} words</span>
-            <span>{stats.chars} characters</span>
+            <span>
+              {stats.words} words · {stats.chars} characters · ~
+              {Math.max(1, Math.ceil(stats.words / 200))} min read
+            </span>
           </>
         ) : (
           <span>No document</span>
         )}
       </div>
-      <div>{modeLabel}</div>
+      <div style={{ display: "flex", gap: 12 }}>
+        {store && (
+          <span style={{ opacity: 0.7 }}>Edited recently</span>
+        )}
+        <span>{modeLabel}</span>
+      </div>
     </div>
   );
 }

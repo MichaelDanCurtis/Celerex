@@ -35,6 +35,7 @@ import { TrashBin } from "./layout/TrashBin";
 import { TimelineView } from "./layout/TimelineView";
 import { FindReplace } from "./layout/FindReplace";
 import { ExportDialog } from "./layout/ExportDialog";
+import { OnboardingDialog } from "./layout/OnboardingDialog";
 
 export function App() {
   const [mode, setMode] = useState<"page" | "edgeless">("page");
@@ -53,6 +54,7 @@ export function App() {
   const [trashOpen, setTrashOpen] = useState(false);
   const [findReplaceOpen, setFindReplaceOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem("celerex-onboarded"));
   const preFocusStateRef = useRef<{ sidebarCollapsed: boolean; aiPanelOpen: boolean } | null>(null);
   const editorStore = useAtomValue(editorStoreAtom);
   const [theme, setTheme] = useAtom(themeAtom);
@@ -332,6 +334,14 @@ export function App() {
         open={exportDialogOpen}
         onClose={() => setExportDialogOpen(false)}
       />
+      {showOnboarding && (
+        <OnboardingDialog
+          onComplete={() => {
+            localStorage.setItem("celerex-onboarded", "true");
+            setShowOnboarding(false);
+          }}
+        />
+      )}
     </div>
   );
 }
