@@ -14,6 +14,7 @@ import {
 } from "../data/agents";
 import { AgentEditorDialog } from "./AgentEditorDialog";
 import { SUBCATEGORIES, classifyAgent, getSubcategoryLabel } from "../data/subcategories";
+import { getToolById, TOOL_CATEGORIES } from "../data/tools";
 
 const statusColors: Record<AgentDef["status"], string> = {
   active: "#22c55e",
@@ -480,6 +481,41 @@ export function AgentDashboard() {
                 }}
               >
                 {selectedAgent.systemPrompt}
+              </div>
+            )}
+
+            {/* Tools */}
+            {selectedAgent.tools && selectedAgent.tools.length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--celerex-text-secondary)", marginBottom: 4 }}>
+                  Tools ({selectedAgent.tools.length}):
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                  {selectedAgent.tools.map((toolId) => {
+                    const t = getToolById(toolId);
+                    const catColor = TOOL_CATEGORIES.find((c) => c.id === t?.category)?.color ?? "#6b7280";
+                    return (
+                      <span
+                        key={toolId}
+                        title={t?.description}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 3,
+                          padding: "2px 8px",
+                          borderRadius: 10,
+                          fontSize: 11,
+                          fontWeight: 500,
+                          background: catColor + "22",
+                          color: catColor,
+                          border: `1px solid ${catColor}44`,
+                        }}
+                      >
+                        {t?.name ?? toolId}
+                      </span>
+                    );
+                  })}
+                </div>
               </div>
             )}
 

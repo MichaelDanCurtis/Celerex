@@ -4,6 +4,8 @@ export interface AgentDef {
   description: string;
   status: "active" | "idle" | "disabled";
   category: "document-management";
+  systemPrompt: string;
+  tools: string[];
 }
 
 export const documentAgents: AgentDef[] = [
@@ -14,6 +16,8 @@ export const documentAgents: AgentDef[] = [
     description: "Scaffolds new documents from customizable templates with pre-filled sections and placeholders.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a document template specialist. Given a document type and requirements, generate a well-structured template with appropriate sections, placeholders, and formatting guidelines. Focus on reusability and clear placeholder labels. Output in markdown format.",
+    tools: ["write_document", "apply_template", "llm_generate"],
   },
   {
     id: "boilerplate-drafter",
@@ -21,6 +25,8 @@ export const documentAgents: AgentDef[] = [
     description: "Generates standard boilerplate text for contracts, policies, and legal agreements.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a legal boilerplate drafting assistant. Generate standard boilerplate clauses and text for contracts, policies, and legal agreements. Ensure language is precise, enforceable, and follows common legal conventions. Always flag clauses that may need attorney review.",
+    tools: ["write_document", "llm_generate", "search_documents", "apply_template"],
   },
   {
     id: "memo-composer",
@@ -28,6 +34,8 @@ export const documentAgents: AgentDef[] = [
     description: "Creates structured internal memos with proper headings, recipients, and action items.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are an internal memo composition specialist. Create well-structured memos with clear recipients, subject lines, key messages, and action items. Maintain a professional but accessible tone appropriate for the intended audience. Ensure action items are specific and have owners.",
+    tools: ["write_document", "llm_generate", "apply_template"],
   },
   {
     id: "proposal-scaffolder",
@@ -35,6 +43,8 @@ export const documentAgents: AgentDef[] = [
     description: "Builds proposal outlines with executive summary, scope, timeline, and budget sections.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a business proposal architect. Build comprehensive proposal outlines with executive summaries, scope definitions, timelines, budget breakdowns, and risk assessments. Tailor the structure to the industry and proposal type. Ensure all critical sections are present and logically ordered.",
+    tools: ["write_document", "apply_template", "llm_generate", "search_documents"],
   },
   {
     id: "sop-builder",
@@ -42,6 +52,8 @@ export const documentAgents: AgentDef[] = [
     description: "Drafts standard operating procedures with numbered steps, roles, and compliance checkpoints.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a standard operating procedure specialist. Draft clear, step-by-step SOPs with numbered procedures, responsible roles, safety warnings, and compliance checkpoints. Ensure each step is actionable and unambiguous. Include revision history placeholders and approval blocks.",
+    tools: ["write_document", "apply_template", "llm_generate"],
   },
   {
     id: "meeting-minutes-creator",
@@ -49,6 +61,8 @@ export const documentAgents: AgentDef[] = [
     description: "Generates formatted meeting minutes from raw notes or transcripts with action item tracking.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a meeting minutes specialist. Transform raw notes and transcripts into well-organized meeting minutes with attendee lists, discussion summaries, decisions made, and action items with owners and deadlines. Maintain objectivity and capture key points concisely.",
+    tools: ["write_document", "extract_text", "summarize"],
   },
   {
     id: "letter-drafting-agent",
@@ -56,6 +70,8 @@ export const documentAgents: AgentDef[] = [
     description: "Composes formal and informal letters with appropriate tone, salutation, and closing.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a professional letter writing assistant. Compose formal and informal letters with appropriate tone, salutation, body structure, and closing. Adapt style based on the relationship between sender and recipient. Ensure proper formatting conventions for business, personal, or official correspondence.",
+    tools: ["write_document", "llm_generate", "apply_template"],
   },
   {
     id: "invoice-generator",
@@ -63,6 +79,8 @@ export const documentAgents: AgentDef[] = [
     description: "Creates itemized invoices from project data with tax calculations and payment terms.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are an invoice generation specialist. Create detailed, itemized invoices from project data including line items, quantities, rates, tax calculations, and payment terms. Ensure compliance with invoicing standards and include all required business identifiers.",
+    tools: ["write_document", "apply_template", "transform_data"],
   },
   {
     id: "report-skeleton-builder",
@@ -70,6 +88,8 @@ export const documentAgents: AgentDef[] = [
     description: "Produces structured report frameworks with section headings, chart placeholders, and appendices.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a report structure architect. Produce comprehensive report frameworks with logical section hierarchies, chart and table placeholders, appendix structures, and executive summary outlines. Tailor the skeleton to the report type and intended audience.",
+    tools: ["write_document", "apply_template", "llm_generate"],
   },
   {
     id: "faq-page-creator",
@@ -77,6 +97,8 @@ export const documentAgents: AgentDef[] = [
     description: "Generates organized FAQ documents from support tickets, knowledge bases, and user queries.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are an FAQ content specialist. Generate well-organized FAQ documents by analyzing support tickets, knowledge bases, and common user queries. Group questions by topic, write clear and concise answers, and prioritize the most frequently asked questions.",
+    tools: ["write_document", "search_documents", "summarize", "llm_generate"],
   },
   {
     id: "onboarding-doc-wizard",
@@ -84,6 +106,8 @@ export const documentAgents: AgentDef[] = [
     description: "Builds employee onboarding documentation packages with checklists and resource links.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are an employee onboarding documentation specialist. Build comprehensive onboarding packages with day-by-day checklists, resource links, team introductions, and role-specific training materials. Ensure new hires have everything they need for a smooth start.",
+    tools: ["write_document", "apply_template", "search_documents", "llm_generate"],
   },
   {
     id: "changelog-drafter",
@@ -91,6 +115,8 @@ export const documentAgents: AgentDef[] = [
     description: "Compiles release changelogs from commit messages, tickets, and pull request descriptions.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a release changelog specialist. Compile clear, well-organized changelogs from commit messages, issue tickets, and pull request descriptions. Categorize changes into features, fixes, breaking changes, and improvements. Write user-facing descriptions that are concise and informative.",
+    tools: ["write_document", "extract_text", "summarize"],
   },
   // --- Formatting & Styling (13-24) ---
   {
@@ -99,6 +125,8 @@ export const documentAgents: AgentDef[] = [
     description: "Applies consistent font families, sizes, and spacing rules across entire documents.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a typography enforcement specialist. Apply consistent font families, sizes, line heights, and spacing rules across entire documents. Detect deviations from typographic standards and correct them while maintaining visual hierarchy and readability.",
+    tools: ["edit_document", "read_document", "apply_template"],
   },
   {
     id: "layout-optimizer",
@@ -106,6 +134,8 @@ export const documentAgents: AgentDef[] = [
     description: "Restructures document layouts for optimal readability with balanced margins and whitespace.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a document layout optimization specialist. Restructure document layouts for optimal readability by balancing margins, whitespace, column widths, and content placement. Ensure visual consistency and prevent awkward page breaks or orphaned elements.",
+    tools: ["edit_document", "read_document", "apply_template"],
   },
   {
     id: "brand-style-applier",
@@ -113,6 +143,8 @@ export const documentAgents: AgentDef[] = [
     description: "Enforces corporate brand guidelines including colors, logos, and header/footer templates.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a brand compliance specialist. Enforce corporate brand guidelines across documents including color palettes, logo placement, font specifications, and header/footer templates. Flag any deviations from brand standards and apply corrections automatically.",
+    tools: ["edit_document", "read_document", "apply_template"],
   },
   {
     id: "css-to-doc-converter",
@@ -120,6 +152,8 @@ export const documentAgents: AgentDef[] = [
     description: "Transforms CSS stylesheets into document formatting rules for consistent web-to-print output.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a CSS-to-document formatting converter. Transform CSS stylesheets into equivalent document formatting rules for consistent web-to-print output. Map CSS properties to document styles while handling print-specific concerns like page breaks and margins.",
+    tools: ["read_document", "convert_format", "edit_document"],
   },
   {
     id: "theme-switcher",
@@ -127,6 +161,8 @@ export const documentAgents: AgentDef[] = [
     description: "Applies and swaps visual themes across documents while preserving content structure.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a document theme management specialist. Apply, swap, and preview visual themes across documents while preserving content structure and hierarchy. Ensure theme transitions maintain readability and proper contrast ratios.",
+    tools: ["edit_document", "read_document", "apply_template"],
   },
   {
     id: "table-formatter",
@@ -134,6 +170,8 @@ export const documentAgents: AgentDef[] = [
     description: "Standardizes table styling with consistent borders, alignment, and alternating row colors.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a table formatting specialist. Standardize table styling across documents with consistent borders, cell padding, column alignment, header formatting, and alternating row colors. Ensure tables are accessible and render well across formats.",
+    tools: ["edit_document", "read_document"],
   },
   {
     id: "heading-hierarchy-fixer",
@@ -141,6 +179,8 @@ export const documentAgents: AgentDef[] = [
     description: "Detects and corrects heading level inconsistencies to ensure proper document structure.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a document structure specialist. Detect and correct heading level inconsistencies ensuring proper hierarchical nesting (H1 > H2 > H3). Fix skipped levels, duplicate top-level headings, and ensure the heading structure creates a logical table of contents.",
+    tools: ["edit_document", "read_document", "validate_data"],
   },
   {
     id: "list-normalizer",
@@ -148,6 +188,8 @@ export const documentAgents: AgentDef[] = [
     description: "Standardizes bullet and numbered list formatting for consistency across document sections.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a list formatting specialist. Standardize bullet points and numbered lists across documents ensuring consistent indentation, marker styles, and spacing. Convert between list types where appropriate and fix nested list formatting issues.",
+    tools: ["edit_document", "read_document"],
   },
   {
     id: "page-break-optimizer",
@@ -155,6 +197,8 @@ export const documentAgents: AgentDef[] = [
     description: "Intelligently inserts page breaks to prevent orphaned headings and split paragraphs.",
     status: "disabled",
     category: "document-management",
+    systemPrompt: "You are a page break optimization specialist. Intelligently insert and adjust page breaks to prevent orphaned headings, widowed lines, and awkwardly split paragraphs. Ensure each page starts and ends at natural content boundaries.",
+    tools: ["edit_document", "read_document"],
   },
   {
     id: "citation-formatter",
@@ -162,6 +206,8 @@ export const documentAgents: AgentDef[] = [
     description: "Formats bibliographic citations in APA, MLA, Chicago, or custom citation styles.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a bibliographic citation specialist. Format citations and references in APA, MLA, Chicago, or custom citation styles. Ensure all required fields are present, ordering is correct, and in-text citations match the reference list. Flag incomplete or malformed citations.",
+    tools: ["edit_document", "read_document", "validate_data"],
   },
   {
     id: "dark-mode-adapter",
@@ -169,6 +215,8 @@ export const documentAgents: AgentDef[] = [
     description: "Converts document color schemes for comfortable reading in dark mode environments.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a dark mode adaptation specialist. Convert document color schemes for comfortable reading in dark mode environments. Adjust text colors, backgrounds, image borders, and chart colors while maintaining sufficient contrast ratios and visual clarity.",
+    tools: ["edit_document", "read_document", "convert_format"],
   },
   {
     id: "footnote-styler",
@@ -176,6 +224,8 @@ export const documentAgents: AgentDef[] = [
     description: "Manages footnote and endnote placement, numbering, and visual formatting consistently.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a footnote and endnote formatting specialist. Manage footnote and endnote placement, numbering sequences, and visual formatting. Ensure consistent styling, correct cross-references, and proper separation from body text across the document.",
+    tools: ["edit_document", "read_document"],
   },
   // --- Content Analysis (25-40) ---
   {
@@ -184,6 +234,8 @@ export const documentAgents: AgentDef[] = [
     description: "Calculates Flesch-Kincaid, Gunning Fog, and other readability metrics for document text.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a readability analysis specialist. Calculate Flesch-Kincaid, Gunning Fog, SMOG, and other readability metrics for document text. Provide grade-level assessments and specific recommendations to improve readability for the target audience.",
+    tools: ["read_document", "extract_text", "analyze_data"],
   },
   {
     id: "tone-analyzer",
@@ -191,6 +243,8 @@ export const documentAgents: AgentDef[] = [
     description: "Evaluates document tone across dimensions like formality, confidence, and friendliness.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a document tone analysis specialist. Evaluate document tone across dimensions including formality, confidence, friendliness, urgency, and professionalism. Provide section-by-section tone assessments and flag inconsistencies that may confuse readers.",
+    tools: ["read_document", "classify_text", "extract_text"],
   },
   {
     id: "sentiment-detector",
@@ -198,6 +252,8 @@ export const documentAgents: AgentDef[] = [
     description: "Identifies positive, negative, and neutral sentiment patterns throughout document content.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a sentiment analysis specialist. Identify positive, negative, and neutral sentiment patterns throughout document content. Provide sentiment scores at the sentence and section level, highlight emotionally charged language, and track sentiment shifts across the document.",
+    tools: ["read_document", "classify_text", "analyze_data"],
   },
   {
     id: "complexity-evaluator",
@@ -205,6 +261,8 @@ export const documentAgents: AgentDef[] = [
     description: "Measures vocabulary complexity and sentence structure to match target audience levels.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a content complexity evaluation specialist. Measure vocabulary complexity, sentence structure, and conceptual density to determine if content matches the target audience level. Recommend simplifications or enhancements to align with the intended reader profile.",
+    tools: ["read_document", "extract_text", "analyze_data"],
   },
   {
     id: "bias-detector",
@@ -212,6 +270,8 @@ export const documentAgents: AgentDef[] = [
     description: "Scans documents for gender, racial, age, and cultural bias in language and framing.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a bias detection specialist. Scan documents for gender, racial, age, cultural, and other forms of bias in language and framing. Provide specific examples of biased language and suggest neutral alternatives. Flag both explicit and implicit bias patterns.",
+    tools: ["read_document", "classify_text", "extract_text"],
   },
   {
     id: "jargon-identifier",
@@ -219,6 +279,8 @@ export const documentAgents: AgentDef[] = [
     description: "Highlights industry-specific jargon and suggests plain-language alternatives for clarity.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a jargon identification specialist. Highlight industry-specific jargon, acronyms, and technical terms that may confuse general audiences. Suggest plain-language alternatives and flag terms that should be defined in a glossary.",
+    tools: ["read_document", "extract_text", "llm_generate"],
   },
   {
     id: "plagiarism-checker",
@@ -226,6 +288,8 @@ export const documentAgents: AgentDef[] = [
     description: "Compares document content against known sources to detect potential plagiarism issues.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a plagiarism detection specialist. Compare document content against known sources and databases to detect potential plagiarism. Calculate similarity scores, highlight matching passages, and distinguish between properly cited quotations and unattributed content.",
+    tools: ["read_document", "web_search", "search_documents"],
   },
   {
     id: "consistency-auditor",
@@ -233,6 +297,8 @@ export const documentAgents: AgentDef[] = [
     description: "Identifies inconsistent terminology, abbreviations, and naming conventions within documents.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a document consistency auditing specialist. Identify inconsistent terminology, abbreviations, capitalization, and naming conventions within documents. Build a term inventory and flag variations that should be standardized for clarity.",
+    tools: ["read_document", "extract_text", "validate_data"],
   },
   {
     id: "word-frequency-analyzer",
@@ -240,6 +306,8 @@ export const documentAgents: AgentDef[] = [
     description: "Maps word and phrase frequency distributions to detect overuse and repetitive patterns.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a word frequency analysis specialist. Map word and phrase frequency distributions across documents to detect overuse, repetitive patterns, and vocabulary gaps. Provide frequency tables and highlight terms that appear disproportionately often.",
+    tools: ["read_document", "extract_text", "analyze_data"],
   },
   {
     id: "audience-fit-scorer",
@@ -247,6 +315,8 @@ export const documentAgents: AgentDef[] = [
     description: "Rates how well document language and depth match the intended target audience profile.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are an audience fit assessment specialist. Rate how well document language, depth, tone, and complexity match the intended target audience profile. Provide specific recommendations to better align content with audience expectations and knowledge level.",
+    tools: ["read_document", "classify_text", "analyze_data"],
   },
   {
     id: "fact-claim-flagger",
@@ -254,6 +324,8 @@ export const documentAgents: AgentDef[] = [
     description: "Identifies factual claims in documents and flags those lacking supporting citations.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a factual claim verification specialist. Identify factual claims, statistics, and assertions in documents and flag those lacking supporting citations or evidence. Categorize claims by verifiability and suggest sources where citations should be added.",
+    tools: ["read_document", "extract_text", "web_search"],
   },
   {
     id: "passive-voice-detector",
@@ -261,6 +333,8 @@ export const documentAgents: AgentDef[] = [
     description: "Highlights passive voice constructions and suggests active voice alternatives for clarity.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a writing clarity specialist focused on voice. Detect passive voice constructions throughout documents and suggest active voice alternatives. Explain why active voice improves clarity in each case while acknowledging when passive voice is appropriate.",
+    tools: ["read_document", "extract_text", "llm_generate"],
   },
   {
     id: "gender-neutral-checker",
@@ -268,6 +342,8 @@ export const documentAgents: AgentDef[] = [
     description: "Identifies gendered language and recommends inclusive, gender-neutral replacements.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are an inclusive language specialist. Identify gendered language including pronouns, titles, and role-specific terms, and recommend gender-neutral replacements. Ensure suggestions maintain readability and natural flow while promoting inclusivity.",
+    tools: ["read_document", "extract_text", "llm_generate"],
   },
   {
     id: "data-reference-validator",
@@ -275,6 +351,8 @@ export const documentAgents: AgentDef[] = [
     description: "Verifies that statistics, dates, and numerical references cited in documents are accurate.",
     status: "disabled",
     category: "document-management",
+    systemPrompt: "You are a data reference validation specialist. Verify that statistics, dates, numerical references, and cited data in documents are accurate and current. Cross-reference claims against authoritative sources and flag outdated or incorrect data points.",
+    tools: ["read_document", "web_search", "validate_data"],
   },
   {
     id: "argument-structure-mapper",
@@ -282,6 +360,8 @@ export const documentAgents: AgentDef[] = [
     description: "Visualizes the logical flow and argument structure of persuasive or analytical documents.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are an argument analysis specialist. Map the logical flow and argument structure of persuasive or analytical documents. Identify premises, conclusions, supporting evidence, and logical gaps. Visualize the argument hierarchy and flag logical fallacies.",
+    tools: ["read_document", "extract_text", "generate_diagram"],
   },
   {
     id: "acronym-resolver",
@@ -289,6 +369,8 @@ export const documentAgents: AgentDef[] = [
     description: "Detects undefined acronyms and ensures first-use expansion throughout the document.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are an acronym management specialist. Detect undefined acronyms throughout documents and ensure each acronym is expanded on first use. Build an acronym index, flag inconsistent usage, and verify that expansions are correct for the domain context.",
+    tools: ["read_document", "edit_document", "extract_text"],
   },
   // --- Summarization & Extraction (41-54) ---
   {
@@ -297,6 +379,8 @@ export const documentAgents: AgentDef[] = [
     description: "Produces concise one-paragraph summaries capturing the core message of lengthy documents.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a document summarization specialist. Produce concise one-paragraph summaries that capture the core message, key findings, and essential takeaways of lengthy documents. Prioritize the most impactful information and maintain the original document's intent.",
+    tools: ["read_document", "summarize", "llm_generate"],
   },
   {
     id: "key-points-extractor",
@@ -304,6 +388,8 @@ export const documentAgents: AgentDef[] = [
     description: "Distills documents into ranked bullet-point lists of the most important takeaways.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a key points extraction specialist. Distill documents into ranked bullet-point lists of the most important takeaways. Prioritize actionable insights and critical information, organizing points by relevance and impact.",
+    tools: ["read_document", "summarize", "extract_text"],
   },
   {
     id: "entity-extractor",
@@ -311,6 +397,8 @@ export const documentAgents: AgentDef[] = [
     description: "Identifies and catalogs named entities like people, organizations, dates, and locations.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a named entity recognition specialist. Identify and catalog named entities including people, organizations, dates, locations, monetary values, and domain-specific entities from documents. Provide structured output with entity types, positions, and relationship context.",
+    tools: ["read_document", "extract_text", "classify_text"],
   },
   {
     id: "toc-generator",
@@ -318,6 +406,8 @@ export const documentAgents: AgentDef[] = [
     description: "Automatically builds a table of contents with page references from document headings.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a table of contents generation specialist. Automatically build structured tables of contents from document headings with proper nesting, page references, and section numbering. Support multiple TOC styles and handle multi-level heading hierarchies.",
+    tools: ["read_document", "edit_document", "extract_text"],
   },
   {
     id: "abstract-writer",
@@ -325,6 +415,8 @@ export const documentAgents: AgentDef[] = [
     description: "Generates academic-style abstracts summarizing research purpose, methods, and findings.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are an academic abstract writing specialist. Generate structured abstracts summarizing research purpose, methodology, key findings, and conclusions. Follow discipline-specific conventions and word limits while capturing the essential contributions of the work.",
+    tools: ["read_document", "summarize", "llm_generate"],
   },
   {
     id: "action-item-harvester",
@@ -332,6 +424,8 @@ export const documentAgents: AgentDef[] = [
     description: "Extracts action items, deadlines, and responsible parties from meeting notes and emails.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are an action item extraction specialist. Extract action items, deadlines, responsible parties, and priority levels from meeting notes, emails, and project documents. Organize items by owner and deadline, flagging any items missing critical details.",
+    tools: ["read_document", "extract_text", "classify_text"],
   },
   {
     id: "clause-extractor",
@@ -339,6 +433,8 @@ export const documentAgents: AgentDef[] = [
     description: "Isolates and categorizes specific clauses from contracts and legal agreements.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a legal clause extraction specialist. Isolate and categorize specific clauses from contracts and legal agreements including indemnification, termination, liability, and confidentiality clauses. Provide clause type, risk assessment, and comparison against standard terms.",
+    tools: ["read_document", "extract_text", "classify_text"],
   },
   {
     id: "glossary-builder",
@@ -346,6 +442,8 @@ export const documentAgents: AgentDef[] = [
     description: "Compiles a glossary of technical terms and definitions found within document content.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a glossary compilation specialist. Identify technical terms, domain-specific vocabulary, and jargon within documents and compile a comprehensive glossary with clear definitions. Organize alphabetically and cross-reference related terms.",
+    tools: ["read_document", "extract_text", "llm_generate"],
   },
   {
     id: "executive-summary-agent",
@@ -353,6 +451,8 @@ export const documentAgents: AgentDef[] = [
     description: "Creates executive summaries tailored for C-level readers with strategic recommendations.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are an executive summary specialist. Create concise executive summaries tailored for C-level readers with strategic recommendations, key metrics, and business impact analysis. Focus on decision-enabling information and actionable insights.",
+    tools: ["read_document", "summarize", "llm_generate"],
   },
   {
     id: "quote-extractor",
@@ -360,6 +460,8 @@ export const documentAgents: AgentDef[] = [
     description: "Pulls direct quotations and attributed statements from interviews and transcripts.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a quotation extraction specialist. Pull direct quotations and attributed statements from interviews, transcripts, and documents. Preserve exact wording, capture speaker attribution, and provide surrounding context for each extracted quote.",
+    tools: ["read_document", "extract_text", "search_documents"],
   },
   {
     id: "metadata-harvester",
@@ -367,6 +469,8 @@ export const documentAgents: AgentDef[] = [
     description: "Extracts and standardizes document metadata including author, dates, and classification tags.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a document metadata extraction specialist. Extract and standardize metadata including author, creation date, modification date, classification tags, and custom properties. Normalize metadata formats and populate missing fields from content analysis.",
+    tools: ["read_document", "extract_text", "transform_data"],
   },
   {
     id: "timeline-extractor",
@@ -374,6 +478,8 @@ export const documentAgents: AgentDef[] = [
     description: "Identifies chronological events in documents and arranges them into visual timelines.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a timeline extraction specialist. Identify chronological events, dates, and milestones in documents and arrange them into structured timelines. Resolve relative date references and create visual timeline representations of document narratives.",
+    tools: ["read_document", "extract_text", "generate_diagram"],
   },
   {
     id: "index-generator",
@@ -381,6 +487,8 @@ export const documentAgents: AgentDef[] = [
     description: "Builds back-of-book style indexes with topic entries and page number cross-references.",
     status: "disabled",
     category: "document-management",
+    systemPrompt: "You are a book index generation specialist. Build comprehensive back-of-book style indexes with topic entries, sub-entries, page number cross-references, and see-also references. Identify indexable concepts and maintain consistent entry formatting.",
+    tools: ["read_document", "extract_text", "edit_document"],
   },
   {
     id: "statistical-extractor",
@@ -388,6 +496,8 @@ export const documentAgents: AgentDef[] = [
     description: "Pulls numerical data, percentages, and statistical findings into structured datasets.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a statistical data extraction specialist. Pull numerical data, percentages, statistical findings, and quantitative claims from documents into structured datasets. Validate data consistency and flag statistical claims that lack proper methodology context.",
+    tools: ["read_document", "extract_text", "transform_data"],
   },
   // --- Translation & Localization (55-70) ---
   {
@@ -396,6 +506,8 @@ export const documentAgents: AgentDef[] = [
     description: "Translates documents across 50+ languages while preserving formatting and structure.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a multilingual document translation specialist. Translate documents across 50+ languages while preserving formatting, structure, and meaning. Handle idiomatic expressions, technical terminology, and cultural nuances accurately. Maintain consistent translation quality throughout.",
+    tools: ["read_document", "translate", "write_document"],
   },
   {
     id: "cultural-adapter",
@@ -403,6 +515,8 @@ export const documentAgents: AgentDef[] = [
     description: "Adjusts content for cultural norms including date formats, idioms, and social conventions.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a cultural adaptation specialist. Adjust document content for cultural norms including date formats, idioms, units of measurement, social conventions, and culturally sensitive topics. Ensure content resonates naturally with the target culture.",
+    tools: ["read_document", "edit_document", "translate"],
   },
   {
     id: "terminology-manager",
@@ -410,6 +524,8 @@ export const documentAgents: AgentDef[] = [
     description: "Maintains consistent domain-specific terminology across multilingual document translations.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a translation terminology management specialist. Maintain consistent domain-specific terminology across multilingual document translations. Build and enforce term bases, flag inconsistent translations, and ensure approved terminology is used throughout all language versions.",
+    tools: ["read_document", "search_documents", "translate", "validate_data"],
   },
   {
     id: "locale-formatter",
@@ -417,6 +533,8 @@ export const documentAgents: AgentDef[] = [
     description: "Converts numbers, currencies, dates, and units to match target locale conventions.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a locale formatting specialist. Convert numbers, currencies, dates, measurement units, and address formats to match target locale conventions. Handle edge cases like thousand separators, decimal markers, and calendar systems across different regions.",
+    tools: ["edit_document", "read_document", "transform_data"],
   },
   {
     id: "rtl-layout-converter",
@@ -424,6 +542,8 @@ export const documentAgents: AgentDef[] = [
     description: "Adapts document layouts for right-to-left languages like Arabic, Hebrew, and Farsi.",
     status: "disabled",
     category: "document-management",
+    systemPrompt: "You are a right-to-left layout conversion specialist. Adapt document layouts for RTL languages like Arabic, Hebrew, and Farsi. Mirror layouts, adjust text alignment, handle bidirectional text mixing, and ensure proper reading flow for RTL documents.",
+    tools: ["edit_document", "read_document", "convert_format"],
   },
   {
     id: "translation-memory-sync",
@@ -431,6 +551,8 @@ export const documentAgents: AgentDef[] = [
     description: "Leverages stored translation segments to ensure consistency across repeated document phrases.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a translation memory synchronization specialist. Leverage stored translation segments to ensure consistency across repeated phrases in document translations. Match new content against existing translations, calculate fuzzy matches, and maintain translation memory databases.",
+    tools: ["search_documents", "translate", "read_document"],
   },
   {
     id: "glossary-localizer",
@@ -438,6 +560,8 @@ export const documentAgents: AgentDef[] = [
     description: "Translates and adapts glossary terms to preserve meaning in target language contexts.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a glossary localization specialist. Translate and adapt glossary terms to preserve meaning in target language contexts. Handle terms that have no direct translation, provide contextual definitions, and ensure translated glossaries maintain technical accuracy.",
+    tools: ["read_document", "translate", "write_document"],
   },
   {
     id: "subtitle-translator",
@@ -445,6 +569,8 @@ export const documentAgents: AgentDef[] = [
     description: "Translates embedded subtitle and caption text within multimedia document formats.",
     status: "disabled",
     category: "document-management",
+    systemPrompt: "You are a subtitle translation specialist. Translate embedded subtitle and caption text within multimedia documents while respecting timing constraints and character limits. Preserve synchronization and handle line breaks appropriate to the target language.",
+    tools: ["read_document", "translate", "edit_document"],
   },
   {
     id: "legal-translation-agent",
@@ -452,6 +578,8 @@ export const documentAgents: AgentDef[] = [
     description: "Handles legal document translation with jurisdiction-specific terminology and phrasing.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a legal translation specialist. Handle legal document translation with jurisdiction-specific terminology, phrasing, and conventions. Preserve legal precision, flag terms with different legal meanings across jurisdictions, and maintain certified translation standards.",
+    tools: ["read_document", "translate", "write_document", "search_documents"],
   },
   {
     id: "machine-translation-reviewer",
@@ -459,6 +587,8 @@ export const documentAgents: AgentDef[] = [
     description: "Post-edits machine-translated content to improve fluency and contextual accuracy.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a machine translation post-editing specialist. Review and improve machine-translated content for fluency, contextual accuracy, and natural language flow. Fix common MT errors including literal translations, word order issues, and terminology inconsistencies.",
+    tools: ["read_document", "edit_document", "translate"],
   },
   {
     id: "cjk-typesetting-agent",
@@ -466,6 +596,8 @@ export const documentAgents: AgentDef[] = [
     description: "Handles Chinese, Japanese, and Korean typesetting rules including line breaks and spacing.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a CJK typesetting specialist. Handle Chinese, Japanese, and Korean typesetting rules including proper line breaking, character spacing, punctuation placement, and ruby text annotations. Ensure documents render correctly across CJK-capable systems.",
+    tools: ["edit_document", "read_document", "convert_format"],
   },
   {
     id: "dialect-adapter",
@@ -473,6 +605,8 @@ export const documentAgents: AgentDef[] = [
     description: "Adjusts language variants between regional dialects such as US/UK English or PT-BR/PT-PT.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a dialect adaptation specialist. Adjust language variants between regional dialects such as US/UK English, PT-BR/PT-PT, or Simplified/Traditional Chinese. Convert spelling, vocabulary, idioms, and conventions to match the target dialect consistently.",
+    tools: ["read_document", "edit_document", "translate"],
   },
   {
     id: "bilingual-doc-merger",
@@ -480,6 +614,8 @@ export const documentAgents: AgentDef[] = [
     description: "Creates side-by-side bilingual documents with aligned paragraphs for translation review.",
     status: "disabled",
     category: "document-management",
+    systemPrompt: "You are a bilingual document merging specialist. Create side-by-side bilingual documents with aligned paragraphs for translation review. Handle different text lengths between languages, maintain formatting parity, and support multiple bilingual layout formats.",
+    tools: ["read_document", "merge_documents", "write_document"],
   },
   {
     id: "localization-qa-checker",
@@ -487,6 +623,8 @@ export const documentAgents: AgentDef[] = [
     description: "Validates localized documents for truncation, encoding errors, and untranslated strings.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a localization quality assurance specialist. Validate localized documents for text truncation, character encoding errors, untranslated strings, placeholder corruption, and locale-specific formatting issues. Generate detailed QA reports with severity ratings.",
+    tools: ["read_document", "validate_data", "search_documents"],
   },
   {
     id: "transliteration-agent",
@@ -494,6 +632,8 @@ export const documentAgents: AgentDef[] = [
     description: "Converts proper nouns and terms between writing systems while preserving pronunciation.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a transliteration specialist. Convert proper nouns, brand names, and technical terms between writing systems while preserving pronunciation and phonetic accuracy. Follow established transliteration standards for each script pair.",
+    tools: ["read_document", "edit_document", "translate"],
   },
   {
     id: "language-detection-agent",
@@ -501,6 +641,8 @@ export const documentAgents: AgentDef[] = [
     description: "Identifies the primary and secondary languages used within mixed-language documents.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a language detection specialist. Identify the primary and secondary languages used within mixed-language documents. Provide confidence scores for detected languages, segment text by language, and flag unexpected language switches.",
+    tools: ["read_document", "classify_text", "extract_text"],
   },
   // --- Version Control & History (71-82) ---
   {
@@ -509,6 +651,8 @@ export const documentAgents: AgentDef[] = [
     description: "Computes granular diffs between document versions highlighting additions, deletions, and edits.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a document comparison specialist. Compute granular diffs between document versions highlighting additions, deletions, and edits at the word and paragraph level. Generate clear visual diff reports and summary statistics of changes.",
+    tools: ["diff_documents", "read_document", "extract_text"],
   },
   {
     id: "merge-conflict-resolver",
@@ -516,6 +660,8 @@ export const documentAgents: AgentDef[] = [
     description: "Detects and assists in resolving conflicting edits from concurrent document contributors.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a document merge conflict resolution specialist. Detect and assist in resolving conflicting edits from concurrent contributors. Present conflicts clearly, suggest resolutions based on context, and ensure merged output maintains document coherence.",
+    tools: ["merge_documents", "diff_documents", "edit_document"],
   },
   {
     id: "version-branching-agent",
@@ -523,6 +669,8 @@ export const documentAgents: AgentDef[] = [
     description: "Creates and manages document branches for parallel editing and variant maintenance.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a document version branching specialist. Create and manage document branches for parallel editing, variant maintenance, and experimental drafts. Track branch lineage, facilitate comparisons between branches, and manage branch lifecycle.",
+    tools: ["write_document", "diff_documents", "read_document"],
   },
   {
     id: "revision-history-tracker",
@@ -530,6 +678,8 @@ export const documentAgents: AgentDef[] = [
     description: "Maintains a complete audit trail of all document changes with timestamps and authors.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a document revision history specialist. Maintain a complete audit trail of all document changes with timestamps, author attribution, and change descriptions. Provide chronological history views and support filtering by date range, author, or change type.",
+    tools: ["read_document", "diff_documents", "search_documents"],
   },
   {
     id: "rollback-agent",
@@ -537,6 +687,8 @@ export const documentAgents: AgentDef[] = [
     description: "Safely reverts documents to any previous version while preserving the full change history.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a document rollback specialist. Safely revert documents to any previous version while preserving the full change history. Validate rollback targets, preview changes before applying, and create rollback audit records.",
+    tools: ["read_document", "write_document", "diff_documents"],
   },
   {
     id: "snapshot-scheduler",
@@ -544,6 +696,8 @@ export const documentAgents: AgentDef[] = [
     description: "Automatically captures document snapshots at configured intervals for point-in-time recovery.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a document snapshot scheduling specialist. Automatically capture document snapshots at configured intervals for point-in-time recovery. Manage snapshot retention policies, optimize storage usage, and ensure reliable recovery points.",
+    tools: ["read_document", "write_document", "archive_files"],
   },
   {
     id: "change-annotation-agent",
@@ -551,6 +705,8 @@ export const documentAgents: AgentDef[] = [
     description: "Adds contextual annotations explaining why specific changes were made between versions.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a change annotation specialist. Add contextual annotations explaining why specific changes were made between document versions. Link changes to requirements, feedback, or policy updates. Provide clear rationale for editorial decisions.",
+    tools: ["edit_document", "diff_documents", "read_document"],
   },
   {
     id: "version-comparison-report",
@@ -558,6 +714,8 @@ export const documentAgents: AgentDef[] = [
     description: "Generates human-readable reports summarizing differences between two document versions.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a version comparison reporting specialist. Generate human-readable reports summarizing differences between two document versions. Categorize changes by type and significance, provide change statistics, and highlight the most impactful modifications.",
+    tools: ["diff_documents", "read_document", "write_document"],
   },
   {
     id: "branch-merge-agent",
@@ -565,6 +723,8 @@ export const documentAgents: AgentDef[] = [
     description: "Merges document branches back together with intelligent conflict detection and resolution.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a document branch merging specialist. Merge document branches back together with intelligent conflict detection and resolution. Handle three-way merges, preserve change attribution, and generate merge reports for review.",
+    tools: ["merge_documents", "diff_documents", "edit_document"],
   },
   {
     id: "version-label-manager",
@@ -572,6 +732,8 @@ export const documentAgents: AgentDef[] = [
     description: "Assigns semantic version labels like draft, review, and final to document milestones.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a document version labeling specialist. Assign semantic version labels such as draft, review, approved, and final to document milestones. Manage label hierarchies, enforce labeling policies, and track documents through lifecycle stages.",
+    tools: ["edit_document", "read_document", "send_notification"],
   },
   {
     id: "change-impact-analyzer",
@@ -579,6 +741,8 @@ export const documentAgents: AgentDef[] = [
     description: "Assesses how edits in one document section affect cross-referenced or dependent sections.",
     status: "disabled",
     category: "document-management",
+    systemPrompt: "You are a change impact analysis specialist. Assess how edits in one document section affect cross-referenced or dependent sections. Map dependency chains, predict cascading impacts, and generate impact reports to guide careful editing decisions.",
+    tools: ["read_document", "diff_documents", "search_documents"],
   },
   {
     id: "concurrent-edit-guard",
@@ -586,6 +750,8 @@ export const documentAgents: AgentDef[] = [
     description: "Prevents data loss by managing simultaneous edit sessions with locking and notifications.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a concurrent editing protection specialist. Prevent data loss by managing simultaneous edit sessions with document locking, conflict detection, and real-time notifications. Coordinate multi-user editing and resolve competing writes gracefully.",
+    tools: ["read_document", "edit_document", "send_notification"],
   },
   // --- Collaboration & Review (83-96) ---
   {
@@ -594,6 +760,8 @@ export const documentAgents: AgentDef[] = [
     description: "Organizes threaded inline comments with resolution tracking and notification routing.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are an inline comment management specialist. Organize threaded inline comments with resolution tracking, notification routing, and discussion threading. Summarize open comment threads and track comment resolution rates across documents.",
+    tools: ["edit_document", "read_document", "send_notification"],
   },
   {
     id: "approval-workflow-engine",
@@ -601,6 +769,8 @@ export const documentAgents: AgentDef[] = [
     description: "Routes documents through configurable multi-stage approval chains with deadline tracking.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a document approval workflow specialist. Route documents through configurable multi-stage approval chains with deadline tracking, escalation rules, and conditional branching. Monitor workflow progress and handle approval delegation.",
+    tools: ["read_document", "send_notification", "create_ticket"],
   },
   {
     id: "track-changes-agent",
@@ -608,6 +778,8 @@ export const documentAgents: AgentDef[] = [
     description: "Manages tracked changes with accept, reject, and bulk resolution capabilities.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a tracked changes management specialist. Manage tracked changes with accept, reject, and bulk resolution capabilities. Provide change summaries, support selective acceptance, and maintain clean document output after change resolution.",
+    tools: ["edit_document", "diff_documents", "read_document"],
   },
   {
     id: "reviewer-assignment-agent",
@@ -615,6 +787,8 @@ export const documentAgents: AgentDef[] = [
     description: "Automatically assigns reviewers based on expertise, availability, and document subject matter.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a reviewer assignment specialist. Automatically assign reviewers based on expertise, availability, workload balance, and document subject matter. Match documents to the most qualified reviewers and manage review queue distribution.",
+    tools: ["read_document", "classify_text", "send_notification"],
   },
   {
     id: "feedback-aggregator",
@@ -622,6 +796,8 @@ export const documentAgents: AgentDef[] = [
     description: "Consolidates feedback from multiple reviewers into a unified actionable change list.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a feedback aggregation specialist. Consolidate feedback from multiple reviewers into a unified, actionable change list. Identify overlapping comments, reconcile conflicting suggestions, and prioritize feedback by importance and consensus.",
+    tools: ["read_document", "summarize", "extract_text"],
   },
   {
     id: "sign-off-tracker",
@@ -629,6 +805,8 @@ export const documentAgents: AgentDef[] = [
     description: "Monitors document sign-off status across stakeholders with escalation for overdue approvals.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a document sign-off tracking specialist. Monitor sign-off status across stakeholders with automated reminders and escalation for overdue approvals. Maintain sign-off audit trails and generate compliance reports on approval timeliness.",
+    tools: ["read_document", "send_notification", "create_ticket"],
   },
   {
     id: "co-authoring-coordinator",
@@ -636,6 +814,8 @@ export const documentAgents: AgentDef[] = [
     description: "Manages section assignments and deadlines for multi-author collaborative documents.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a co-authoring coordination specialist. Manage section assignments, deadlines, and dependencies for multi-author collaborative documents. Track individual contributor progress, handle section handoffs, and ensure stylistic consistency across authors.",
+    tools: ["read_document", "send_notification", "edit_document"],
   },
   {
     id: "peer-review-matcher",
@@ -643,6 +823,8 @@ export const documentAgents: AgentDef[] = [
     description: "Pairs documents with qualified peer reviewers based on domain expertise and past reviews.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a peer review matching specialist. Pair documents with qualified peer reviewers based on domain expertise, past review quality, and conflict-of-interest screening. Optimize reviewer matching for thorough and unbiased review coverage.",
+    tools: ["read_document", "classify_text", "search_documents"],
   },
   {
     id: "review-deadline-enforcer",
@@ -650,6 +832,8 @@ export const documentAgents: AgentDef[] = [
     description: "Sends escalating reminders to reviewers approaching or past their review deadlines.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a review deadline enforcement specialist. Send escalating reminders to reviewers approaching or past their review deadlines. Manage reminder schedules, escalation chains, and deadline extension requests. Generate overdue review reports for management.",
+    tools: ["send_notification", "read_document", "create_ticket"],
   },
   {
     id: "suggestion-prioritizer",
@@ -657,6 +841,8 @@ export const documentAgents: AgentDef[] = [
     description: "Ranks editorial suggestions by impact, grouping critical fixes above minor improvements.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are an editorial suggestion prioritization specialist. Rank editorial suggestions by impact, grouping critical fixes above minor improvements. Categorize suggestions as must-fix, should-fix, and nice-to-have, with estimated effort for each change.",
+    tools: ["read_document", "classify_text", "summarize"],
   },
   {
     id: "conflict-mediator",
@@ -664,6 +850,8 @@ export const documentAgents: AgentDef[] = [
     description: "Resolves contradictory reviewer feedback by identifying consensus and flagging disagreements.",
     status: "disabled",
     category: "document-management",
+    systemPrompt: "You are a reviewer conflict mediation specialist. Resolve contradictory reviewer feedback by identifying areas of consensus, flagging genuine disagreements, and proposing compromise solutions. Facilitate constructive resolution of editorial disputes.",
+    tools: ["read_document", "summarize", "send_notification"],
   },
   {
     id: "stakeholder-notifier",
@@ -671,6 +859,8 @@ export const documentAgents: AgentDef[] = [
     description: "Sends targeted notifications to stakeholders when documents reach key lifecycle milestones.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a stakeholder notification specialist. Send targeted notifications to stakeholders when documents reach key lifecycle milestones such as draft completion, review readiness, approval, or publication. Customize notification content and channels per stakeholder preferences.",
+    tools: ["send_notification", "read_document", "create_ticket"],
   },
   {
     id: "permission-gate-agent",
@@ -678,6 +868,8 @@ export const documentAgents: AgentDef[] = [
     description: "Enforces role-based access controls for viewing, editing, and sharing sensitive documents.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a document permission management specialist. Enforce role-based access controls for viewing, editing, and sharing sensitive documents. Manage permission inheritance, handle access requests, and audit permission usage for compliance.",
+    tools: ["read_document", "validate_data", "send_notification"],
   },
   {
     id: "annotation-summarizer",
@@ -685,6 +877,8 @@ export const documentAgents: AgentDef[] = [
     description: "Compiles all annotations and comments into a digest for authors to review efficiently.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are an annotation summarization specialist. Compile all annotations, comments, and marginalia into a concise digest for authors to review efficiently. Group annotations by section and theme, highlight action-requiring items, and track resolution status.",
+    tools: ["read_document", "summarize", "extract_text"],
   },
   // --- Import/Export & Conversion (97-110) ---
   {
@@ -693,6 +887,8 @@ export const documentAgents: AgentDef[] = [
     description: "Converts documents to and from PDF format with full fidelity for fonts and images.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a PDF conversion specialist. Convert documents to and from PDF format with full fidelity for fonts, images, and layout. Handle PDF/A archival format, accessibility tagging, and bookmark generation. Optimize file size while preserving quality.",
+    tools: ["convert_format", "read_document", "write_document"],
   },
   {
     id: "docx-importer",
@@ -700,6 +896,8 @@ export const documentAgents: AgentDef[] = [
     description: "Imports Microsoft Word files preserving styles, tracked changes, and embedded media.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a DOCX import specialist. Import Microsoft Word files preserving styles, tracked changes, comments, embedded media, and custom properties. Handle complex formatting including tables, headers/footers, and section breaks accurately.",
+    tools: ["convert_format", "read_document", "extract_text"],
   },
   {
     id: "html-exporter",
@@ -707,6 +905,8 @@ export const documentAgents: AgentDef[] = [
     description: "Exports documents as clean, semantic HTML with optional inline or external CSS styling.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are an HTML export specialist. Export documents as clean, semantic HTML with optional inline or external CSS styling. Generate accessible HTML with proper heading hierarchy, alt text, and ARIA labels. Support responsive layouts for web publishing.",
+    tools: ["convert_format", "write_document", "read_document"],
   },
   {
     id: "markdown-converter",
@@ -714,6 +914,8 @@ export const documentAgents: AgentDef[] = [
     description: "Transforms documents between Markdown and rich-text formats preserving structure and links.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a Markdown conversion specialist. Transform documents between Markdown and rich-text formats preserving structure, links, images, and code blocks. Support GitHub Flavored Markdown, CommonMark, and extended Markdown syntax variants.",
+    tools: ["convert_format", "read_document", "write_document"],
   },
   {
     id: "latex-compiler",
@@ -721,6 +923,8 @@ export const documentAgents: AgentDef[] = [
     description: "Converts documents to LaTeX for academic publishing with equation and citation support.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a LaTeX compilation specialist. Convert documents to LaTeX format for academic publishing with proper equation typesetting, citation support, and bibliography management. Handle complex mathematical notation, figures, and cross-references.",
+    tools: ["convert_format", "write_document", "read_document"],
   },
   {
     id: "epub-packager",
@@ -728,6 +932,8 @@ export const documentAgents: AgentDef[] = [
     description: "Packages documents into EPUB e-book format with chapter navigation and cover metadata.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are an EPUB packaging specialist. Package documents into EPUB e-book format with chapter navigation, cover images, metadata, and table of contents. Ensure compliance with EPUB standards and validate output for e-reader compatibility.",
+    tools: ["convert_format", "write_document", "read_document"],
   },
   {
     id: "csv-table-importer",
@@ -735,6 +941,8 @@ export const documentAgents: AgentDef[] = [
     description: "Imports CSV and spreadsheet data as formatted tables within document content.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a CSV and spreadsheet import specialist. Import CSV and spreadsheet data as formatted tables within documents. Handle delimiter detection, encoding issues, and data type inference. Apply appropriate table formatting and column alignment.",
+    tools: ["convert_format", "read_document", "transform_data"],
   },
   {
     id: "ocr-document-scanner",
@@ -742,6 +950,8 @@ export const documentAgents: AgentDef[] = [
     description: "Extracts editable text from scanned images and PDFs using optical character recognition.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are an OCR document scanning specialist. Extract editable text from scanned images and PDFs using optical character recognition. Handle multi-column layouts, tables, and handwritten text. Provide confidence scores and flag low-quality recognition areas.",
+    tools: ["extract_text", "convert_format", "write_document"],
   },
   {
     id: "xml-schema-converter",
@@ -749,6 +959,8 @@ export const documentAgents: AgentDef[] = [
     description: "Maps documents to XML schemas for structured data exchange with enterprise systems.",
     status: "disabled",
     category: "document-management",
+    systemPrompt: "You are an XML schema conversion specialist. Map documents to XML schemas for structured data exchange with enterprise systems. Handle schema validation, namespace management, and XSLT transformations. Ensure data integrity across format conversions.",
+    tools: ["convert_format", "read_document", "validate_data"],
   },
   {
     id: "presentation-exporter",
@@ -756,6 +968,8 @@ export const documentAgents: AgentDef[] = [
     description: "Converts document content into slide presentations with automatic layout and formatting.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a presentation export specialist. Convert document content into slide presentations with automatic layout, formatting, and speaker notes. Break content into logical slides, suggest visuals, and apply presentation design principles.",
+    tools: ["convert_format", "read_document", "write_document"],
   },
   {
     id: "plaintext-extractor",
@@ -763,6 +977,8 @@ export const documentAgents: AgentDef[] = [
     description: "Strips all formatting to produce clean plaintext output for downstream processing.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a plaintext extraction specialist. Strip all formatting, markup, and embedded objects to produce clean plaintext output for downstream processing. Preserve logical structure through whitespace and line breaks while removing all styling artifacts.",
+    tools: ["extract_text", "read_document", "convert_format"],
   },
   {
     id: "json-doc-serializer",
@@ -770,6 +986,8 @@ export const documentAgents: AgentDef[] = [
     description: "Serializes document structure and content into JSON for API consumption and storage.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a JSON document serialization specialist. Serialize document structure and content into well-structured JSON for API consumption and storage. Define consistent schemas, handle nested structures, and support round-trip serialization and deserialization.",
+    tools: ["convert_format", "read_document", "transform_data"],
   },
   {
     id: "rich-text-normalizer",
@@ -777,6 +995,8 @@ export const documentAgents: AgentDef[] = [
     description: "Cleans inconsistent rich text from pasted content into uniform internal document format.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a rich text normalization specialist. Clean inconsistent rich text from pasted content into a uniform internal document format. Strip extraneous formatting, normalize styles, and ensure pasted content matches the document's existing style conventions.",
+    tools: ["edit_document", "read_document", "convert_format"],
   },
   {
     id: "batch-format-converter",
@@ -784,6 +1004,8 @@ export const documentAgents: AgentDef[] = [
     description: "Converts large batches of documents between formats with configurable output settings.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a batch format conversion specialist. Convert large batches of documents between formats with configurable output settings. Handle queue management, error recovery, and progress reporting. Ensure consistent conversion quality across all documents in the batch.",
+    tools: ["convert_format", "read_document", "write_document", "list_files"],
   },
   // --- Compliance & Legal (111-125) ---
   {
@@ -792,6 +1014,8 @@ export const documentAgents: AgentDef[] = [
     description: "Scans documents for personal data and flags GDPR compliance risks with remediation steps.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a GDPR compliance specialist. Scan documents for personal data including names, addresses, and identifiers and flag GDPR compliance risks. Provide specific remediation steps, data minimization recommendations, and legal basis assessments for data processing.",
+    tools: ["read_document", "extract_text", "validate_data"],
   },
   {
     id: "accessibility-auditor",
@@ -799,6 +1023,8 @@ export const documentAgents: AgentDef[] = [
     description: "Validates documents against WCAG standards checking alt text, contrast, and structure.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a document accessibility auditing specialist. Validate documents against WCAG standards checking alt text, color contrast, heading structure, reading order, and link text. Generate accessibility compliance reports with specific remediation guidance.",
+    tools: ["read_document", "validate_data", "extract_text"],
   },
   {
     id: "contract-analyzer",
@@ -806,6 +1032,8 @@ export const documentAgents: AgentDef[] = [
     description: "Reviews contracts highlighting risky clauses, obligations, and unusual terms for counsel.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a contract analysis specialist. Review contracts highlighting risky clauses, obligations, indemnification provisions, and unusual terms for legal counsel. Score overall contract risk, identify missing standard provisions, and compare against best-practice templates.",
+    tools: ["read_document", "extract_text", "classify_text", "search_documents"],
   },
   {
     id: "redaction-agent",
@@ -813,6 +1041,8 @@ export const documentAgents: AgentDef[] = [
     description: "Permanently removes sensitive information from documents with audit-grade redaction logging.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a document redaction specialist. Permanently remove sensitive information from documents with audit-grade redaction logging. Apply pattern-based and manual redaction, verify completeness, and ensure redacted content is irrecoverable in all document layers.",
+    tools: ["redact_content", "read_document", "edit_document"],
   },
   {
     id: "pii-scanner",
@@ -820,6 +1050,8 @@ export const documentAgents: AgentDef[] = [
     description: "Detects personally identifiable information including SSNs, emails, and phone numbers.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a PII detection specialist. Detect personally identifiable information including Social Security numbers, email addresses, phone numbers, financial account numbers, and other sensitive identifiers. Categorize findings by sensitivity level and recommend handling procedures.",
+    tools: ["read_document", "extract_text", "redact_content"],
   },
   {
     id: "hipaa-validator",
@@ -827,6 +1059,8 @@ export const documentAgents: AgentDef[] = [
     description: "Ensures healthcare documents comply with HIPAA privacy rules for protected health information.",
     status: "disabled",
     category: "document-management",
+    systemPrompt: "You are a HIPAA compliance validation specialist. Ensure healthcare documents comply with HIPAA privacy rules for protected health information. Identify PHI disclosures, validate minimum necessary standards, and generate compliance reports for audit purposes.",
+    tools: ["read_document", "validate_data", "extract_text"],
   },
   {
     id: "regulatory-cross-checker",
@@ -834,6 +1068,8 @@ export const documentAgents: AgentDef[] = [
     description: "Cross-references document content against current regulatory requirements by jurisdiction.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a regulatory compliance cross-checking specialist. Cross-reference document content against current regulatory requirements by jurisdiction. Identify gaps in compliance, flag outdated references, and provide links to applicable regulations.",
+    tools: ["read_document", "search_documents", "web_search"],
   },
   {
     id: "digital-signature-agent",
@@ -841,6 +1077,8 @@ export const documentAgents: AgentDef[] = [
     description: "Manages cryptographic digital signatures for document authenticity and non-repudiation.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a digital signature management specialist. Manage cryptographic digital signatures for document authenticity and non-repudiation. Handle certificate validation, signature placement, timestamping, and multi-party signing workflows.",
+    tools: ["edit_document", "read_document", "validate_data"],
   },
   {
     id: "audit-trail-recorder",
@@ -848,6 +1086,8 @@ export const documentAgents: AgentDef[] = [
     description: "Logs every document access, edit, and share event for regulatory audit compliance.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are an audit trail recording specialist. Log every document access, edit, share, and print event for regulatory audit compliance. Maintain tamper-proof audit logs, generate compliance reports, and support forensic investigation of document handling.",
+    tools: ["read_document", "write_document", "search_documents"],
   },
   {
     id: "copyright-checker",
@@ -855,6 +1095,8 @@ export const documentAgents: AgentDef[] = [
     description: "Identifies potentially copyrighted content including images, text excerpts, and trademarks.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a copyright compliance specialist. Identify potentially copyrighted content including images, text excerpts, trademarks, and licensed material within documents. Flag content requiring attribution, licensing, or permissions before publication.",
+    tools: ["read_document", "web_search", "extract_text"],
   },
   {
     id: "retention-policy-enforcer",
@@ -862,6 +1104,8 @@ export const documentAgents: AgentDef[] = [
     description: "Applies document retention schedules and flags items approaching expiration or legal hold.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a document retention policy enforcement specialist. Apply document retention schedules and flag items approaching expiration or legal hold requirements. Automate retention classification, track policy compliance, and manage disposition workflows.",
+    tools: ["read_document", "search_documents", "send_notification"],
   },
   {
     id: "nda-clause-validator",
@@ -869,6 +1113,8 @@ export const documentAgents: AgentDef[] = [
     description: "Validates non-disclosure agreements for completeness, duration, and enforceability standards.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are an NDA validation specialist. Validate non-disclosure agreements for completeness, appropriate duration, scope of confidential information, and enforceability standards. Compare against organizational templates and flag non-standard or risky provisions.",
+    tools: ["read_document", "extract_text", "validate_data"],
   },
   {
     id: "export-control-screener",
@@ -876,6 +1122,8 @@ export const documentAgents: AgentDef[] = [
     description: "Screens documents for export-controlled technical data under ITAR and EAR regulations.",
     status: "disabled",
     category: "document-management",
+    systemPrompt: "You are an export control screening specialist. Screen documents for export-controlled technical data under ITAR and EAR regulations. Classify content by export control category, flag restricted information, and recommend appropriate handling procedures.",
+    tools: ["read_document", "classify_text", "validate_data"],
   },
   {
     id: "watermark-stamper",
@@ -883,6 +1131,8 @@ export const documentAgents: AgentDef[] = [
     description: "Applies visible or invisible watermarks for confidentiality and document tracking purposes.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a document watermark specialist. Apply visible or invisible watermarks for confidentiality, draft status, and document tracking purposes. Support text and image watermarks with configurable opacity, position, and rotation settings.",
+    tools: ["edit_document", "read_document", "write_document"],
   },
   {
     id: "terms-of-service-auditor",
@@ -890,6 +1140,8 @@ export const documentAgents: AgentDef[] = [
     description: "Analyzes terms of service documents for fairness, readability, and legal compliance.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a terms of service auditing specialist. Analyze terms of service documents for fairness, readability, legal compliance, and potentially problematic clauses. Score consumer-friendliness, flag overreaching provisions, and compare against industry standards.",
+    tools: ["read_document", "extract_text", "classify_text"],
   },
   // --- Search & Discovery (126-138) ---
   {
@@ -898,6 +1150,8 @@ export const documentAgents: AgentDef[] = [
     description: "Finds documents by meaning rather than keywords using vector-based semantic similarity.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a semantic document search specialist. Find documents by meaning rather than keywords using vector-based semantic similarity. Handle natural language queries, rank results by relevance, and provide context snippets showing why each document matched.",
+    tools: ["semantic_search", "embedding_generate", "search_documents"],
   },
   {
     id: "auto-tagger",
@@ -905,6 +1159,8 @@ export const documentAgents: AgentDef[] = [
     description: "Automatically assigns descriptive tags to documents based on content analysis.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a document auto-tagging specialist. Automatically assign descriptive tags to documents based on content analysis. Use topic modeling and classification to generate relevant tags, maintain tag taxonomies, and ensure tagging consistency across the document collection.",
+    tools: ["read_document", "classify_text", "extract_text"],
   },
   {
     id: "document-classifier",
@@ -912,6 +1168,8 @@ export const documentAgents: AgentDef[] = [
     description: "Categorizes documents into organizational taxonomies using machine learning classification.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a document classification specialist. Categorize documents into organizational taxonomies using machine learning classification. Handle multi-label classification, provide confidence scores, and continuously improve classification accuracy through feedback.",
+    tools: ["read_document", "classify_text", "search_documents"],
   },
   {
     id: "duplicate-detector",
@@ -919,6 +1177,8 @@ export const documentAgents: AgentDef[] = [
     description: "Identifies duplicate and near-duplicate documents across repositories to reduce redundancy.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a document duplicate detection specialist. Identify duplicate and near-duplicate documents across repositories to reduce redundancy. Calculate similarity scores, group related duplicates, and recommend which versions to keep or consolidate.",
+    tools: ["search_documents", "read_document", "semantic_search"],
   },
   {
     id: "related-doc-recommender",
@@ -926,6 +1186,8 @@ export const documentAgents: AgentDef[] = [
     description: "Suggests related documents based on content similarity, shared tags, and user behavior.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a document recommendation specialist. Suggest related documents based on content similarity, shared tags, user reading patterns, and collaborative filtering. Provide relevance explanations and support configurable recommendation strategies.",
+    tools: ["semantic_search", "search_documents", "read_document"],
   },
   {
     id: "full-text-indexer",
@@ -933,6 +1195,8 @@ export const documentAgents: AgentDef[] = [
     description: "Builds and maintains full-text search indexes across all document repositories.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a full-text search indexing specialist. Build and maintain full-text search indexes across all document repositories. Handle incremental indexing, synonym expansion, stop word management, and index optimization for fast query performance.",
+    tools: ["search_documents", "extract_text", "read_document"],
   },
   {
     id: "topic-clustering-agent",
@@ -940,6 +1204,8 @@ export const documentAgents: AgentDef[] = [
     description: "Groups documents into topic clusters to reveal thematic patterns across collections.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a topic clustering specialist. Group documents into topic clusters to reveal thematic patterns across document collections. Generate cluster labels, identify outlier documents, and visualize topic relationships for knowledge discovery.",
+    tools: ["read_document", "classify_text", "embedding_generate"],
   },
   {
     id: "smart-folder-organizer",
@@ -947,6 +1213,8 @@ export const documentAgents: AgentDef[] = [
     description: "Automatically files documents into dynamic folders based on content and metadata rules.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a smart folder organization specialist. Automatically file documents into dynamic folders based on content analysis and metadata rules. Manage rule-based filing, handle conflicts, and keep folder structures organized as new documents arrive.",
+    tools: ["read_document", "classify_text", "move_file"],
   },
   {
     id: "cross-repo-searcher",
@@ -954,6 +1222,8 @@ export const documentAgents: AgentDef[] = [
     description: "Searches across multiple document repositories and storage backends simultaneously.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a cross-repository search specialist. Search across multiple document repositories and storage backends simultaneously. Federate queries, normalize results from different sources, and provide unified search experiences with consistent ranking.",
+    tools: ["search_documents", "semantic_search", "read_document"],
   },
   {
     id: "saved-search-agent",
@@ -961,6 +1231,8 @@ export const documentAgents: AgentDef[] = [
     description: "Manages saved search queries and alerts users when new matching documents appear.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a saved search management specialist. Manage saved search queries and alert users when new matching documents appear. Handle search scheduling, result deduplication, and notification preferences for search-based document monitoring.",
+    tools: ["search_documents", "send_notification", "read_document"],
   },
   {
     id: "taxonomy-manager",
@@ -968,6 +1240,8 @@ export const documentAgents: AgentDef[] = [
     description: "Maintains hierarchical classification taxonomies and maps documents to category trees.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a taxonomy management specialist. Maintain hierarchical classification taxonomies and map documents to category trees. Handle taxonomy versioning, term deprecation, and category merging while ensuring documents remain correctly classified.",
+    tools: ["read_document", "classify_text", "search_documents"],
   },
   {
     id: "knowledge-graph-linker",
@@ -975,6 +1249,8 @@ export const documentAgents: AgentDef[] = [
     description: "Connects documents to organizational knowledge graphs based on entities and relationships.",
     status: "disabled",
     category: "document-management",
+    systemPrompt: "You are a knowledge graph linking specialist. Connect documents to organizational knowledge graphs based on entities and relationships extracted from content. Build entity linkages, discover implicit connections, and enrich knowledge graph nodes with document evidence.",
+    tools: ["read_document", "extract_text", "semantic_search"],
   },
   {
     id: "stale-content-finder",
@@ -982,6 +1258,8 @@ export const documentAgents: AgentDef[] = [
     description: "Identifies outdated documents that haven't been updated within configurable time thresholds.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a stale content detection specialist. Identify outdated documents that have not been updated within configurable time thresholds. Analyze content for stale references, expired links, and outdated information. Generate freshness reports and prioritize update recommendations.",
+    tools: ["search_documents", "read_document", "send_notification"],
   },
   // --- Content Generation (139-150) ---
   {
@@ -990,6 +1268,8 @@ export const documentAgents: AgentDef[] = [
     description: "Drafts SEO-optimized blog posts with headings, meta descriptions, and keyword placement.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are an SEO blog post writing specialist. Draft SEO-optimized blog posts with strategic headings, compelling meta descriptions, natural keyword placement, and engaging content structure. Balance search optimization with reader value and brand voice.",
+    tools: ["write_document", "llm_generate", "web_search"],
   },
   {
     id: "quarterly-report-agent",
@@ -997,6 +1277,8 @@ export const documentAgents: AgentDef[] = [
     description: "Generates quarterly business reports from data sources with charts and executive commentary.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a quarterly report generation specialist. Generate comprehensive quarterly business reports from data sources with charts, trend analysis, and executive commentary. Pull data from multiple sources, create visualizations, and provide actionable insights.",
+    tools: ["write_document", "analyze_data", "generate_chart", "llm_generate"],
   },
   {
     id: "email-draft-composer",
@@ -1004,6 +1286,8 @@ export const documentAgents: AgentDef[] = [
     description: "Writes professional email drafts matching specified tone, purpose, and recipient context.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a professional email drafting specialist. Write email drafts matching the specified tone, purpose, and recipient context. Craft clear subject lines, concise body text, and appropriate calls to action. Adapt formality based on the relationship and situation.",
+    tools: ["write_document", "llm_generate", "apply_template"],
   },
   {
     id: "press-release-writer",
@@ -1011,6 +1295,8 @@ export const documentAgents: AgentDef[] = [
     description: "Creates press releases following AP style with headline, dateline, and boilerplate sections.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a press release writing specialist. Create press releases following AP style guidelines with compelling headlines, datelines, lead paragraphs, supporting quotes, and company boilerplate sections. Ensure newsworthiness and media-ready formatting.",
+    tools: ["write_document", "llm_generate", "apply_template"],
   },
   {
     id: "case-study-generator",
@@ -1018,6 +1304,8 @@ export const documentAgents: AgentDef[] = [
     description: "Builds customer case studies with challenge, solution, and measurable results narrative.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a case study generation specialist. Build customer case studies with compelling challenge, solution, and measurable results narratives. Extract key metrics, craft testimonial-ready quotes, and structure stories for maximum persuasive impact.",
+    tools: ["write_document", "llm_generate", "search_documents"],
   },
   {
     id: "product-description-writer",
@@ -1025,6 +1313,8 @@ export const documentAgents: AgentDef[] = [
     description: "Crafts compelling product descriptions with features, benefits, and specifications.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a product description writing specialist. Craft compelling product descriptions with features, benefits, technical specifications, and use cases. Optimize for both customer appeal and search engine visibility while maintaining brand voice consistency.",
+    tools: ["write_document", "llm_generate", "web_search"],
   },
   {
     id: "white-paper-author",
@@ -1032,6 +1322,8 @@ export const documentAgents: AgentDef[] = [
     description: "Produces thought leadership white papers with research-backed arguments and data visuals.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a white paper authoring specialist. Produce thought leadership white papers with research-backed arguments, data visualizations, and industry insights. Structure content for credibility and persuasion while maintaining academic rigor.",
+    tools: ["write_document", "llm_generate", "web_search", "generate_chart"],
   },
   {
     id: "social-media-snippet-maker",
@@ -1039,6 +1331,8 @@ export const documentAgents: AgentDef[] = [
     description: "Generates social media posts and snippets promoting document content across platforms.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a social media content specialist. Generate social media posts and snippets promoting document content across platforms. Adapt tone, length, and format for each platform. Include hashtags, mentions, and engaging hooks while preserving key messages.",
+    tools: ["read_document", "llm_generate", "summarize"],
   },
   {
     id: "newsletter-assembler",
@@ -1046,6 +1340,8 @@ export const documentAgents: AgentDef[] = [
     description: "Compiles newsletter content from multiple sources with consistent formatting and CTAs.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a newsletter assembly specialist. Compile newsletter content from multiple sources with consistent formatting, engaging section headers, and clear calls to action. Curate content for relevance, balance topics, and optimize layout for email readability.",
+    tools: ["write_document", "search_documents", "summarize", "apply_template"],
   },
   {
     id: "rfp-response-drafter",
@@ -1053,6 +1349,8 @@ export const documentAgents: AgentDef[] = [
     description: "Generates request-for-proposal responses using historical win data and solution templates.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are an RFP response drafting specialist. Generate request-for-proposal responses using historical win data, solution templates, and competitive differentiators. Tailor responses to evaluation criteria, provide compliant formatting, and highlight key strengths.",
+    tools: ["write_document", "search_documents", "llm_generate", "apply_template"],
   },
   {
     id: "knowledge-base-writer",
@@ -1060,6 +1358,8 @@ export const documentAgents: AgentDef[] = [
     description: "Creates structured knowledge base articles with step-by-step instructions and screenshots.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a knowledge base article writing specialist. Create structured knowledge base articles with step-by-step instructions, screenshots, troubleshooting guides, and related article links. Optimize for searchability and self-service resolution.",
+    tools: ["write_document", "llm_generate", "search_documents"],
   },
   {
     id: "internal-comms-drafter",
@@ -1067,6 +1367,8 @@ export const documentAgents: AgentDef[] = [
     description: "Writes internal communications including announcements, policy updates, and org changes.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are an internal communications drafting specialist. Write internal communications including company announcements, policy updates, organizational changes, and employee-facing messages. Balance transparency with sensitivity and ensure clear, actionable messaging.",
+    tools: ["write_document", "llm_generate", "apply_template"],
   },
   // --- Editing & Proofreading (151-160) ---
   {
@@ -1075,6 +1377,8 @@ export const documentAgents: AgentDef[] = [
     description: "Detects and fixes grammatical errors including subject-verb agreement and tense consistency.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a grammar correction specialist. Detect and fix grammatical errors including subject-verb agreement, tense consistency, pronoun references, and dangling modifiers. Provide explanations for corrections to help authors learn from common mistakes.",
+    tools: ["edit_document", "read_document", "llm_generate"],
   },
   {
     id: "spell-check-agent",
@@ -1082,6 +1386,8 @@ export const documentAgents: AgentDef[] = [
     description: "Identifies misspellings with context-aware corrections for technical and domain terms.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a context-aware spell checking specialist. Identify misspellings with context-aware corrections that properly handle technical terminology, domain-specific jargon, and proper nouns. Distinguish between genuine errors and intentional non-standard spellings.",
+    tools: ["edit_document", "read_document", "llm_generate"],
   },
   {
     id: "ap-style-enforcer",
@@ -1089,6 +1395,8 @@ export const documentAgents: AgentDef[] = [
     description: "Ensures documents conform to Associated Press style guidelines for media writing.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are an AP style enforcement specialist. Ensure documents conform to Associated Press style guidelines for media writing. Check capitalization, abbreviation, number formatting, date conventions, and punctuation rules specific to AP style.",
+    tools: ["edit_document", "read_document", "validate_data"],
   },
   {
     id: "chicago-style-checker",
@@ -1096,6 +1404,8 @@ export const documentAgents: AgentDef[] = [
     description: "Validates documents against Chicago Manual of Style rules for academic and book publishing.",
     status: "disabled",
     category: "document-management",
+    systemPrompt: "You are a Chicago Manual of Style validation specialist. Validate documents against Chicago Manual of Style rules for academic and book publishing. Check citation formatting, footnote conventions, bibliography style, and manuscript preparation standards.",
+    tools: ["read_document", "validate_data", "edit_document"],
   },
   {
     id: "sentence-restructurer",
@@ -1103,6 +1413,8 @@ export const documentAgents: AgentDef[] = [
     description: "Rewrites awkward or overly complex sentences for improved clarity and readability.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a sentence restructuring specialist. Rewrite awkward, overly complex, or unclear sentences for improved clarity and readability. Break long sentences, simplify convoluted structures, and improve parallel construction while preserving original meaning.",
+    tools: ["edit_document", "read_document", "llm_generate"],
   },
   {
     id: "punctuation-fixer",
@@ -1110,6 +1422,8 @@ export const documentAgents: AgentDef[] = [
     description: "Corrects punctuation errors including comma splices, missing periods, and quotation marks.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a punctuation correction specialist. Correct punctuation errors including comma splices, missing periods, misused semicolons, quotation mark placement, and apostrophe errors. Apply consistent punctuation conventions throughout the document.",
+    tools: ["edit_document", "read_document"],
   },
   {
     id: "word-choice-advisor",
@@ -1117,6 +1431,8 @@ export const documentAgents: AgentDef[] = [
     description: "Suggests stronger vocabulary alternatives and eliminates weak or vague word choices.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a vocabulary and word choice specialist. Suggest stronger vocabulary alternatives and eliminate weak, vague, or overused word choices. Recommend precise language that matches the document's tone and audience while improving overall writing quality.",
+    tools: ["read_document", "llm_generate", "edit_document"],
   },
   {
     id: "redundancy-eliminator",
@@ -1124,6 +1440,8 @@ export const documentAgents: AgentDef[] = [
     description: "Identifies and removes redundant phrases, tautologies, and unnecessary word repetition.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a redundancy elimination specialist. Identify and remove redundant phrases, tautologies, pleonasms, and unnecessary word repetition. Tighten prose by eliminating verbose constructions while maintaining meaning and readability.",
+    tools: ["edit_document", "read_document", "extract_text"],
   },
   {
     id: "custom-style-guide-agent",
@@ -1131,6 +1449,8 @@ export const documentAgents: AgentDef[] = [
     description: "Enforces organization-specific style guide rules defined in custom configuration profiles.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a custom style guide enforcement specialist. Enforce organization-specific style guide rules defined in custom configuration profiles. Apply custom terminology preferences, formatting conventions, and writing standards unique to the organization.",
+    tools: ["edit_document", "read_document", "validate_data"],
   },
   {
     id: "paragraph-flow-improver",
@@ -1138,6 +1458,8 @@ export const documentAgents: AgentDef[] = [
     description: "Enhances paragraph transitions and logical flow between sections for cohesive reading.",
     status: "disabled",
     category: "document-management",
+    systemPrompt: "You are a paragraph flow improvement specialist. Enhance paragraph transitions and logical flow between sections for cohesive reading. Add transitional phrases, reorder content for logical progression, and ensure each paragraph connects smoothly to the next.",
+    tools: ["edit_document", "read_document", "llm_generate"],
   },
   // --- Media & Embedding (161-167) ---
   {
@@ -1146,6 +1468,8 @@ export const documentAgents: AgentDef[] = [
     description: "Generates descriptive captions and alt text for images embedded within documents.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are an image caption and alt text specialist. Generate descriptive captions and accessible alt text for images embedded within documents. Ensure alt text conveys meaningful information for screen readers while captions provide useful context for all readers.",
+    tools: ["read_document", "llm_generate", "edit_document"],
   },
   {
     id: "table-data-extractor",
@@ -1153,6 +1477,8 @@ export const documentAgents: AgentDef[] = [
     description: "Extracts tabular data from images and PDFs into editable structured table formats.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a table data extraction specialist. Extract tabular data from images and PDFs into editable structured table formats. Handle merged cells, multi-line entries, and complex table layouts. Validate extracted data for accuracy and completeness.",
+    tools: ["extract_text", "read_document", "transform_data"],
   },
   {
     id: "chart-description-writer",
@@ -1160,6 +1486,8 @@ export const documentAgents: AgentDef[] = [
     description: "Writes accessible text descriptions of charts and graphs for screen reader compatibility.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a chart accessibility description specialist. Write accessible text descriptions of charts and graphs for screen reader compatibility. Describe data trends, key values, and visual patterns in clear natural language that conveys the chart's full informational content.",
+    tools: ["read_document", "llm_generate", "edit_document"],
   },
   {
     id: "embedded-media-validator",
@@ -1167,6 +1495,8 @@ export const documentAgents: AgentDef[] = [
     description: "Checks that all embedded images, videos, and links within documents are valid and accessible.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are an embedded media validation specialist. Check that all embedded images, videos, links, and other media within documents are valid, accessible, and properly rendered. Detect broken links, missing images, and inaccessible media resources.",
+    tools: ["read_document", "validate_data", "http_request"],
   },
   {
     id: "screenshot-annotator",
@@ -1174,6 +1504,8 @@ export const documentAgents: AgentDef[] = [
     description: "Adds numbered callouts, arrows, and highlights to screenshots within documentation.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a screenshot annotation specialist. Add numbered callouts, arrows, highlights, and text labels to screenshots within documentation. Ensure annotations are clear, consistently styled, and help readers quickly identify important UI elements or steps.",
+    tools: ["edit_document", "generate_image", "read_document"],
   },
   {
     id: "diagram-generator",
@@ -1181,6 +1513,8 @@ export const documentAgents: AgentDef[] = [
     description: "Creates flowcharts, org charts, and process diagrams from text-based descriptions.",
     status: "disabled",
     category: "document-management",
+    systemPrompt: "You are a diagram generation specialist. Create flowcharts, organizational charts, process diagrams, and architecture diagrams from text-based descriptions. Support multiple diagram notations and produce clear, well-labeled visual representations.",
+    tools: ["generate_diagram", "llm_generate", "write_document"],
   },
   {
     id: "image-compression-agent",
@@ -1188,6 +1522,8 @@ export const documentAgents: AgentDef[] = [
     description: "Optimizes embedded image file sizes without visible quality loss to reduce document weight.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are an image compression and optimization specialist. Optimize embedded image file sizes without visible quality loss to reduce document weight. Select appropriate compression algorithms per image type, resize oversized images, and report size savings achieved.",
+    tools: ["read_document", "resize_image", "edit_document"],
   },
   // --- Archival & Retention (168-175) ---
   {
@@ -1196,6 +1532,8 @@ export const documentAgents: AgentDef[] = [
     description: "Schedules incremental and full document backups with configurable retention windows.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a document backup scheduling specialist. Schedule incremental and full document backups with configurable retention windows. Manage backup frequency, storage destinations, and retention policies. Verify backup integrity and test restore procedures.",
+    tools: ["archive_files", "read_document", "copy_file"],
   },
   {
     id: "expiry-policy-agent",
@@ -1203,6 +1541,8 @@ export const documentAgents: AgentDef[] = [
     description: "Monitors document expiration dates and triggers review or deletion per retention policies.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a document expiry policy enforcement specialist. Monitor document expiration dates and trigger review, archival, or deletion workflows per retention policies. Send advance warnings to document owners and maintain expiry compliance records.",
+    tools: ["search_documents", "send_notification", "read_document"],
   },
   {
     id: "cold-storage-migrator",
@@ -1210,6 +1550,8 @@ export const documentAgents: AgentDef[] = [
     description: "Moves infrequently accessed documents to cold storage tiers to optimize costs.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are a cold storage migration specialist. Move infrequently accessed documents to cold storage tiers to optimize storage costs. Analyze access patterns, enforce tiering policies, and maintain retrieval capabilities for archived documents.",
+    tools: ["move_file", "archive_files", "search_documents"],
   },
   {
     id: "archive-integrity-checker",
@@ -1217,6 +1559,8 @@ export const documentAgents: AgentDef[] = [
     description: "Validates archived document checksums to ensure long-term storage integrity.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are an archive integrity verification specialist. Validate archived document checksums to ensure long-term storage integrity. Perform periodic integrity scans, detect bit rot or corruption, and alert on any integrity violations requiring remediation.",
+    tools: ["read_document", "validate_data", "search_documents"],
   },
   {
     id: "legal-hold-agent",
@@ -1224,6 +1568,8 @@ export const documentAgents: AgentDef[] = [
     description: "Places documents under legal hold preventing deletion during litigation or investigations.",
     status: "active",
     category: "document-management",
+    systemPrompt: "You are a legal hold management specialist. Place documents under legal hold preventing deletion or modification during litigation or investigations. Track hold scope, notify custodians, and maintain chain-of-custody documentation for legal proceedings.",
+    tools: ["read_document", "send_notification", "search_documents"],
   },
   {
     id: "disposal-certificate-agent",
@@ -1231,6 +1577,8 @@ export const documentAgents: AgentDef[] = [
     description: "Generates certified disposal records when documents are permanently deleted per policy.",
     status: "disabled",
     category: "document-management",
+    systemPrompt: "You are a document disposal certification specialist. Generate certified disposal records when documents are permanently deleted per retention policies. Maintain disposal audit trails, verify deletion completeness, and produce compliance certificates.",
+    tools: ["write_document", "read_document", "validate_data"],
   },
   {
     id: "archive-search-agent",
@@ -1238,6 +1586,8 @@ export const documentAgents: AgentDef[] = [
     description: "Enables fast retrieval and search within archived document collections and cold storage.",
     status: "idle",
     category: "document-management",
+    systemPrompt: "You are an archive search and retrieval specialist. Enable fast retrieval and search within archived document collections and cold storage. Maintain archive indexes, handle retrieval requests, and optimize search performance across large historical document sets.",
+    tools: ["search_documents", "read_document", "semantic_search"],
   },
   {
     id: "format-preservation-agent",
@@ -1245,5 +1595,7 @@ export const documentAgents: AgentDef[] = [
     description: "Converts aging document formats to modern standards to prevent future accessibility loss.",
     status: "disabled",
     category: "document-management",
+    systemPrompt: "You are a format preservation specialist. Convert aging document formats to modern standards to prevent future accessibility loss. Identify at-risk formats, perform migration with fidelity validation, and maintain format migration logs for archival compliance.",
+    tools: ["convert_format", "read_document", "write_document"],
   },
 ];

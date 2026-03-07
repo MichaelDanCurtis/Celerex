@@ -36,6 +36,10 @@ export function Breadcrumb() {
       segments.push({ label: "Agents" });
       segments.push({ label: "Task Queue" });
       break;
+    case "tools-manager":
+      segments.push({ label: "Agents" });
+      segments.push({ label: "Tools Manager" });
+      break;
     case "plugin-manager":
       segments.push({ label: "Plugins" });
       segments.push({ label: "Manager" });

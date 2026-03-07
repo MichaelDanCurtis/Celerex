@@ -17,6 +17,7 @@ import { usePersistence } from "./hooks/usePersistence";
 import { ToastContainer } from "./layout/ToastContainer";
 import { AgentDashboard } from "./layout/AgentDashboard";
 import { PipelineEditor } from "./layout/PipelineEditor";
+import { ToolsManager } from "./layout/ToolsManager";
 import { TaskQueue } from "./layout/TaskQueue";
 import { PluginManager } from "./layout/PluginManager";
 import { Settings } from "./layout/Settings";
@@ -291,6 +292,8 @@ export function App() {
             <AgentDashboard />
           ) : activeView === "pipeline-editor" ? (
             <PipelineEditor />
+          ) : activeView === "tools-manager" ? (
+            <ToolsManager />
           ) : activeView === "task-queue" ? (
             <TaskQueue />
           ) : activeView === "timeline" ? (

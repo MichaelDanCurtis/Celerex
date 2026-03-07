@@ -43,6 +43,8 @@ export interface AgentDef {
   systemPrompt?: string;
   /** Which AI model to use (overrides default) */
   model?: string;
+  /** Tool IDs this agent can invoke */
+  tools?: string[];
   /** Whether this is a user-created custom agent */
   isCustom?: boolean;
 }

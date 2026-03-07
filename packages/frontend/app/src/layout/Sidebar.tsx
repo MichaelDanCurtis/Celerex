@@ -355,6 +355,11 @@ export function Sidebar({
               active={activeView === "task-queue"}
               onClick={() => setActiveView("task-queue")}
             />
+            <SidebarItem
+              label="Tools Manager"
+              active={activeView === "tools-manager"}
+              onClick={() => setActiveView("tools-manager")}
+            />
           </SidebarSection>
 
           <SidebarSection title="Plugins">

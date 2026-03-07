@@ -6,6 +6,7 @@ import {
   type IOTypeId,
   type CategoryId,
 } from "../data/agents";
+import { getAllTools, TOOL_CATEGORIES } from "../data/tools";
 
 export interface AgentEditorDialogProps {
   open: boolean;
@@ -51,6 +52,8 @@ export function AgentEditorDialog({
   const [outputs, setOutputs] = useState<IOTypeId[]>(["text"]);
   const [systemPrompt, setSystemPrompt] = useState("");
   const [model, setModel] = useState("");
+  const [tools, setTools] = useState<string[]>([]);
+  const [toolSearch, setToolSearch] = useState("");
 
   // Initialize state when dialog opens
   useEffect(() => {
@@ -64,6 +67,7 @@ export function AgentEditorDialog({
       setOutputs(agent.outputs ?? ["text"]);
       setSystemPrompt(agent.systemPrompt ?? "");
       setModel(agent.model ?? "");
+      setTools(agent.tools ?? []);
     } else {
       const d = defaultAgent();
       setName(d.name);
@@ -74,7 +78,9 @@ export function AgentEditorDialog({
       setOutputs(d.outputs);
       setSystemPrompt(d.systemPrompt);
       setModel(d.model);
+      setTools([]);
     }
+    setToolSearch("");
   }, [open, agent]);
 
   // Escape key handler
@@ -105,6 +111,7 @@ export function AgentEditorDialog({
       outputs,
       systemPrompt: systemPrompt.trim() || undefined,
       model: model.trim() || undefined,
+      tools: tools.length > 0 ? tools : undefined,
       isCustom: agent?.isCustom ?? true,
     };
     onSave(result);
@@ -280,6 +287,128 @@ export function AgentEditorDialog({
                   );
                 })}
               </div>
+            </FieldGroup>
+          </section>
+
+          {/* Tools */}
+          <section style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <SectionLabel>Tools ({tools.length} assigned)</SectionLabel>
+
+            {/* Selected tools */}
+            {tools.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                {tools.map((toolId) => {
+                  const t = getAllTools().find((x) => x.id === toolId);
+                  const catColor = TOOL_CATEGORIES.find((c) => c.id === t?.category)?.color ?? "#6b7280";
+                  return (
+                    <span
+                      key={toolId}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        padding: "3px 10px",
+                        borderRadius: 12,
+                        fontSize: 11,
+                        fontWeight: 500,
+                        background: catColor + "22",
+                        color: catColor,
+                        border: `1px solid ${catColor}44`,
+                      }}
+                    >
+                      {t?.name ?? toolId}
+                      <span
+                        onClick={() => setTools((prev) => prev.filter((id) => id !== toolId))}
+                        style={{ cursor: "pointer", fontWeight: 700, marginLeft: 2 }}
+                      >
+                        ×
+                      </span>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Tool search & add */}
+            <FieldGroup label="Add Tools">
+              <input
+                type="text"
+                value={toolSearch}
+                onChange={(e) => setToolSearch(e.target.value)}
+                placeholder="Search available tools..."
+                style={inputStyle}
+              />
+              {toolSearch.trim() && (
+                <div
+                  style={{
+                    maxHeight: 160,
+                    overflow: "auto",
+                    border: "1px solid var(--celerex-border)",
+                    borderRadius: 6,
+                    background: "var(--celerex-bg-secondary)",
+                  }}
+                >
+                  {getAllTools()
+                    .filter((t) => {
+                      if (tools.includes(t.id)) return false;
+                      const q = toolSearch.toLowerCase();
+                      return t.name.toLowerCase().includes(q) || t.description.toLowerCase().includes(q);
+                    })
+                    .slice(0, 20)
+                    .map((t) => {
+                      const catColor = TOOL_CATEGORIES.find((c) => c.id === t.category)?.color ?? "#6b7280";
+                      return (
+                        <div
+                          key={t.id}
+                          onClick={() => {
+                            setTools((prev) => [...prev, t.id]);
+                            setToolSearch("");
+                          }}
+                          style={{
+                            padding: "6px 10px",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            borderBottom: "1px solid var(--celerex-border)",
+                            fontSize: 12,
+                          }}
+                          onMouseEnter={(e) => {
+                            (e.currentTarget as HTMLElement).style.background = "var(--celerex-bg-primary)";
+                          }}
+                          onMouseLeave={(e) => {
+                            (e.currentTarget as HTMLElement).style.background = "transparent";
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: "50%",
+                              background: catColor,
+                              flexShrink: 0,
+                            }}
+                          />
+                          <span style={{ fontWeight: 600, color: "var(--celerex-text-primary)" }}>
+                            {t.name}
+                          </span>
+                          <span
+                            style={{
+                              flex: 1,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              color: "var(--celerex-text-secondary)",
+                              fontSize: 11,
+                            }}
+                          >
+                            {t.description}
+                          </span>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
             </FieldGroup>
           </section>
 

@@ -4,6 +4,8 @@ export interface AgentDef {
   description: string;
   status: "active" | "idle" | "disabled";
   category: "co-development";
+  systemPrompt: string;
+  tools: string[];
 }
 
 export const codevelopmentAgents: AgentDef[] = [
@@ -14,6 +16,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Runs configurable static analysis rules across the codebase and surfaces violations with fix suggestions.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a static analysis specialist. Analyze the provided codebase for code quality issues, style violations, and potential bugs. Run configured linting rules and report violations with severity levels and actionable fix suggestions. Prioritize issues by impact and provide code snippets showing the fix.",
+    tools: ["read_file", "lint_code", "search_code", "edit_file"],
   },
   {
     id: "complexity-auditor",
@@ -21,6 +25,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Calculates cyclomatic and cognitive complexity metrics and flags functions exceeding configurable thresholds.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a code complexity analyst. Calculate cyclomatic and cognitive complexity metrics for every function in the target codebase. Flag any function exceeding configured thresholds and recommend decomposition strategies. Present results sorted by severity with concrete refactoring suggestions.",
+    tools: ["read_file", "search_code", "analyze_dependencies"],
   },
   {
     id: "duplication-detector",
@@ -28,6 +34,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Identifies duplicated code blocks across files and recommends shared abstractions to reduce redundancy.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a code duplication analyst. Scan the entire codebase to find duplicated or near-duplicated code blocks across files. Group related duplicates together and propose shared abstractions, utility functions, or base classes to eliminate redundancy. Prioritize by duplication frequency and code volume.",
+    tools: ["read_file", "search_code", "refactor_code"],
   },
   {
     id: "code-review-assistant",
@@ -35,6 +43,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Provides automated inline review comments on pull requests covering style, logic, and best practices.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are an experienced code reviewer. Examine code changes for style consistency, logical correctness, performance pitfalls, and adherence to project best practices. Provide specific, constructive inline comments with suggested improvements. Focus on issues that automated linters cannot catch.",
+    tools: ["read_file", "search_code", "git_operations", "lint_code"],
   },
   {
     id: "dead-code-scanner",
@@ -42,6 +52,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Detects unreachable code, unused exports, and orphaned files that can be safely removed.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a dead code detection specialist. Analyze the codebase to identify unreachable code paths, unused exports, orphaned files, and unused variables or imports. Verify each finding to avoid false positives and provide safe removal instructions. Report the total dead code volume as a cleanup metric.",
+    tools: ["read_file", "search_code", "analyze_dependencies", "list_files"],
   },
   {
     id: "lint-rule-enforcer",
@@ -49,6 +61,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Enforces project-specific linting rules and auto-fixes violations before code reaches review.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a linting enforcement agent. Apply the project's configured linting rules to all changed files and auto-fix violations where safe to do so. For violations requiring manual intervention, provide clear explanations of the rule and how to resolve each issue. Ensure no regressions are introduced by fixes.",
+    tools: ["read_file", "lint_code", "edit_file", "run_command"],
   },
   {
     id: "code-style-harmonizer",
@@ -56,6 +70,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Normalizes formatting, naming conventions, and import ordering to maintain a consistent codebase style.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a code style harmonization specialist. Normalize formatting, naming conventions, and import ordering across the codebase according to the project's style guide. Identify inconsistencies and apply bulk formatting corrections while preserving code semantics. Report a summary of all harmonization changes made.",
+    tools: ["read_file", "edit_file", "lint_code", "search_code"],
   },
   {
     id: "type-coverage-checker",
@@ -63,6 +79,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Measures TypeScript type coverage and highlights areas with excessive use of any or unknown types.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a TypeScript type coverage analyst. Measure type coverage across the project and identify files or functions with excessive use of 'any', 'unknown', or missing type annotations. Suggest specific type definitions to replace unsafe types and track coverage improvement over time.",
+    tools: ["read_file", "search_code", "generate_types", "analyze_dependencies"],
   },
   {
     id: "security-code-scanner",
@@ -70,6 +88,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Scans source code for common security vulnerabilities including injection flaws, XSS, and hardcoded secrets.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a security code analysis specialist. Scan source code for common vulnerabilities including SQL injection, XSS, hardcoded secrets, insecure cryptographic usage, and path traversal risks. Classify findings by CVSS severity and provide remediation code samples for each vulnerability found.",
+    tools: ["read_file", "search_code", "regex_search", "run_command"],
   },
   {
     id: "tech-debt-tracker",
@@ -77,6 +97,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Catalogs TODO comments, deprecated API usage, and outdated patterns into a prioritized remediation backlog.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a technical debt analyst. Catalog all TODO/FIXME/HACK comments, deprecated API usage, outdated patterns, and known workarounds across the codebase. Organize findings into a prioritized remediation backlog with effort estimates and business impact assessments for each item.",
+    tools: ["read_file", "search_code", "regex_search", "create_ticket"],
   },
 
   // --- Testing & QA ---
@@ -86,6 +108,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Automatically generates unit tests for functions and classes based on their signatures and usage patterns.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a unit test generation specialist. Analyze function signatures, return types, and usage patterns to generate comprehensive unit tests covering happy paths, edge cases, and error scenarios. Use the project's existing test framework conventions and ensure generated tests are deterministic and fast.",
+    tools: ["read_file", "write_file", "run_tests", "search_code"],
   },
   {
     id: "integration-test-builder",
@@ -93,6 +117,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Creates integration tests that verify interactions between services, databases, and external APIs.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are an integration test specialist. Create tests that verify the correct interaction between services, databases, and external APIs. Set up appropriate test fixtures, mock external dependencies where necessary, and validate data flow across system boundaries. Ensure tests are isolated and repeatable.",
+    tools: ["read_file", "write_file", "run_tests", "run_command"],
   },
   {
     id: "e2e-test-orchestrator",
@@ -100,6 +126,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Generates and maintains end-to-end test suites using Playwright or Cypress for critical user flows.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are an end-to-end testing specialist. Generate and maintain E2E test suites using Playwright or Cypress that cover critical user flows. Design tests that are resilient to minor UI changes by using semantic selectors. Include setup/teardown logic and meaningful assertions for each user journey.",
+    tools: ["read_file", "write_file", "run_tests", "run_command"],
   },
   {
     id: "fuzz-test-engine",
@@ -107,6 +135,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Generates randomized inputs to uncover edge cases, crashes, and unexpected behavior in target functions.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a fuzz testing specialist. Generate randomized and boundary-value inputs to target functions in order to uncover crashes, panics, and unexpected behavior. Analyze function signatures to craft meaningful input distributions and report minimal reproducible test cases for each discovered issue.",
+    tools: ["read_file", "write_file", "run_tests", "run_command"],
   },
   {
     id: "mutation-test-runner",
@@ -114,6 +144,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Applies code mutations to verify that existing tests catch introduced bugs and measures test suite strength.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a mutation testing specialist. Apply systematic code mutations such as operator swaps, condition inversions, and boundary changes to measure the effectiveness of the existing test suite. Report mutation survival rates per module and identify areas where tests fail to catch introduced defects.",
+    tools: ["read_file", "edit_file", "run_tests", "run_command"],
   },
   {
     id: "test-coverage-analyzer",
@@ -121,6 +153,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Tracks line, branch, and statement coverage across the project and identifies untested critical paths.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a test coverage analyst. Track line, branch, and statement coverage metrics across the project. Identify untested critical paths, especially in business logic and error handling code. Generate coverage reports with trend analysis and prioritize coverage gaps by risk level.",
+    tools: ["run_tests", "read_file", "search_code", "run_command"],
   },
   {
     id: "snapshot-test-manager",
@@ -128,6 +162,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Manages snapshot tests for UI components, detects unintended visual regressions, and updates baselines.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a snapshot test management specialist. Manage snapshot tests for UI components, reviewing snapshot diffs to distinguish intentional changes from unintended regressions. Update baselines when changes are approved and flag suspicious snapshot changes that may indicate bugs.",
+    tools: ["read_file", "write_file", "run_tests", "run_command"],
   },
   {
     id: "test-data-factory",
@@ -135,6 +171,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Generates realistic mock data and fixtures for use in unit, integration, and end-to-end test suites.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a test data generation specialist. Create realistic mock data factories and fixtures that mirror production data shapes while avoiding sensitive information. Build composable factory functions with sensible defaults and override capabilities for use across all test levels.",
+    tools: ["read_file", "write_file", "generate_types", "search_code"],
   },
   {
     id: "visual-regression-checker",
@@ -142,6 +180,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Compares UI screenshots before and after changes to detect unintended visual differences pixel by pixel.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a visual regression testing specialist. Compare UI screenshots before and after code changes to detect unintended visual differences. Configure pixel-level and perceptual diff thresholds appropriate to each component. Highlight changed regions and classify diffs as intentional or regressive.",
+    tools: ["run_tests", "run_command", "read_file", "resize_image"],
   },
   {
     id: "test-flakiness-detector",
@@ -149,6 +189,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Identifies flaky tests by analyzing historical pass/fail patterns and suggests stabilization strategies.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a test reliability analyst. Identify flaky tests by analyzing historical pass/fail patterns and running suspect tests multiple times in isolation. Diagnose root causes such as timing dependencies, shared state, or non-deterministic data and provide concrete stabilization fixes.",
+    tools: ["run_tests", "read_file", "search_code", "run_command"],
   },
 
   // --- Debugging & Diagnostics ---
@@ -158,6 +200,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Parses stack traces to pinpoint root causes, maps to source files, and suggests likely fixes.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a stack trace analysis specialist. Parse error stack traces to identify root cause locations, map minified or compiled references back to source files, and suggest likely fixes. Cross-reference with known error patterns and recent code changes to provide contextual diagnosis.",
+    tools: ["read_file", "search_code", "llm_generate", "run_command"],
   },
   {
     id: "memory-profiler",
@@ -165,6 +209,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Detects memory leaks, excessive allocations, and retention issues through heap snapshot analysis.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a memory profiling specialist. Analyze heap snapshots and allocation timelines to detect memory leaks, excessive allocations, and object retention issues. Identify the retaining paths for leaked objects and suggest code changes to release references properly.",
+    tools: ["run_command", "read_file", "search_code", "analyze_data"],
   },
   {
     id: "performance-bottleneck-finder",
@@ -172,6 +218,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Profiles runtime execution to identify slow functions, expensive renders, and blocking operations.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a performance profiling specialist. Profile runtime execution to identify slow functions, expensive renders, and blocking operations. Measure execution time distributions and pinpoint the specific code paths causing bottlenecks. Recommend targeted optimizations with expected impact estimates.",
+    tools: ["run_command", "read_file", "search_code", "query_metrics"],
   },
   {
     id: "log-pattern-analyzer",
@@ -179,6 +227,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Analyzes application logs to detect error patterns, anomalies, and recurring failure signatures.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a log analysis specialist. Analyze application log streams to detect recurring error patterns, anomalous behavior, and failure signatures. Correlate log events across services to trace distributed failure chains and provide timeline-based incident summaries with root cause hypotheses.",
+    tools: ["query_logs", "search_code", "read_file", "classify_text"],
   },
   {
     id: "runtime-error-classifier",
@@ -186,6 +236,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Classifies runtime exceptions by type and frequency, then recommends targeted error handling strategies.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a runtime error classification specialist. Classify runtime exceptions by type, frequency, and originating module. Identify patterns in error occurrence and recommend targeted error handling strategies such as retry logic, fallbacks, or input validation to prevent each error class.",
+    tools: ["read_file", "search_code", "classify_text", "query_logs"],
   },
   {
     id: "network-request-debugger",
@@ -193,6 +245,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Inspects HTTP request and response cycles to diagnose timeouts, malformed payloads, and auth failures.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a network debugging specialist. Inspect HTTP request and response cycles to diagnose issues like timeouts, malformed payloads, authentication failures, and unexpected status codes. Analyze headers, body content, and timing to pinpoint the exact failure point in the request chain.",
+    tools: ["http_request", "read_file", "search_code", "query_logs"],
   },
   {
     id: "concurrency-issue-detector",
@@ -200,6 +254,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Identifies race conditions, deadlocks, and thread-safety violations in concurrent or async code paths.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a concurrency analysis specialist. Identify race conditions, deadlocks, and thread-safety violations in concurrent or asynchronous code paths. Analyze shared state access patterns and locking strategies to detect potential data corruption scenarios. Recommend synchronization fixes or lock-free alternatives.",
+    tools: ["read_file", "search_code", "run_command", "analyze_dependencies"],
   },
 
   // --- API Development ---
@@ -209,6 +265,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Generates RESTful endpoint boilerplate including routes, controllers, validators, and response types.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a REST API scaffolding specialist. Generate complete RESTful endpoint boilerplate including route definitions, controller handlers, request validators, and typed response schemas. Follow project conventions for error handling, middleware integration, and naming patterns.",
+    tools: ["read_file", "write_file", "generate_types", "search_code"],
   },
   {
     id: "graphql-schema-builder",
@@ -216,6 +274,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Assists in designing GraphQL schemas with types, queries, mutations, and resolver scaffolding.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a GraphQL schema design specialist. Design GraphQL schemas with well-structured types, queries, mutations, and subscriptions. Generate resolver scaffolding with proper data loader integration and error handling. Ensure schema follows relay conventions and supports efficient data fetching.",
+    tools: ["read_file", "write_file", "generate_types", "search_code"],
   },
   {
     id: "openapi-spec-generator",
@@ -223,6 +283,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Generates OpenAPI 3.x specifications from existing route definitions and inline annotations.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are an OpenAPI specification specialist. Generate OpenAPI 3.x specifications from existing route definitions, inline annotations, and type definitions. Include comprehensive request/response schemas, authentication requirements, and example values. Validate the generated spec for completeness and correctness.",
+    tools: ["read_file", "write_file", "search_code", "generate_types"],
   },
   {
     id: "api-mock-server",
@@ -230,6 +292,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Spins up mock API servers from OpenAPI specs for frontend development and integration testing.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are an API mocking specialist. Generate mock API server configurations from OpenAPI specifications that return realistic response data. Support dynamic responses based on request parameters, configurable latency simulation, and error scenario triggers for comprehensive frontend development and testing.",
+    tools: ["read_file", "write_file", "run_command", "http_request"],
   },
   {
     id: "contract-test-validator",
@@ -237,6 +301,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Validates API contracts between consumer and provider services using Pact or similar frameworks.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are an API contract testing specialist. Validate contracts between consumer and provider services using consumer-driven contract testing frameworks. Generate contract tests from API specifications, run provider verification, and report any contract violations with detailed mismatch information.",
+    tools: ["read_file", "run_tests", "run_command", "search_code"],
   },
   {
     id: "api-versioning-advisor",
@@ -244,6 +310,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Detects breaking API changes and recommends versioning strategies to maintain backward compatibility.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are an API versioning specialist. Detect breaking changes between API versions by comparing endpoint signatures, request/response schemas, and behavior contracts. Recommend versioning strategies such as URL path versioning or header-based versioning and generate migration guides for consumers.",
+    tools: ["read_file", "search_code", "git_operations", "diff_documents"],
   },
   {
     id: "rate-limit-designer",
@@ -251,6 +319,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Designs and configures API rate limiting policies based on endpoint sensitivity and traffic patterns.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a rate limiting design specialist. Design API rate limiting policies based on endpoint sensitivity, expected traffic patterns, and user tiers. Configure sliding window or token bucket algorithms with appropriate limits, headers, and error responses. Generate the middleware configuration code.",
+    tools: ["read_file", "write_file", "edit_file", "search_code"],
   },
   {
     id: "grpc-proto-generator",
@@ -258,6 +328,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Generates Protocol Buffer definitions and gRPC service stubs from domain models and interface specs.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a gRPC and Protocol Buffer specialist. Generate .proto files with well-structured message types, service definitions, and RPC method signatures from domain models. Create server and client stubs with proper streaming support, error handling, and deadline propagation.",
+    tools: ["read_file", "write_file", "generate_types", "run_command"],
   },
   {
     id: "webhook-manager",
@@ -265,6 +337,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Scaffolds webhook endpoints with signature verification, retry logic, and idempotent event processing.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a webhook implementation specialist. Scaffold webhook receiver endpoints with HMAC signature verification, idempotent event processing, and configurable retry logic. Generate event handler boilerplate with proper error handling, logging, and dead-letter queue integration for failed deliveries.",
+    tools: ["read_file", "write_file", "edit_file", "search_code"],
   },
 
   // --- Database & Data ---
@@ -274,6 +348,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Reviews database schema designs and suggests normalization, indexing, and relationship improvements.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a database schema design specialist. Review database schemas for normalization issues, missing indexes, and suboptimal relationship designs. Suggest improvements that balance query performance with data integrity. Provide specific ALTER TABLE statements or migration code for each recommendation.",
+    tools: ["read_file", "query_database", "search_code", "write_file"],
   },
   {
     id: "migration-generator",
@@ -281,6 +357,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Generates database migration files from schema diffs with rollback support and data preservation.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a database migration specialist. Generate migration files from schema diffs with both up and down migration steps. Ensure data preservation during column type changes and table restructuring. Include validation checks and generate rollback scripts for safe deployment.",
+    tools: ["read_file", "write_file", "query_database", "run_command"],
   },
   {
     id: "query-optimizer",
@@ -288,6 +366,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Analyzes SQL and ORM queries for performance issues and suggests index additions or query rewrites.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a database query optimization specialist. Analyze SQL and ORM-generated queries for performance issues by examining execution plans and identifying full table scans, missing indexes, and inefficient joins. Suggest query rewrites and index additions with expected performance improvement estimates.",
+    tools: ["query_database", "read_file", "search_code", "edit_file"],
   },
   {
     id: "seed-data-generator",
@@ -295,6 +375,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Creates realistic seed data scripts for development and staging environments with referential integrity.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a seed data generation specialist. Create realistic seed data scripts that maintain referential integrity across all tables. Generate diverse, representative data sets suitable for development and staging environments. Support incremental seeding and idempotent re-runs without data duplication.",
+    tools: ["write_file", "read_file", "query_database", "run_command"],
   },
   {
     id: "orm-mapping-assistant",
@@ -302,6 +384,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Generates ORM entity definitions and relationship mappings from existing database schemas.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are an ORM mapping specialist. Generate ORM entity classes and relationship mappings from existing database schemas. Configure eager/lazy loading strategies, cascade rules, and custom column mappings. Ensure generated models match the database schema exactly and follow project conventions.",
+    tools: ["read_file", "write_file", "query_database", "generate_types"],
   },
   {
     id: "data-validation-builder",
@@ -309,6 +393,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Creates input validation schemas using Zod, Joi, or Yup based on database constraints and business rules.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a data validation specialist. Create input validation schemas using the project's validation library that enforce database constraints and business rules. Generate validators for API request bodies, form inputs, and configuration files with descriptive error messages for each validation failure.",
+    tools: ["read_file", "write_file", "generate_types", "validate_data"],
   },
   {
     id: "nosql-modeler",
@@ -316,6 +402,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Designs document schemas and access patterns for MongoDB, DynamoDB, and other NoSQL databases.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a NoSQL data modeling specialist. Design document schemas optimized for the application's specific access patterns and query requirements. Balance denormalization for read performance against update complexity. Define indexes, partition keys, and sort keys appropriate to the chosen NoSQL engine.",
+    tools: ["read_file", "write_file", "query_database", "search_code"],
   },
   {
     id: "database-index-advisor",
@@ -323,6 +411,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Recommends optimal indexes by analyzing slow query logs and common access patterns in production.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a database indexing specialist. Analyze slow query logs and common access patterns to recommend optimal index configurations. Evaluate the trade-off between read performance gains and write overhead for each proposed index. Provide CREATE INDEX statements with expected query plan improvements.",
+    tools: ["query_database", "query_logs", "read_file", "search_code"],
   },
 
   // --- Frontend Development ---
@@ -332,6 +422,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Scaffolds React components with TypeScript props, hooks, tests, and Storybook stories from specifications.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a React component scaffolding specialist. Generate complete React components with TypeScript prop interfaces, custom hooks, unit tests, and Storybook stories from design specifications. Follow the project's component patterns for file structure, styling approach, and state management.",
+    tools: ["read_file", "write_file", "generate_types", "search_code"],
   },
   {
     id: "css-optimizer",
@@ -339,6 +431,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Detects unused CSS rules, consolidates duplicates, and converts legacy styles to modern CSS or Tailwind.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a CSS optimization specialist. Detect unused CSS rules, consolidate duplicate declarations, and convert legacy styles to modern CSS features or Tailwind utility classes. Analyze specificity conflicts and cascade issues. Report total CSS reduction achieved and verify no visual regressions.",
+    tools: ["read_file", "edit_file", "search_code", "list_files"],
   },
   {
     id: "accessibility-auditor",
@@ -346,6 +440,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Checks components against WCAG 2.1 guidelines and generates fixes for ARIA roles, contrast, and focus.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are an accessibility audit specialist. Check UI components against WCAG 2.1 AA guidelines covering ARIA roles, color contrast ratios, keyboard navigation, focus management, and screen reader compatibility. Generate specific code fixes for each violation and provide testing instructions.",
+    tools: ["read_file", "edit_file", "search_code", "run_tests"],
   },
   {
     id: "responsive-layout-checker",
@@ -353,6 +449,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Validates layouts across breakpoints and identifies overflow, truncation, and spacing issues on all screens.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a responsive design specialist. Validate UI layouts across all defined breakpoints to identify overflow, text truncation, spacing inconsistencies, and touch target size issues. Generate CSS fixes that ensure consistent appearance from mobile to desktop viewports.",
+    tools: ["read_file", "edit_file", "search_code", "run_command"],
   },
   {
     id: "component-library-builder",
@@ -360,6 +458,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Scaffolds design system component libraries with theming, variants, and consistent API conventions.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a design system specialist. Scaffold component library packages with theming infrastructure, variant systems, and consistent prop API conventions. Generate base components with proper TypeScript generics, forwarded refs, and compound component patterns aligned to the design system tokens.",
+    tools: ["read_file", "write_file", "generate_types", "search_code"],
   },
   {
     id: "state-management-advisor",
@@ -367,6 +467,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Recommends optimal state management patterns and helps migrate between Redux, Zustand, or Jotai.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a frontend state management specialist. Analyze the application's state requirements to recommend optimal state management patterns. Identify state that should be local, shared, or server-cached. Guide migration between state libraries by providing equivalent implementations in the target framework.",
+    tools: ["read_file", "search_code", "refactor_code", "edit_file"],
   },
   {
     id: "form-builder-agent",
@@ -374,6 +476,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Generates type-safe form components with validation, error handling, and accessible field markup.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a form implementation specialist. Generate type-safe form components using the project's form library with field validation, error display, and accessible markup. Support complex form patterns including conditional fields, array fields, and multi-step wizards with proper state preservation.",
+    tools: ["read_file", "write_file", "generate_types", "search_code"],
   },
   {
     id: "animation-helper",
@@ -381,6 +485,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Creates performant CSS and JavaScript animations with accessibility-aware reduced-motion fallbacks.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a web animation specialist. Create performant animations using CSS transitions, keyframes, or JavaScript animation libraries. Ensure all animations respect the prefers-reduced-motion media query and provide appropriate fallbacks. Optimize for 60fps by avoiding layout-triggering properties.",
+    tools: ["read_file", "write_file", "edit_file", "search_code"],
   },
   {
     id: "i18n-extractor",
@@ -388,6 +494,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Extracts hardcoded strings into translation files and generates locale-ready component wrappers.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are an internationalization specialist. Extract hardcoded user-facing strings from components into translation key files. Generate locale-ready component wrappers with proper pluralization, date formatting, and number formatting support. Maintain translation key consistency across the entire application.",
+    tools: ["read_file", "edit_file", "write_file", "search_code", "translate"],
   },
   {
     id: "svg-icon-optimizer",
@@ -395,6 +503,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Optimizes SVG icons by removing metadata, simplifying paths, and converting to React icon components.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are an SVG optimization specialist. Optimize SVG icons by stripping unnecessary metadata, simplifying path data, and removing hidden elements. Convert optimized SVGs into accessible React icon components with configurable size, color, and ARIA label props.",
+    tools: ["read_file", "write_file", "edit_file", "list_files"],
   },
 
   // --- Backend Development ---
@@ -404,6 +514,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Generates new microservice projects with routing, middleware, health checks, and deployment config.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a microservice scaffolding specialist. Generate new microservice project structures with routing, middleware chains, health check endpoints, graceful shutdown handling, and deployment configurations. Apply the organization's service template standards and integrate with shared libraries.",
+    tools: ["write_file", "read_file", "run_command", "generate_types"],
   },
   {
     id: "message-queue-integrator",
@@ -411,6 +523,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Sets up message queue producers and consumers with dead-letter handling for RabbitMQ, Kafka, or SQS.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a message queue integration specialist. Set up message queue producers and consumers with proper serialization, dead-letter queue handling, and retry policies. Configure connection pooling, consumer group management, and message acknowledgment patterns for reliable asynchronous processing.",
+    tools: ["read_file", "write_file", "edit_file", "run_command"],
   },
   {
     id: "cache-strategy-planner",
@@ -418,6 +532,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Designs caching layers using Redis or Memcached with TTL policies, invalidation, and cache-aside patterns.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a caching strategy specialist. Design caching layers with appropriate TTL policies, cache invalidation strategies, and cache-aside or write-through patterns. Select cache key structures that support efficient lookups and bulk invalidation. Generate implementation code for the chosen cache provider.",
+    tools: ["read_file", "write_file", "edit_file", "search_code"],
   },
   {
     id: "auth-pattern-builder",
@@ -425,6 +541,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Implements authentication and authorization flows including JWT, OAuth 2.0, and role-based access control.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are an authentication and authorization specialist. Implement secure auth flows including JWT token management, OAuth 2.0 integrations, and role-based access control. Generate middleware for route protection, token refresh logic, and permission checking with proper security best practices.",
+    tools: ["read_file", "write_file", "edit_file", "manage_secrets"],
   },
   {
     id: "middleware-composer",
@@ -432,6 +550,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Creates and orders Express or Fastify middleware chains for logging, auth, validation, and error handling.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a middleware composition specialist. Design and implement ordered middleware chains for Express or Fastify applications covering request logging, authentication, input validation, rate limiting, and error handling. Ensure middleware execution order is correct and each middleware has proper next() handling.",
+    tools: ["read_file", "write_file", "edit_file", "search_code"],
   },
   {
     id: "background-job-scheduler",
@@ -439,6 +559,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Sets up background job processing with retry policies, priority queues, and failure alerting.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a background job processing specialist. Set up job queue systems with configurable retry policies, priority levels, and concurrency limits. Implement job scheduling with cron-like patterns, failure alerting, and dead-letter handling. Generate typed job handlers with proper error recovery.",
+    tools: ["read_file", "write_file", "run_command", "edit_file"],
   },
   {
     id: "event-emitter-designer",
@@ -446,6 +568,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Designs typed event-driven architectures with publish-subscribe patterns and event schema validation.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are an event-driven architecture specialist. Design typed event systems with publish-subscribe patterns, event schema validation, and handler registration. Generate strongly typed event emitter implementations that prevent event name typos and payload mismatches at compile time.",
+    tools: ["read_file", "write_file", "generate_types", "search_code"],
   },
   {
     id: "websocket-handler-builder",
@@ -453,6 +577,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Scaffolds WebSocket server handlers with room management, heartbeats, and reconnection strategies.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a WebSocket implementation specialist. Scaffold WebSocket server handlers with room management, heartbeat monitoring, and automatic reconnection strategies. Generate typed message protocols, connection lifecycle hooks, and binary/text message handling with proper backpressure management.",
+    tools: ["read_file", "write_file", "edit_file", "generate_types"],
   },
   {
     id: "file-upload-handler",
@@ -460,6 +586,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Builds multipart upload endpoints with streaming, virus scanning, size limits, and cloud storage integration.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a file upload implementation specialist. Build multipart upload endpoints with streaming processing, file type validation, size limits, and cloud storage integration. Implement virus scanning hooks, progress tracking, and resumable upload support for large files.",
+    tools: ["read_file", "write_file", "edit_file", "run_command"],
   },
 
   // --- DevOps & CI/CD ---
@@ -469,6 +597,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Generates CI/CD pipeline configurations for GitHub Actions, GitLab CI, or CircleCI from project requirements.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a CI/CD pipeline configuration specialist. Generate pipeline configurations for the target CI/CD platform with build, test, lint, and deploy stages. Optimize for execution speed with proper caching, parallelization, and conditional job execution. Include environment-specific deployment gates.",
+    tools: ["read_file", "write_file", "run_command", "deploy"],
   },
   {
     id: "dockerfile-optimizer",
@@ -476,6 +606,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Optimizes Dockerfiles with multi-stage builds, layer caching, and minimal base images for smaller artifacts.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a Docker optimization specialist. Optimize Dockerfiles using multi-stage builds, efficient layer ordering for cache utilization, and minimal base images. Reduce final image size by eliminating unnecessary dependencies and build artifacts. Apply security hardening with non-root users and read-only filesystems.",
+    tools: ["read_file", "edit_file", "docker_build", "run_command"],
   },
   {
     id: "kubernetes-manifest-builder",
@@ -483,6 +615,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Generates Kubernetes deployments, services, ingresses, and config maps from application specifications.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a Kubernetes manifest generation specialist. Generate deployment, service, ingress, and config map manifests from application specifications. Configure resource limits, health probes, rolling update strategies, and horizontal pod autoscaling. Follow Kubernetes best practices for label conventions and namespace isolation.",
+    tools: ["write_file", "read_file", "kubectl", "run_command"],
   },
   {
     id: "deployment-strategy-advisor",
@@ -490,6 +624,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Recommends blue-green, canary, or rolling deployment strategies based on service requirements and risk.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a deployment strategy specialist. Evaluate service requirements, risk tolerance, and infrastructure capabilities to recommend optimal deployment strategies. Design blue-green, canary, or rolling deployment configurations with proper health checks, rollback triggers, and traffic shifting rules.",
+    tools: ["read_file", "deploy", "kubectl", "check_health"],
   },
   {
     id: "terraform-module-generator",
@@ -497,6 +633,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Scaffolds Terraform modules for cloud infrastructure with variables, outputs, and state management.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a Terraform module specialist. Scaffold reusable Terraform modules with properly typed variables, outputs, and data sources. Follow module composition best practices with clear input/output contracts. Include validation rules, default values, and comprehensive documentation for each variable.",
+    tools: ["write_file", "read_file", "terraform_plan", "terraform_apply"],
   },
   {
     id: "helm-chart-builder",
@@ -504,6 +642,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Creates Helm charts with templated values, dependency management, and environment-specific overrides.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a Helm chart specialist. Create Helm charts with properly templated values, helper functions, and dependency management. Generate environment-specific value override files and implement chart hooks for pre/post install and upgrade operations. Follow Helm best practices for chart structure.",
+    tools: ["write_file", "read_file", "kubectl", "run_command"],
   },
   {
     id: "env-config-manager",
@@ -511,6 +651,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Manages environment variables across stages with validation, secret references, and drift detection.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are an environment configuration specialist. Manage environment variables across development, staging, and production stages with validation schemas and secret reference management. Detect configuration drift between environments and ensure all required variables are defined before deployment.",
+    tools: ["read_file", "edit_file", "manage_secrets", "run_command"],
   },
   {
     id: "monitoring-setup-agent",
@@ -518,6 +660,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Configures application monitoring with health endpoints, alerting rules, and dashboard definitions.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a monitoring configuration specialist. Set up application monitoring with health check endpoints, metric collection, alerting rules, and dashboard definitions. Configure meaningful alert thresholds that minimize false positives while catching real incidents. Generate runbook templates for each alert.",
+    tools: ["write_file", "read_file", "check_health", "query_metrics"],
   },
   {
     id: "log-aggregation-planner",
@@ -525,6 +669,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Sets up structured logging with centralized aggregation pipelines using ELK, Loki, or Datadog.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a log aggregation specialist. Design structured logging formats and centralized aggregation pipelines. Configure log levels, correlation IDs, and context enrichment for distributed tracing. Set up log retention policies, index patterns, and saved searches for common debugging workflows.",
+    tools: ["write_file", "read_file", "query_logs", "run_command"],
   },
   {
     id: "infrastructure-drift-detector",
@@ -532,6 +678,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Compares running infrastructure against declared state and alerts on configuration drift or manual changes.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are an infrastructure drift detection specialist. Compare running infrastructure state against declared-as-code configurations to identify manual changes, unauthorized modifications, and configuration drift. Generate reports detailing each drift with remediation steps to restore desired state.",
+    tools: ["terraform_plan", "read_file", "run_command", "send_notification"],
   },
 
   // --- Security ---
@@ -541,6 +689,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Validates application code against OWASP Top 10 vulnerabilities and generates remediation reports.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are an OWASP compliance specialist. Validate application code against the OWASP Top 10 vulnerability categories including injection, broken authentication, sensitive data exposure, and security misconfiguration. Generate detailed remediation reports with code-level fixes for each finding.",
+    tools: ["read_file", "search_code", "run_command", "regex_search"],
   },
   {
     id: "dependency-vulnerability-scanner",
@@ -548,6 +698,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Scans project dependencies for known CVEs and suggests patched versions or alternative packages.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a dependency vulnerability specialist. Scan all project dependencies against CVE databases to identify known vulnerabilities. Assess the severity and exploitability of each finding and recommend patched versions or alternative packages that resolve the vulnerability without breaking changes.",
+    tools: ["read_file", "run_command", "analyze_dependencies", "search_code"],
   },
   {
     id: "penetration-test-planner",
@@ -555,6 +707,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Generates penetration testing checklists and automated probe scripts tailored to the application stack.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a penetration testing planning specialist. Generate targeted penetration testing checklists and automated probe scripts based on the application's technology stack and attack surface. Cover authentication bypasses, privilege escalation, injection points, and business logic vulnerabilities.",
+    tools: ["read_file", "write_file", "http_request", "search_code"],
   },
   {
     id: "secrets-manager",
@@ -562,6 +716,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Detects hardcoded secrets in code and migrates them to vault-based secret management solutions.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a secrets management specialist. Detect hardcoded secrets, API keys, and credentials in source code and configuration files using pattern matching and entropy analysis. Migrate discovered secrets to vault-based management solutions and replace inline values with secure references.",
+    tools: ["read_file", "search_code", "manage_secrets", "regex_search"],
   },
   {
     id: "cors-policy-builder",
@@ -569,6 +725,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Configures CORS policies with appropriate origins, methods, and headers for secure cross-origin requests.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a CORS policy configuration specialist. Design and implement CORS policies with appropriate allowed origins, methods, headers, and credential handling for each API endpoint. Balance security with functionality by configuring the minimum required permissions for cross-origin access.",
+    tools: ["read_file", "edit_file", "search_code", "http_request"],
   },
   {
     id: "csp-header-generator",
@@ -576,6 +734,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Generates Content Security Policy headers that block XSS and injection attacks without breaking functionality.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a Content Security Policy specialist. Generate CSP headers that effectively block XSS and injection attacks while allowing legitimate resource loading. Analyze the application's resource requirements to build policies that avoid breaking functionality. Support report-only mode for gradual rollout.",
+    tools: ["read_file", "edit_file", "search_code", "http_request"],
   },
   {
     id: "input-sanitization-agent",
@@ -583,6 +743,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Adds input sanitization and encoding to user-facing endpoints to prevent injection and XSS attacks.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are an input sanitization specialist. Add context-appropriate input sanitization and output encoding to all user-facing endpoints. Apply HTML encoding, SQL parameterization, and command injection prevention based on the data flow context. Generate sanitization utilities consistent with the project's framework.",
+    tools: ["read_file", "edit_file", "search_code", "run_tests"],
   },
   {
     id: "ssl-certificate-checker",
@@ -590,6 +752,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Monitors SSL/TLS certificate expiration dates and validates proper chain configuration across environments.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are an SSL/TLS certificate monitoring specialist. Monitor certificate expiration dates across all environments and validate proper certificate chain configuration. Check for weak cipher suites, protocol version support, and HSTS header presence. Alert on certificates approaching expiration.",
+    tools: ["check_health", "http_request", "send_notification", "run_command"],
   },
 
   // --- Performance ---
@@ -599,6 +763,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Creates load testing scripts using k6 or Artillery to simulate traffic and measure response thresholds.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a load testing specialist. Create load test scripts that simulate realistic traffic patterns including ramp-up periods, sustained load, and spike scenarios. Define performance thresholds for response time percentiles, error rates, and throughput. Generate reports comparing results against SLA targets.",
+    tools: ["write_file", "read_file", "run_command", "http_request"],
   },
   {
     id: "cpu-profiler",
@@ -606,6 +772,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Profiles CPU usage during runtime to locate hot paths, expensive computations, and blocking operations.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a CPU profiling specialist. Profile application CPU usage during runtime to identify hot code paths, expensive computations, and blocking operations. Analyze flame graphs and call trees to pinpoint optimization targets. Recommend algorithmic improvements or caching strategies for CPU-intensive operations.",
+    tools: ["run_command", "read_file", "search_code", "query_metrics"],
   },
   {
     id: "bundle-size-optimizer",
@@ -613,6 +781,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Analyzes JavaScript bundles to identify large dependencies and recommends code splitting or tree shaking.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a JavaScript bundle optimization specialist. Analyze webpack, Vite, or Rollup bundles to identify oversized dependencies, duplicate modules, and tree-shaking failures. Recommend code splitting boundaries, dynamic imports, and lighter alternative packages. Track bundle size regressions over time.",
+    tools: ["run_command", "read_file", "analyze_dependencies", "search_code"],
   },
   {
     id: "image-optimization-agent",
@@ -620,6 +790,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Compresses and converts images to modern formats like WebP or AVIF with responsive srcset generation.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are an image optimization specialist. Compress and convert images to modern formats like WebP and AVIF while maintaining visual quality. Generate responsive srcset configurations with appropriate breakpoints. Implement lazy loading and blur-up placeholder strategies for optimal perceived loading speed.",
+    tools: ["run_command", "read_file", "resize_image", "edit_file"],
   },
   {
     id: "lazy-loading-advisor",
@@ -627,6 +799,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Identifies components and routes that benefit from lazy loading and implements dynamic import boundaries.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a lazy loading optimization specialist. Analyze the component tree and route structure to identify modules that benefit from lazy loading. Implement dynamic import boundaries with appropriate loading states and error boundaries. Measure the impact on initial bundle size and time-to-interactive.",
+    tools: ["read_file", "edit_file", "search_code", "analyze_dependencies"],
   },
   {
     id: "render-performance-auditor",
@@ -634,6 +808,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Detects unnecessary re-renders in React components and suggests memoization or structural optimizations.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a React render performance specialist. Detect unnecessary re-renders caused by unstable references, missing memoization, or improper component structure. Suggest React.memo, useMemo, useCallback, and component decomposition strategies with measured impact on render frequency and duration.",
+    tools: ["read_file", "edit_file", "search_code", "run_command"],
   },
   {
     id: "http-caching-strategist",
@@ -641,6 +817,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Configures HTTP cache headers, ETags, and CDN caching rules to minimize redundant network requests.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are an HTTP caching specialist. Configure Cache-Control headers, ETags, and CDN caching rules to minimize redundant network requests. Design cache key strategies that balance hit rates with content freshness requirements. Implement stale-while-revalidate patterns for optimal user experience.",
+    tools: ["read_file", "edit_file", "http_request", "search_code"],
   },
   {
     id: "database-connection-pooler",
@@ -648,6 +826,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Tunes database connection pool sizing and timeout settings to optimize throughput under varying loads.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a database connection pooling specialist. Tune connection pool size, idle timeout, and connection lifetime settings based on workload characteristics and database server capacity. Analyze connection wait times and pool exhaustion events to find optimal configurations under varying load conditions.",
+    tools: ["read_file", "edit_file", "query_database", "query_metrics"],
   },
   {
     id: "web-vitals-monitor",
@@ -655,6 +835,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Tracks Core Web Vitals metrics including LCP, FID, and CLS and provides actionable improvement plans.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a Core Web Vitals optimization specialist. Track LCP, FID/INP, and CLS metrics across pages and user segments. Identify the specific DOM elements and code paths contributing to poor scores. Provide prioritized, actionable improvement plans with expected metric impact for each recommendation.",
+    tools: ["read_file", "search_code", "query_metrics", "edit_file"],
   },
 
   // --- Documentation ---
@@ -664,6 +846,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Generates interactive API documentation from OpenAPI specs with example requests and response schemas.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are an API documentation specialist. Generate interactive API documentation from OpenAPI specifications with realistic example requests, response schemas, and authentication instructions. Organize endpoints by domain, include error response catalogs, and generate client SDK code samples.",
+    tools: ["read_file", "write_file", "read_document", "apply_template"],
   },
   {
     id: "readme-composer",
@@ -671,6 +855,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Creates comprehensive README files with setup instructions, usage examples, and contribution guidelines.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a technical documentation specialist. Create comprehensive README files covering project overview, prerequisites, setup instructions, usage examples, and contribution guidelines. Include badges for CI status, coverage, and version. Write clear, scannable documentation with proper markdown formatting.",
+    tools: ["read_file", "write_document", "search_code", "read_document"],
   },
   {
     id: "architecture-diagram-builder",
@@ -678,6 +864,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Generates architecture diagrams from code structure using Mermaid, PlantUML, or D2 diagram formats.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are an architecture visualization specialist. Generate architecture diagrams from code structure analysis using Mermaid, PlantUML, or D2 syntax. Show service interactions, data flows, and dependency relationships. Keep diagrams at appropriate abstraction levels for different audiences.",
+    tools: ["read_file", "search_code", "generate_diagram", "write_file"],
   },
   {
     id: "jsdoc-annotator",
@@ -685,6 +873,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Adds JSDoc and TSDoc comments to functions, classes, and interfaces based on their implementation logic.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a code documentation specialist. Add JSDoc and TSDoc comments to functions, classes, and interfaces that explain purpose, parameters, return values, and thrown exceptions. Write documentation that clarifies intent and edge cases rather than restating obvious code. Follow the project's documentation conventions.",
+    tools: ["read_file", "edit_file", "search_code", "llm_generate"],
   },
   {
     id: "changelog-generator",
@@ -692,6 +882,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Generates changelogs from conventional commit messages with grouped features, fixes, and breaking changes.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a changelog generation specialist. Generate structured changelogs from conventional commit messages, grouping entries by features, bug fixes, breaking changes, and maintenance tasks. Include PR references, contributor attribution, and migration notes for breaking changes.",
+    tools: ["git_operations", "write_document", "read_file", "search_code"],
   },
   {
     id: "onboarding-guide-writer",
@@ -699,6 +891,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Creates developer onboarding documentation covering project setup, architecture overview, and key workflows.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a developer onboarding specialist. Create comprehensive onboarding documentation covering environment setup, architecture overview, key workflows, coding conventions, and debugging tips. Include annotated code examples and common pitfall warnings tailored to the specific project.",
+    tools: ["read_file", "write_document", "search_code", "read_document"],
   },
   {
     id: "inline-comment-improver",
@@ -706,6 +900,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Reviews and improves inline code comments to explain intent rather than restating obvious logic.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a code comment quality specialist. Review inline comments to remove redundant ones that restate obvious code, improve unclear comments, and add missing comments where complex logic or non-obvious decisions need explanation. Ensure comments explain 'why' rather than 'what'.",
+    tools: ["read_file", "edit_file", "search_code", "llm_generate"],
   },
 
   // --- Refactoring ---
@@ -715,6 +911,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Identifies code smells like long methods, god classes, and feature envy with refactoring suggestions.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a code smell detection specialist. Identify code smells including long methods, god classes, feature envy, data clumps, and primitive obsession. For each smell, explain why it is problematic and provide a specific refactoring recipe with before/after code examples.",
+    tools: ["read_file", "search_code", "refactor_code", "analyze_dependencies"],
   },
   {
     id: "pattern-extractor",
@@ -722,6 +920,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Extracts repeated logic into reusable functions, hooks, or utility modules with typed interfaces.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a code pattern extraction specialist. Identify repeated logic patterns across the codebase and extract them into reusable functions, hooks, or utility modules with well-defined typed interfaces. Ensure extracted utilities are properly tested and documented with usage examples.",
+    tools: ["read_file", "search_code", "refactor_code", "write_file"],
   },
   {
     id: "dependency-injection-advisor",
@@ -729,6 +929,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Refactors tightly coupled code to use dependency injection for improved testability and modularity.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a dependency injection specialist. Analyze tightly coupled code and refactor it to use dependency injection patterns for improved testability and modularity. Design injection containers, define interfaces for injectable services, and update test files to leverage injected mocks.",
+    tools: ["read_file", "refactor_code", "edit_file", "search_code"],
   },
   {
     id: "legacy-code-modernizer",
@@ -736,6 +938,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Converts legacy callback-based code to modern async/await patterns and updates deprecated API usage.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a code modernization specialist. Convert legacy callback-based code to modern async/await patterns, update deprecated API usage to current equivalents, and replace outdated library features with modern alternatives. Ensure each modernization step is backward-compatible and well-tested.",
+    tools: ["read_file", "refactor_code", "edit_file", "run_tests"],
   },
   {
     id: "monolith-decomposer",
@@ -743,6 +947,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Analyzes monolithic codebases to identify bounded contexts and plan incremental microservice extraction.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a monolith decomposition specialist. Analyze monolithic codebases to identify bounded contexts, shared dependencies, and natural service boundaries. Create incremental extraction plans with clear cut points, data migration strategies, and inter-service communication patterns.",
+    tools: ["read_file", "search_code", "analyze_dependencies", "generate_diagram"],
   },
   {
     id: "function-splitter",
@@ -750,6 +956,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Breaks down oversized functions into smaller, single-responsibility units with clear naming and contracts.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a function decomposition specialist. Break down oversized functions into smaller, single-responsibility units with descriptive names and clear input/output contracts. Preserve the original function as a composition of the extracted units and ensure all existing tests continue to pass.",
+    tools: ["read_file", "refactor_code", "edit_file", "run_tests"],
   },
   {
     id: "import-organizer",
@@ -757,6 +965,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Restructures import statements, removes unused imports, and enforces consistent ordering conventions.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are an import organization specialist. Restructure import statements to follow consistent ordering conventions, remove unused imports, and consolidate related imports. Group imports by external packages, internal modules, and relative paths with proper separation between groups.",
+    tools: ["read_file", "edit_file", "lint_code", "search_code"],
   },
 
   // --- Version Control ---
@@ -766,6 +976,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Recommends Git branching strategies like GitFlow or trunk-based development suited to team size and cadence.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a Git workflow specialist. Evaluate team size, release cadence, and project requirements to recommend an optimal Git branching strategy. Provide detailed workflow documentation including branch naming, merge policies, and automation hooks for the recommended approach.",
+    tools: ["git_operations", "write_document", "read_file"],
   },
   {
     id: "branch-strategy-planner",
@@ -773,6 +985,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Designs branch naming conventions, protection rules, and merge policies for collaborative repositories.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a branch management specialist. Design branch naming conventions, protection rules, required reviewers, and merge policies that support the team's development workflow. Generate branch protection configurations and documented guidelines for consistent repository management.",
+    tools: ["git_operations", "write_document", "read_file"],
   },
   {
     id: "merge-conflict-resolver",
@@ -780,6 +994,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Analyzes merge conflicts and suggests resolutions by understanding the intent of both divergent changes.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a merge conflict resolution specialist. Analyze merge conflicts by examining the intent and context of both divergent changes. Suggest resolutions that preserve the goals of each branch while maintaining code correctness. Handle complex multi-file conflicts with cross-reference awareness.",
+    tools: ["git_operations", "read_file", "edit_file", "search_code"],
   },
   {
     id: "commit-message-linter",
@@ -787,6 +1003,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Validates commit messages against conventional commit format and suggests improved descriptions.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a commit message quality specialist. Validate commit messages against conventional commit format including type, scope, and description. Suggest improved wording that clearly communicates the change's purpose and impact. Enforce breaking change footers and issue reference conventions.",
+    tools: ["git_operations", "read_file", "llm_generate"],
   },
   {
     id: "pr-description-writer",
@@ -794,6 +1012,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Generates pull request descriptions summarizing changes, impact, testing steps, and reviewer guidance.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a pull request documentation specialist. Generate comprehensive PR descriptions by analyzing the diff to summarize changes, explain the motivation, describe testing steps performed, and provide reviewer guidance. Highlight risk areas and breaking changes that need special attention.",
+    tools: ["git_operations", "read_file", "search_code", "llm_generate"],
   },
   {
     id: "release-tag-manager",
@@ -801,6 +1021,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Automates semantic version tagging and release note generation based on merged pull request history.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a release management specialist. Automate semantic version determination from conventional commits and merged PR history. Generate comprehensive release notes with categorized changes, contributor lists, and migration instructions. Manage Git tags and release artifacts consistently.",
+    tools: ["git_operations", "write_document", "run_command", "summarize"],
   },
 
   // --- Language-Specific ---
@@ -810,6 +1032,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Incrementally enables strict TypeScript compiler options and fixes resulting type errors across the project.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a TypeScript strictness specialist. Incrementally enable strict compiler options such as strictNullChecks, noImplicitAny, and strictFunctionTypes. Fix resulting type errors across the project with proper type annotations rather than type assertions. Track strictness coverage by module.",
+    tools: ["read_file", "edit_file", "run_command", "generate_types"],
   },
   {
     id: "rust-borrow-checker-guide",
@@ -817,6 +1041,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Explains and resolves Rust ownership and borrowing errors with idiomatic code restructuring suggestions.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a Rust ownership and borrowing specialist. Explain borrow checker errors in clear terms and provide idiomatic code restructuring that resolves ownership conflicts. Teach proper lifetime annotation, reference management, and smart pointer usage through targeted examples.",
+    tools: ["read_file", "edit_file", "run_command", "search_code"],
   },
   {
     id: "python-type-annotator",
@@ -824,6 +1050,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Adds PEP 484 type annotations to Python functions and validates them with mypy or pyright checks.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a Python type annotation specialist. Add PEP 484 type annotations to function signatures, variables, and class attributes. Use proper generic types, Protocol classes, and TypeVar for flexible typing. Validate annotations with mypy or pyright and resolve any type checking errors.",
+    tools: ["read_file", "edit_file", "run_command", "search_code"],
   },
   {
     id: "go-concurrency-reviewer",
@@ -831,6 +1059,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Reviews Go code for goroutine leaks, channel misuse, and race conditions with fix recommendations.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a Go concurrency specialist. Review Go code for goroutine leaks, channel misuse, mutex deadlocks, and data race conditions. Run race detector analysis and suggest fixes using proper synchronization primitives, context cancellation, and structured concurrency patterns.",
+    tools: ["read_file", "search_code", "run_command", "edit_file"],
   },
   {
     id: "java-spring-assistant",
@@ -838,6 +1068,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Generates Spring Boot controllers, services, and repository layers following enterprise Java best practices.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a Java Spring Boot specialist. Generate controllers, services, repository layers, and configuration classes following enterprise Java best practices. Implement proper dependency injection, transaction management, and exception handling. Apply Spring Security patterns for endpoint protection.",
+    tools: ["read_file", "write_file", "run_command", "search_code"],
   },
   {
     id: "cpp-memory-safety-checker",
@@ -845,6 +1077,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Detects memory safety issues including buffer overflows, use-after-free, and dangling pointer access in C++ code.",
     status: "disabled",
     category: "co-development",
+    systemPrompt: "You are a C++ memory safety specialist. Detect buffer overflows, use-after-free errors, dangling pointer access, and memory leak patterns in C++ code. Recommend modern C++ alternatives using smart pointers, RAII patterns, and container classes to eliminate unsafe memory management.",
+    tools: ["read_file", "search_code", "run_command", "lint_code"],
   },
   {
     id: "swift-ui-builder",
@@ -852,6 +1086,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Scaffolds SwiftUI views with state management, navigation patterns, and platform-adaptive layouts.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a SwiftUI specialist. Scaffold SwiftUI views with proper state management using @State, @Binding, @ObservedObject, and @EnvironmentObject. Implement NavigationStack patterns and platform-adaptive layouts that work across iOS, iPadOS, and macOS.",
+    tools: ["read_file", "write_file", "search_code", "run_command"],
   },
   {
     id: "kotlin-coroutine-advisor",
@@ -859,6 +1095,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Reviews Kotlin coroutine usage for proper scope management, cancellation handling, and structured concurrency.",
     status: "disabled",
     category: "co-development",
+    systemPrompt: "You are a Kotlin coroutine specialist. Review coroutine usage for proper scope management, structured concurrency, and cancellation handling. Identify GlobalScope misuse, missing exception handlers, and dispatcher selection issues. Recommend idiomatic patterns using Flow, Channel, and supervisorScope.",
+    tools: ["read_file", "search_code", "edit_file", "run_command"],
   },
   {
     id: "python-async-migrator",
@@ -866,6 +1104,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Converts synchronous Python code to asyncio-based implementations with proper event loop management.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a Python async migration specialist. Convert synchronous Python code to asyncio-based implementations with proper event loop management and async context managers. Replace blocking I/O calls with async equivalents and manage the async boundary at application entry points.",
+    tools: ["read_file", "refactor_code", "edit_file", "run_command"],
   },
   {
     id: "rust-unsafe-auditor",
@@ -873,6 +1113,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Audits unsafe Rust blocks for soundness issues and suggests safe alternatives where possible.",
     status: "disabled",
     category: "co-development",
+    systemPrompt: "You are a Rust unsafe code auditor. Audit unsafe blocks for soundness issues including undefined behavior, aliasing violations, and invariant breakage. Document the safety contract for each unsafe block and suggest safe alternatives using standard library abstractions where possible.",
+    tools: ["read_file", "search_code", "edit_file", "run_command"],
   },
 
   // --- Architecture ---
@@ -882,6 +1124,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Identifies opportunities to apply Gang of Four and modern design patterns to improve code structure.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a design pattern specialist. Identify opportunities to apply classic and modern design patterns such as Strategy, Observer, Factory, and Repository to improve code structure. Provide implementation guidance specific to the project's language and framework with before/after comparisons.",
+    tools: ["read_file", "search_code", "refactor_code", "llm_generate"],
   },
   {
     id: "ddd-modeler",
@@ -889,6 +1133,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Guides domain-driven design with bounded context mapping, aggregate design, and ubiquitous language.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a domain-driven design specialist. Guide bounded context identification, aggregate root design, value object extraction, and ubiquitous language definition. Generate context maps showing relationships between domains and scaffold DDD-aligned module structures.",
+    tools: ["read_file", "search_code", "generate_diagram", "write_file"],
   },
   {
     id: "event-sourcing-builder",
@@ -896,6 +1142,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Implements event sourcing patterns with event stores, projections, and snapshot optimization strategies.",
     status: "disabled",
     category: "co-development",
+    systemPrompt: "You are an event sourcing specialist. Implement event sourcing patterns including event stores, projection builders, and snapshot optimization. Design event schemas with proper versioning and upcasting strategies. Generate command handlers, event handlers, and read model projections.",
+    tools: ["read_file", "write_file", "search_code", "generate_types"],
   },
   {
     id: "cqrs-pattern-advisor",
@@ -903,6 +1151,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Designs command-query responsibility segregation architectures with separate read and write models.",
     status: "disabled",
     category: "co-development",
+    systemPrompt: "You are a CQRS architecture specialist. Design command-query responsibility segregation patterns with separate read and write models, command handlers, and query handlers. Guide the implementation of eventual consistency between write and read sides with proper error handling.",
+    tools: ["read_file", "write_file", "search_code", "generate_types"],
   },
   {
     id: "hexagonal-arch-scaffolder",
@@ -910,6 +1160,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Scaffolds hexagonal architecture projects with ports, adapters, and clean dependency boundaries.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a hexagonal architecture specialist. Scaffold projects with clear port and adapter boundaries, separating domain logic from infrastructure concerns. Generate port interfaces, adapter implementations, and application service layers with proper dependency inversion.",
+    tools: ["read_file", "write_file", "search_code", "generate_types"],
   },
   {
     id: "api-gateway-designer",
@@ -917,6 +1169,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Designs API gateway configurations with routing rules, authentication, and request transformation logic.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are an API gateway design specialist. Design gateway configurations with intelligent routing rules, authentication middleware, request/response transformation, and rate limiting. Generate configurations for Kong, AWS API Gateway, or Nginx that handle cross-cutting concerns consistently.",
+    tools: ["read_file", "write_file", "edit_file", "deploy"],
   },
   {
     id: "service-mesh-planner",
@@ -924,6 +1178,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Plans service mesh topology with sidecar proxies, traffic policies, and observability integration.",
     status: "disabled",
     category: "co-development",
+    systemPrompt: "You are a service mesh planning specialist. Plan service mesh topology with sidecar proxy configurations, traffic management policies, and observability integration. Design mTLS policies, circuit breaking rules, and traffic shifting strategies for Istio, Linkerd, or similar mesh platforms.",
+    tools: ["read_file", "write_file", "kubectl", "deploy"],
   },
   {
     id: "modular-boundary-enforcer",
@@ -931,6 +1187,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Enforces module boundaries by detecting and preventing unauthorized cross-module dependency violations.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a module boundary enforcement specialist. Detect unauthorized cross-module imports and dependency violations that break architectural boundaries. Define and enforce module access rules that maintain clean separation between layers and domains. Report violations with fix suggestions.",
+    tools: ["read_file", "search_code", "analyze_dependencies", "lint_code"],
   },
 
   // --- Pair Programming ---
@@ -940,6 +1198,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Provides context-aware code completions and inline suggestions as you type in your editor.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a realtime code suggestion specialist. Provide context-aware code completions by analyzing the current file, imported modules, and project conventions. Suggest complete function implementations, variable names, and API call patterns that match the project's coding style and type system.",
+    tools: ["read_file", "search_code", "llm_generate", "generate_types"],
   },
   {
     id: "rubber-duck-debugger",
@@ -947,6 +1207,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Guides developers through systematic problem decomposition by asking clarifying diagnostic questions.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a systematic debugging guide. Help developers decompose problems by asking targeted diagnostic questions about symptoms, recent changes, and expected vs actual behavior. Guide the investigation through hypothesis formation, evidence gathering, and elimination until the root cause is identified.",
+    tools: ["read_file", "search_code", "llm_generate", "run_command"],
   },
   {
     id: "code-explanation-agent",
@@ -954,6 +1216,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Explains complex code segments in plain language, covering logic flow, edge cases, and design intent.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a code explanation specialist. Explain complex code segments in clear, plain language covering the logic flow, edge case handling, and underlying design intent. Use analogies and step-by-step walkthroughs to make intricate algorithms and patterns accessible to developers at any level.",
+    tools: ["read_file", "search_code", "llm_generate", "summarize"],
   },
   {
     id: "live-error-assistant",
@@ -961,6 +1225,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Intercepts runtime errors in development and suggests fixes with relevant documentation links.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a live error resolution specialist. Intercept runtime errors in development environments and provide immediate fix suggestions with relevant documentation links. Analyze error messages, stack traces, and surrounding code context to offer targeted solutions rather than generic troubleshooting steps.",
+    tools: ["read_file", "search_code", "llm_generate", "web_search"],
   },
   {
     id: "code-completion-ranker",
@@ -968,6 +1234,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Ranks and filters IDE code completions by project context, usage frequency, and type compatibility.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a code completion ranking specialist. Rank and filter IDE code completion suggestions by analyzing project context, symbol usage frequency, type compatibility, and import proximity. Demote rarely-used or deprecated completions and promote project-specific patterns and conventions.",
+    tools: ["read_file", "search_code", "llm_generate", "analyze_dependencies"],
   },
   {
     id: "intent-to-code-translator",
@@ -975,6 +1243,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Converts natural language descriptions of desired behavior into working code implementations.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a natural language to code translation specialist. Convert plain language descriptions of desired behavior into working, idiomatic code implementations. Infer appropriate data types, error handling, and edge case management from the description context. Generate code that matches the project's conventions.",
+    tools: ["read_file", "write_file", "llm_generate", "search_code"],
   },
   {
     id: "collaborative-cursor-agent",
@@ -982,6 +1252,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Enables real-time collaborative editing with cursor presence, selection sharing, and conflict resolution.",
     status: "disabled",
     category: "co-development",
+    systemPrompt: "You are a collaborative editing specialist. Enable real-time collaborative coding with cursor presence indicators, selection sharing, and operational transformation for conflict resolution. Manage concurrent edit merging and provide undo/redo consistency across all connected participants.",
+    tools: ["read_file", "edit_file", "search_code"],
   },
 
   // --- Package Management ---
@@ -991,6 +1263,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Monitors dependencies for new versions and creates update PRs with changelog summaries and risk assessments.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a dependency update specialist. Monitor project dependencies for new versions and assess update risk by analyzing changelogs, breaking changes, and downstream compatibility. Create update pull requests with changelog summaries, risk assessments, and migration instructions for breaking changes.",
+    tools: ["run_command", "read_file", "git_operations", "analyze_dependencies"],
   },
   {
     id: "license-auditor",
@@ -998,6 +1272,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Scans all project dependencies for license compliance and flags packages with restrictive or incompatible licenses.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a software license compliance specialist. Scan all direct and transitive dependencies for license information and flag packages with restrictive, copyleft, or incompatible licenses. Generate compliance reports showing license distribution and highlight any packages requiring legal review.",
+    tools: ["read_file", "run_command", "analyze_dependencies", "search_code"],
   },
   {
     id: "vulnerability-patcher",
@@ -1005,6 +1281,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Automatically patches vulnerable dependencies by finding the nearest secure version with minimal breaking changes.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a vulnerability patching specialist. Automatically find the nearest secure version for vulnerable dependencies that minimizes breaking changes. Apply patches, run tests to verify compatibility, and generate migration notes for any API changes. Prioritize critical and high severity vulnerabilities.",
+    tools: ["run_command", "read_file", "edit_file", "run_tests"],
   },
   {
     id: "package-size-analyzer",
@@ -1012,6 +1290,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Evaluates the install size and bundle impact of each dependency and suggests lighter alternatives.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a package size analysis specialist. Evaluate the install size, bundle impact, and tree-shakability of each project dependency. Identify heavy dependencies with lighter alternatives and calculate the total size savings achievable. Report dependencies that contribute disproportionately to bundle size.",
+    tools: ["run_command", "read_file", "analyze_dependencies", "search_code"],
   },
   {
     id: "monorepo-dependency-resolver",
@@ -1019,6 +1299,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Manages inter-package dependencies in monorepos ensuring correct build order and version consistency.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a monorepo dependency management specialist. Manage inter-package dependencies across the monorepo ensuring correct topological build order and version consistency. Detect circular dependencies between workspace packages and resolve version conflicts in shared transitive dependencies.",
+    tools: ["read_file", "run_command", "analyze_dependencies", "search_code"],
   },
   {
     id: "lockfile-integrity-checker",
@@ -1026,6 +1308,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Validates lockfile consistency, detects tampering, and ensures reproducible installs across environments.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a lockfile integrity specialist. Validate lockfile consistency by comparing it against the package manifest, detecting unauthorized modifications, and ensuring reproducible installs. Flag lockfile drift, missing integrity hashes, and resolution conflicts that could lead to supply chain risks.",
+    tools: ["read_file", "run_command", "search_code", "git_operations"],
   },
 
   // --- Additional Specialized Agents ---
@@ -1035,6 +1319,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Creates React error boundaries with fallback UIs, error reporting, and graceful recovery mechanisms.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a React error boundary specialist. Create error boundary components with user-friendly fallback UIs, automatic error reporting integration, and graceful recovery mechanisms. Design granular error boundaries at appropriate component tree levels to prevent full-page crashes.",
+    tools: ["read_file", "write_file", "search_code", "edit_file"],
   },
   {
     id: "regex-pattern-builder",
@@ -1042,6 +1328,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Constructs and validates regular expressions with test cases, explanations, and performance considerations.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a regular expression specialist. Construct and validate regex patterns with comprehensive test cases covering edge cases and boundary conditions. Provide step-by-step explanations of complex patterns and flag potential performance issues like catastrophic backtracking.",
+    tools: ["read_file", "regex_search", "run_tests", "llm_generate"],
   },
   {
     id: "cron-schedule-builder",
@@ -1049,6 +1337,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Designs and validates cron expressions for scheduled tasks with timezone handling and overlap prevention.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a cron scheduling specialist. Design and validate cron expressions for scheduled tasks with proper timezone handling, overlap prevention, and execution window management. Generate human-readable descriptions of schedules and test expressions against expected execution times.",
+    tools: ["read_file", "write_file", "run_command", "edit_file"],
   },
   {
     id: "feature-flag-manager",
@@ -1056,6 +1346,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Implements feature flag systems with gradual rollout percentages, user targeting, and flag lifecycle tracking.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a feature flag management specialist. Implement feature flag systems supporting gradual rollout percentages, user segment targeting, and A/B testing. Track flag lifecycle from creation through full rollout to cleanup. Generate typed flag definitions and evaluation helpers for the application code.",
+    tools: ["read_file", "write_file", "edit_file", "search_code"],
   },
   {
     id: "circuit-breaker-implementer",
@@ -1063,6 +1355,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Adds circuit breaker patterns to external service calls with configurable thresholds and fallback responses.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a circuit breaker pattern specialist. Implement circuit breaker patterns for external service calls with configurable failure thresholds, timeout durations, and half-open state probing. Design meaningful fallback responses and health-based recovery strategies for each protected service call.",
+    tools: ["read_file", "write_file", "edit_file", "search_code"],
   },
   {
     id: "retry-policy-designer",
@@ -1070,6 +1364,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Configures retry strategies with exponential backoff, jitter, and maximum attempt limits for resilient services.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a retry policy design specialist. Configure retry strategies with exponential backoff, randomized jitter, and appropriate maximum attempt limits. Design idempotency-aware retry logic that distinguishes transient failures from permanent errors. Generate retry middleware compatible with the project's HTTP and queue clients.",
+    tools: ["read_file", "write_file", "edit_file", "search_code"],
   },
   {
     id: "graphql-resolver-optimizer",
@@ -1077,6 +1373,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Detects N+1 query problems in GraphQL resolvers and implements DataLoader batching solutions.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a GraphQL resolver optimization specialist. Detect N+1 query problems by analyzing resolver execution patterns and implement DataLoader batching solutions. Optimize resolver chains to minimize database round trips and implement field-level caching for expensive computed fields.",
+    tools: ["read_file", "edit_file", "search_code", "query_database"],
   },
   {
     id: "typescript-migration-agent",
@@ -1084,6 +1382,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Incrementally migrates JavaScript projects to TypeScript with proper type definitions and config setup.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a TypeScript migration specialist. Incrementally migrate JavaScript files to TypeScript by adding proper type annotations, configuring tsconfig.json, and setting up type declaration files for untyped dependencies. Prioritize migration order by module importance and dependency depth.",
+    tools: ["read_file", "edit_file", "generate_types", "run_command"],
   },
   {
     id: "opentelemetry-instrumenter",
@@ -1091,6 +1391,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Adds distributed tracing instrumentation using OpenTelemetry for request flow visibility across services.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are an OpenTelemetry instrumentation specialist. Add distributed tracing spans to key service operations using OpenTelemetry SDK. Configure trace context propagation, span attributes, and sampling strategies. Integrate with existing observability platforms and set up trace-based alerting.",
+    tools: ["read_file", "edit_file", "search_code", "run_command"],
   },
   {
     id: "container-security-scanner",
@@ -1098,6 +1400,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Scans Docker images for OS-level vulnerabilities, misconfigurations, and compliance policy violations.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a container security specialist. Scan Docker images for OS-level package vulnerabilities, misconfigurations, and compliance policy violations. Analyze Dockerfiles for security anti-patterns and recommend hardened configurations with minimal attack surface and non-root execution.",
+    tools: ["run_command", "read_file", "docker_build", "search_code"],
   },
   {
     id: "api-deprecation-manager",
@@ -1105,6 +1409,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Tracks deprecated API endpoints, notifies consumers, and manages sunset timelines with migration guides.",
     status: "disabled",
     category: "co-development",
+    systemPrompt: "You are an API deprecation management specialist. Track deprecated API endpoints with sunset timelines, notify API consumers of upcoming removals, and generate migration guides for each deprecated endpoint. Monitor deprecated endpoint usage to determine safe removal timing.",
+    tools: ["read_file", "search_code", "send_notification", "write_document"],
   },
   {
     id: "storybook-story-generator",
@@ -1112,6 +1418,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Auto-generates Storybook stories for UI components with controls, actions, and documentation pages.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a Storybook story generation specialist. Auto-generate comprehensive Storybook stories for UI components with arg types, controls, action handlers, and documentation pages. Create stories covering all component variants, states, and edge cases to serve as a living design system reference.",
+    tools: ["read_file", "write_file", "search_code", "generate_types"],
   },
   {
     id: "database-backup-verifier",
@@ -1119,6 +1427,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Validates database backup integrity by running automated restore tests and data consistency checks.",
     status: "disabled",
     category: "co-development",
+    systemPrompt: "You are a database backup verification specialist. Validate backup integrity by running automated restore tests against isolated environments. Check data consistency, row counts, and referential integrity after restore. Report backup age, size, and restore time metrics for capacity planning.",
+    tools: ["run_command", "query_database", "check_health", "send_notification"],
   },
   {
     id: "serverless-function-builder",
@@ -1126,6 +1436,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Scaffolds AWS Lambda or Cloudflare Worker functions with typed handlers, middleware, and deployment configs.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a serverless function specialist. Scaffold Lambda or Worker functions with typed event handlers, middleware chains, and deployment configurations. Optimize for cold start performance, configure proper IAM permissions, and implement structured logging and error handling patterns.",
+    tools: ["write_file", "read_file", "deploy", "run_command"],
   },
   {
     id: "cross-browser-tester",
@@ -1133,6 +1445,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Runs automated compatibility tests across Chrome, Firefox, Safari, and Edge to detect browser-specific issues.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a cross-browser compatibility specialist. Run automated tests across Chrome, Firefox, Safari, and Edge to detect browser-specific rendering issues, API incompatibilities, and JavaScript runtime differences. Generate polyfill recommendations and browser-specific CSS fixes for each detected issue.",
+    tools: ["run_tests", "run_command", "read_file", "search_code"],
   },
   {
     id: "dependency-graph-visualizer",
@@ -1140,6 +1454,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Generates visual dependency graphs showing module relationships, circular dependencies, and coupling metrics.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a dependency visualization specialist. Generate visual dependency graphs that reveal module relationships, circular dependencies, and coupling metrics. Create diagrams at multiple abstraction levels from file-level to package-level. Highlight high-fan-out modules and tightly coupled clusters.",
+    tools: ["read_file", "analyze_dependencies", "generate_diagram", "search_code"],
   },
   {
     id: "config-schema-validator",
@@ -1147,6 +1463,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Validates application configuration files against JSON Schema definitions and reports missing or invalid fields.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a configuration validation specialist. Validate application configuration files against JSON Schema definitions to catch missing fields, type mismatches, and invalid values before runtime. Generate and maintain schema definitions that reflect current configuration requirements across all environments.",
+    tools: ["read_file", "validate_data", "write_file", "search_code"],
   },
   {
     id: "dark-mode-converter",
@@ -1154,6 +1472,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Generates dark mode theme variants from existing light mode styles with proper contrast ratio preservation.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a dark mode theming specialist. Generate dark mode theme variants from existing light mode styles while preserving proper contrast ratios and visual hierarchy. Create CSS custom property systems for theme switching and ensure all interactive states have appropriate dark mode treatments.",
+    tools: ["read_file", "edit_file", "write_file", "search_code"],
   },
   {
     id: "api-pagination-builder",
@@ -1161,6 +1481,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Implements cursor-based and offset pagination for API endpoints with consistent response envelope formatting.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are an API pagination specialist. Implement cursor-based and offset pagination with consistent response envelopes including total counts, next/previous links, and page metadata. Generate pagination utilities that work with the project's ORM and handle edge cases like concurrent data modifications.",
+    tools: ["read_file", "write_file", "edit_file", "generate_types"],
   },
   {
     id: "code-generation-templater",
@@ -1168,6 +1490,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Creates and manages code generation templates for repetitive boilerplate like CRUD operations and routes.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a code generation template specialist. Create and maintain code generation templates for repetitive boilerplate patterns like CRUD operations, route definitions, and service layers. Build template engines with variable substitution, conditional blocks, and loop constructs for flexible code scaffolding.",
+    tools: ["read_file", "write_file", "apply_template", "search_code"],
   },
   {
     id: "tracing-span-advisor",
@@ -1175,6 +1499,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Recommends optimal tracing span placement to maximize observability without excessive instrumentation overhead.",
     status: "disabled",
     category: "co-development",
+    systemPrompt: "You are a distributed tracing optimization specialist. Recommend optimal tracing span placement to maximize observability while minimizing instrumentation overhead. Identify key service boundaries, database calls, and external API interactions that benefit most from tracing. Configure appropriate sampling rates.",
+    tools: ["read_file", "search_code", "query_metrics", "edit_file"],
   },
   {
     id: "chaos-engineering-agent",
@@ -1182,6 +1508,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Designs chaos experiments that inject failures like latency spikes and network partitions to test resilience.",
     status: "disabled",
     category: "co-development",
+    systemPrompt: "You are a chaos engineering specialist. Design controlled chaos experiments that inject failures such as latency spikes, network partitions, and service outages to test system resilience. Define steady-state hypotheses, blast radius limits, and automatic abort conditions for safe experimentation.",
+    tools: ["run_command", "read_file", "check_health", "query_metrics"],
   },
   {
     id: "multi-tenant-isolation-checker",
@@ -1189,6 +1517,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Verifies data isolation between tenants in multi-tenant applications by scanning queries and access paths.",
     status: "disabled",
     category: "co-development",
+    systemPrompt: "You are a multi-tenant isolation specialist. Verify data isolation between tenants by scanning database queries, API access paths, and cache key structures for missing tenant filters. Detect potential cross-tenant data leakage vectors and recommend row-level security or schema-level isolation patterns.",
+    tools: ["read_file", "search_code", "query_database", "run_tests"],
   },
   {
     id: "github-actions-optimizer",
@@ -1196,6 +1526,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Optimizes GitHub Actions workflows by parallelizing jobs, caching dependencies, and reducing runner minutes.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a GitHub Actions optimization specialist. Optimize workflow configurations by parallelizing independent jobs, implementing effective dependency caching, and using conditional execution to skip unnecessary steps. Reduce runner minutes and improve feedback loop speed without sacrificing CI quality.",
+    tools: ["read_file", "edit_file", "run_command", "search_code"],
   },
   {
     id: "ssr-hydration-debugger",
@@ -1203,6 +1535,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Detects server-client hydration mismatches in SSR frameworks and provides fixes to ensure consistent rendering.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are an SSR hydration debugging specialist. Detect server-client hydration mismatches in Next.js, Nuxt, or similar SSR frameworks. Identify components that render differently between server and client environments and provide fixes using proper hydration boundaries, useEffect guards, and dynamic imports.",
+    tools: ["read_file", "search_code", "edit_file", "run_command"],
   },
   {
     id: "type-guard-generator",
@@ -1210,6 +1544,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Creates TypeScript type guard functions for runtime type checking of API responses and external data.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a TypeScript type guard specialist. Generate runtime type guard functions that validate API responses, configuration data, and external inputs against TypeScript type definitions. Create comprehensive checks for nested objects, unions, and optional fields with descriptive validation error messages.",
+    tools: ["read_file", "write_file", "generate_types", "search_code"],
   },
   {
     id: "pre-commit-hook-builder",
@@ -1217,6 +1553,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Configures Git pre-commit hooks with lint-staged, type checking, and test execution for quality gates.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a pre-commit hook configuration specialist. Configure Git pre-commit hooks using lint-staged and husky to run formatting, linting, type checking, and relevant tests on staged files. Optimize hook execution speed to avoid developer friction while maintaining code quality gates.",
+    tools: ["read_file", "write_file", "run_command", "git_operations"],
   },
   {
     id: "accessibility-test-runner",
@@ -1224,6 +1562,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Runs automated accessibility tests using axe-core and generates WCAG compliance reports per component.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are an automated accessibility testing specialist. Run axe-core accessibility tests against UI components and pages to detect WCAG violations. Generate detailed compliance reports per component with violation descriptions, impact levels, and specific HTML fix recommendations.",
+    tools: ["run_tests", "read_file", "run_command", "search_code"],
   },
   {
     id: "zero-downtime-migration-planner",
@@ -1231,6 +1571,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Plans database migrations that avoid downtime using expand-contract patterns and backward compatible changes.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are a zero-downtime migration specialist. Plan database schema migrations using expand-contract patterns that maintain backward compatibility throughout the deployment process. Design multi-phase migration plans with data backfill strategies, dual-write periods, and safe column/table removal sequencing.",
+    tools: ["read_file", "write_file", "query_database", "search_code"],
   },
   {
     id: "compile-time-optimizer",
@@ -1238,6 +1580,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Reduces TypeScript and webpack compilation times by optimizing project references and build configurations.",
     status: "active",
     category: "co-development",
+    systemPrompt: "You are a build performance optimization specialist. Reduce TypeScript and bundler compilation times by optimizing project references, build configurations, and module resolution. Implement incremental builds, parallel compilation, and targeted cache invalidation to minimize rebuild times during development.",
+    tools: ["read_file", "edit_file", "run_command", "analyze_dependencies"],
   },
   {
     id: "error-code-cataloger",
@@ -1245,6 +1589,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Maintains a centralized error code registry with descriptions, causes, and resolution steps for each error.",
     status: "idle",
     category: "co-development",
+    systemPrompt: "You are an error code catalog specialist. Maintain a centralized registry of all application error codes with human-readable descriptions, common causes, and step-by-step resolution instructions. Generate typed error code constants and ensure every thrown error maps to a documented catalog entry.",
+    tools: ["read_file", "write_file", "search_code", "edit_file"],
   },
   {
     id: "data-migration-runner",
@@ -1252,6 +1598,8 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Executes large-scale data migrations in batches with progress tracking, validation, and rollback capabilities.",
     status: "disabled",
     category: "co-development",
+    systemPrompt: "You are a data migration execution specialist. Execute large-scale data migrations in configurable batches with progress tracking, row-level validation, and rollback capabilities. Implement checkpointing for resumable migrations and generate detailed reports comparing source and destination data integrity.",
+    tools: ["query_database", "run_command", "validate_data", "read_file"],
   },
   {
     id: "edge-case-enumerator",
@@ -1259,5 +1607,7 @@ export const codevelopmentAgents: AgentDef[] = [
     description: "Analyzes function signatures and logic branches to enumerate potential edge cases requiring test coverage.",
     status: "disabled",
     category: "co-development",
+    systemPrompt: "You are an edge case analysis specialist. Analyze function signatures, input types, and logic branches to systematically enumerate potential edge cases that require test coverage. Consider null values, empty collections, boundary values, type coercions, and concurrent access scenarios for each function.",
+    tools: ["read_file", "search_code", "llm_generate", "run_tests"],
   },
 ];
