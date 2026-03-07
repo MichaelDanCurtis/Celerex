@@ -6,7 +6,10 @@ import {
   selectedModelAtom,
   apiKeysAtom,
   selectedProviderAtom,
+  copilotAuthenticatedAtom,
 } from "../state/aiProviderAtom";
+import { getCopilotAuthStatus } from "../api/client";
+import { CopilotAuthDialog } from "./CopilotAuthDialog";
 
 export function AIProviderSelector() {
   const [open, setOpen] = useState(false);
@@ -18,6 +21,15 @@ export function AIProviderSelector() {
   const [localKey, setLocalKey] = useState("");
   const popoverRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const [copilotAuthenticated, setCopilotAuthenticated] = useAtom(copilotAuthenticatedAtom);
+  const [copilotDialogOpen, setCopilotDialogOpen] = useState(false);
+
+  // Check Copilot auth status on mount
+  useEffect(() => {
+    getCopilotAuthStatus()
+      .then((data) => setCopilotAuthenticated(data.authenticated))
+      .catch(() => {});
+  }, [setCopilotAuthenticated]);
 
   // Sync local key input when provider changes or popover opens
   useEffect(() => {
@@ -205,75 +217,140 @@ export function AIProviderSelector() {
             </select>
           </div>
 
-          {/* API key */}
-          <div>
-            <div
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: "var(--celerex-text-secondary)",
-                marginBottom: 6,
-                textTransform: "uppercase",
-                letterSpacing: 0.5,
-              }}
-            >
-              API Key
-            </div>
-            <div style={{ display: "flex", gap: 4 }}>
-              <input
-                type={showKey ? "text" : "password"}
-                value={localKey}
-                onChange={(e) => setLocalKey(e.target.value)}
-                placeholder={`Enter ${provider.name} API key`}
+          {/* API key or Copilot connect */}
+          {providerId === "github-copilot" ? (
+            <div>
+              <div
                 style={{
-                  flex: 1,
-                  padding: "6px 8px",
-                  borderRadius: 6,
-                  border: "1px solid var(--celerex-border)",
-                  background: "var(--celerex-bg-secondary)",
-                  color: "var(--celerex-text-primary)",
-                  fontSize: 12,
-                  outline: "none",
-                  fontFamily: "monospace",
-                }}
-              />
-              <button
-                onClick={() => setShowKey((v) => !v)}
-                style={{
-                  padding: "4px 8px",
-                  borderRadius: 6,
-                  border: "1px solid var(--celerex-border)",
-                  background: "var(--celerex-bg-secondary)",
-                  color: "var(--celerex-text-secondary)",
-                  cursor: "pointer",
                   fontSize: 11,
+                  fontWeight: 600,
+                  color: "var(--celerex-text-secondary)",
+                  marginBottom: 6,
+                  textTransform: "uppercase",
+                  letterSpacing: 0.5,
                 }}
-                title={showKey ? "Hide key" : "Show key"}
               >
-                {showKey ? "Hide" : "Show"}
-              </button>
+                Authentication
+              </div>
+              {copilotAuthenticated ? (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "8px 12px",
+                    borderRadius: 6,
+                    background: "var(--celerex-bg-secondary)",
+                    border: "1px solid var(--celerex-border)",
+                    fontSize: 13,
+                    color: "var(--celerex-text-primary)",
+                    fontWeight: 500,
+                  }}
+                >
+                  <span style={{ color: "#22c55e", fontSize: 16 }}>{"\u2713"}</span>
+                  Connected
+                </div>
+              ) : (
+                <button
+                  onClick={() => setCopilotDialogOpen(true)}
+                  style={{
+                    width: "100%",
+                    padding: "8px 0",
+                    borderRadius: 6,
+                    border: "none",
+                    background: "var(--celerex-accent)",
+                    color: "#fff",
+                    cursor: "pointer",
+                    fontSize: 13,
+                    fontWeight: 600,
+                  }}
+                >
+                  Connect GitHub Copilot
+                </button>
+              )}
             </div>
-          </div>
+          ) : (
+            <>
+              <div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: "var(--celerex-text-secondary)",
+                    marginBottom: 6,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  API Key
+                </div>
+                <div style={{ display: "flex", gap: 4 }}>
+                  <input
+                    type={showKey ? "text" : "password"}
+                    value={localKey}
+                    onChange={(e) => setLocalKey(e.target.value)}
+                    placeholder={`Enter ${provider.name} API key`}
+                    style={{
+                      flex: 1,
+                      padding: "6px 8px",
+                      borderRadius: 6,
+                      border: "1px solid var(--celerex-border)",
+                      background: "var(--celerex-bg-secondary)",
+                      color: "var(--celerex-text-primary)",
+                      fontSize: 12,
+                      outline: "none",
+                      fontFamily: "monospace",
+                    }}
+                  />
+                  <button
+                    onClick={() => setShowKey((v) => !v)}
+                    style={{
+                      padding: "4px 8px",
+                      borderRadius: 6,
+                      border: "1px solid var(--celerex-border)",
+                      background: "var(--celerex-bg-secondary)",
+                      color: "var(--celerex-text-secondary)",
+                      cursor: "pointer",
+                      fontSize: 11,
+                    }}
+                    title={showKey ? "Hide key" : "Show key"}
+                  >
+                    {showKey ? "Hide" : "Show"}
+                  </button>
+                </div>
+              </div>
 
-          {/* Save */}
-          <button
-            onClick={handleSave}
-            style={{
-              padding: "7px 0",
-              borderRadius: 6,
-              border: "none",
-              background: "var(--celerex-accent)",
-              color: "#fff",
-              cursor: "pointer",
-              fontSize: 12,
-              fontWeight: 600,
-              transition: "opacity 0.12s",
-            }}
-          >
-            Save
-          </button>
+              {/* Save */}
+              <button
+                onClick={handleSave}
+                style={{
+                  padding: "7px 0",
+                  borderRadius: 6,
+                  border: "none",
+                  background: "var(--celerex-accent)",
+                  color: "#fff",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  transition: "opacity 0.12s",
+                }}
+              >
+                Save
+              </button>
+            </>
+          )}
         </div>
       )}
+      <CopilotAuthDialog
+        open={copilotDialogOpen}
+        onClose={() => {
+          setCopilotDialogOpen(false);
+          // Re-check auth status after dialog closes
+          getCopilotAuthStatus()
+            .then((data) => setCopilotAuthenticated(data.authenticated))
+            .catch(() => {});
+        }}
+      />
     </div>
   );
 }

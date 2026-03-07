@@ -77,3 +77,6 @@ export const selectedProviderAtom = atom((get) => {
   const id = get(selectedProviderIdAtom);
   return AI_PROVIDERS.find((p) => p.id === id) || AI_PROVIDERS[0];
 });
+
+// Whether GitHub Copilot is authenticated via device flow
+export const copilotAuthenticatedAtom = atom<boolean>(false);

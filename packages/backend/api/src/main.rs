@@ -64,11 +64,158 @@ struct UpdateDoc {
     title: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct CopilotPollRequest {
+    device_code: String,
+}
+
+// ---------------------------------------------------------------------------
+// Copilot state
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Default)]
+struct CopilotState {
+    github_token: Option<String>,
+    copilot_token: Option<String>,
+    copilot_token_expires_at: Option<i64>,
+}
+
 // ---------------------------------------------------------------------------
 // Shared application state
 // ---------------------------------------------------------------------------
 
-type AppState = Arc<Mutex<Vec<Engagement>>>;
+#[derive(Clone)]
+struct AppState {
+    engagements: Arc<Mutex<Vec<Engagement>>>,
+    copilot: Arc<Mutex<CopilotState>>,
+}
+
+// ---------------------------------------------------------------------------
+// Copilot constants
+// ---------------------------------------------------------------------------
+
+const COPILOT_CLIENT_ID: &str = "Iv1.b507a08c87ecfe98";
+const COPILOT_SCOPE: &str = "read:user";
+const COPILOT_EDITOR_VERSION: &str = "vscode/1.104.3";
+const COPILOT_PLUGIN_VERSION: &str = "copilot-chat/0.26.7";
+const COPILOT_USER_AGENT: &str = "GitHubCopilotChat/0.26.7";
+const COPILOT_API_VERSION: &str = "2025-04-01";
+
+// ---------------------------------------------------------------------------
+// Copilot token persistence helpers
+// ---------------------------------------------------------------------------
+
+fn copilot_token_path() -> std::path::PathBuf {
+    let data_dir = dirs::data_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("~/.local/share"));
+    data_dir.join("copilot-api").join("github_token")
+}
+
+fn load_github_token_from_disk() -> Option<String> {
+    let path = copilot_token_path();
+    std::fs::read_to_string(&path)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+fn save_github_token_to_disk(token: &str) -> Result<(), String> {
+    let path = copilot_token_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create directory: {}", e))?;
+    }
+    std::fs::write(&path, token)
+        .map_err(|e| format!("Failed to write token file: {}", e))?;
+
+    // Set file permissions to owner-only on Unix
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+            .map_err(|e| format!("Failed to set file permissions: {}", e))?;
+    }
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Copilot token exchange
+// ---------------------------------------------------------------------------
+
+async fn exchange_copilot_token(github_token: &str) -> Result<(String, i64), String> {
+    let client = reqwest::Client::new();
+    let resp = client
+        .get("https://api.github.com/copilot_internal/v2/token")
+        .header("authorization", format!("token {}", github_token))
+        .header("accept", "application/json")
+        .header("editor-version", COPILOT_EDITOR_VERSION)
+        .header("editor-plugin-version", COPILOT_PLUGIN_VERSION)
+        .header("user-agent", COPILOT_USER_AGENT)
+        .header("x-github-api-version", COPILOT_API_VERSION)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to reach GitHub API: {}", e))?;
+
+    let status = resp.status();
+    let body: Value = resp.json().await
+        .map_err(|e| format!("Failed to parse token response: {}", e))?;
+
+    if !status.is_success() {
+        return Err(format!(
+            "GitHub token exchange failed ({}): {}",
+            status,
+            body.get("message").and_then(|m| m.as_str()).unwrap_or("unknown error")
+        ));
+    }
+
+    let token = body.get("token")
+        .and_then(|t| t.as_str())
+        .ok_or("Missing 'token' in response")?
+        .to_string();
+    let expires_at = body.get("expires_at")
+        .and_then(|e| e.as_i64())
+        .ok_or("Missing 'expires_at' in response")?;
+
+    Ok((token, expires_at))
+}
+
+/// Ensure we have a valid Copilot token, refreshing if needed.
+/// Returns the token string or an error message.
+async fn ensure_copilot_token(copilot_state: &Arc<Mutex<CopilotState>>) -> Result<String, String> {
+    let (github_token, copilot_token, expires_at) = {
+        let state = copilot_state.lock().unwrap();
+        (
+            state.github_token.clone(),
+            state.copilot_token.clone(),
+            state.copilot_token_expires_at,
+        )
+    };
+
+    // If we have a valid (non-expired) copilot token, return it
+    let now = Utc::now().timestamp();
+    if let (Some(token), Some(exp)) = (&copilot_token, expires_at) {
+        if now < exp - 60 {
+            // Token is still valid (with 60s buffer)
+            return Ok(token.clone());
+        }
+    }
+
+    // Need to refresh — must have a github token
+    let github_token = github_token
+        .ok_or("Not authenticated with GitHub Copilot. Use POST /api/copilot/auth/start to begin authentication.")?;
+
+    let (new_token, new_expires_at) = exchange_copilot_token(&github_token).await?;
+
+    // Store the refreshed token
+    {
+        let mut state = copilot_state.lock().unwrap();
+        state.copilot_token = Some(new_token.clone());
+        state.copilot_token_expires_at = Some(new_expires_at);
+    }
+
+    Ok(new_token)
+}
 
 // ---------------------------------------------------------------------------
 // Main
@@ -93,7 +240,32 @@ async fn main() -> anyhow::Result<()> {
         created_at: now,
         docs: vec![default_doc],
     };
-    let state: AppState = Arc::new(Mutex::new(vec![default_engagement]));
+
+    // Initialize Copilot state — try loading persisted GitHub token
+    let mut copilot_state = CopilotState::default();
+    if let Some(token) = load_github_token_from_disk() {
+        tracing::info!("Found persisted GitHub token, will exchange for Copilot token");
+        copilot_state.github_token = Some(token);
+    }
+
+    let state = AppState {
+        engagements: Arc::new(Mutex::new(vec![default_engagement])),
+        copilot: Arc::new(Mutex::new(copilot_state)),
+    };
+
+    // If we have a GitHub token, try to exchange it on startup
+    {
+        let copilot = state.copilot.clone();
+        let has_github_token = copilot.lock().unwrap().github_token.is_some();
+        if has_github_token {
+            tokio::spawn(async move {
+                match ensure_copilot_token(&copilot).await {
+                    Ok(_) => tracing::info!("Successfully obtained Copilot token on startup"),
+                    Err(e) => tracing::warn!("Failed to obtain Copilot token on startup: {}", e),
+                }
+            });
+        }
+    }
 
     let app = Router::new()
         // Existing routes
@@ -114,6 +286,12 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/ws", get(ws_handler))
         // Chat proxy
         .route("/api/chat", post(chat_handler))
+        // Copilot auth routes
+        .route("/api/copilot/auth/start", post(copilot_auth_start))
+        .route("/api/copilot/auth/poll", post(copilot_auth_poll))
+        .route("/api/copilot/auth/status", get(copilot_auth_status))
+        // Copilot models
+        .route("/api/copilot/models", get(copilot_models))
         .with_state(state)
         .layer(
             CorsLayer::new()
@@ -168,7 +346,7 @@ async fn workspace_info() -> Json<Value> {
 // ---------------------------------------------------------------------------
 
 async fn list_engagements(State(state): State<AppState>) -> Json<Value> {
-    let engagements = state.lock().unwrap();
+    let engagements = state.engagements.lock().unwrap();
     Json(json!(*engagements))
 }
 
@@ -182,7 +360,7 @@ async fn create_engagement(
         created_at: Utc::now(),
         docs: Vec::new(),
     };
-    let mut engagements = state.lock().unwrap();
+    let mut engagements = state.engagements.lock().unwrap();
     engagements.push(engagement.clone());
     (StatusCode::CREATED, Json(json!(engagement)))
 }
@@ -191,7 +369,7 @@ async fn delete_engagement(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
-    let mut engagements = state.lock().unwrap();
+    let mut engagements = state.engagements.lock().unwrap();
     let Some(pos) = engagements.iter().position(|e| e.id == id) else {
         return (
             StatusCode::NOT_FOUND,
@@ -217,7 +395,7 @@ async fn create_doc(
     Path(id): Path<Uuid>,
     Json(body): Json<CreateDoc>,
 ) -> impl IntoResponse {
-    let mut engagements = state.lock().unwrap();
+    let mut engagements = state.engagements.lock().unwrap();
     let Some(engagement) = engagements.iter_mut().find(|e| e.id == id) else {
         return (
             StatusCode::NOT_FOUND,
@@ -239,7 +417,7 @@ async fn update_doc(
     Path((id, doc_id)): Path<(Uuid, Uuid)>,
     Json(body): Json<UpdateDoc>,
 ) -> impl IntoResponse {
-    let mut engagements = state.lock().unwrap();
+    let mut engagements = state.engagements.lock().unwrap();
     let Some(engagement) = engagements.iter_mut().find(|e| e.id == id) else {
         return (
             StatusCode::NOT_FOUND,
@@ -260,7 +438,7 @@ async fn delete_doc(
     State(state): State<AppState>,
     Path((id, doc_id)): Path<(Uuid, Uuid)>,
 ) -> impl IntoResponse {
-    let mut engagements = state.lock().unwrap();
+    let mut engagements = state.engagements.lock().unwrap();
     let Some(engagement) = engagements.iter_mut().find(|e| e.id == id) else {
         return (
             StatusCode::NOT_FOUND,
@@ -278,7 +456,7 @@ async fn delete_doc(
 }
 
 // ---------------------------------------------------------------------------
-// WebSocket handler — echo server, to be extended for Yjs document sync
+// WebSocket handler -- echo server, to be extended for Yjs document sync
 // ---------------------------------------------------------------------------
 
 async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
@@ -322,7 +500,228 @@ async fn handle_ws_connection(socket: WebSocket) {
 }
 
 // ---------------------------------------------------------------------------
-// Chat proxy handler — multi-provider
+// Copilot auth handlers
+// ---------------------------------------------------------------------------
+
+/// POST /api/copilot/auth/start - Start the GitHub Device OAuth flow
+async fn copilot_auth_start() -> impl IntoResponse {
+    let client = reqwest::Client::new();
+    let resp = client
+        .post("https://github.com/login/device/code")
+        .header("accept", "application/json")
+        .header("content-type", "application/json")
+        .json(&json!({
+            "client_id": COPILOT_CLIENT_ID,
+            "scope": COPILOT_SCOPE
+        }))
+        .send()
+        .await;
+
+    let resp = match resp {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({ "error": format!("Failed to start device flow: {}", e) })),
+            );
+        }
+    };
+
+    let status = resp.status();
+    let body: Value = match resp.json().await {
+        Ok(b) => b,
+        Err(e) => {
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({ "error": format!("Failed to parse device flow response: {}", e) })),
+            );
+        }
+    };
+
+    if !status.is_success() {
+        return (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({ "error": format!("GitHub device flow error: {}", body) })),
+        );
+    }
+
+    let device_code = body.get("device_code").and_then(|v| v.as_str()).unwrap_or("");
+    let user_code = body.get("user_code").and_then(|v| v.as_str()).unwrap_or("");
+    let verification_uri = body.get("verification_uri").and_then(|v| v.as_str()).unwrap_or("");
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "device_code": device_code,
+            "user_code": user_code,
+            "verification_uri": verification_uri
+        })),
+    )
+}
+
+/// POST /api/copilot/auth/poll - Poll for device flow completion
+async fn copilot_auth_poll(
+    State(state): State<AppState>,
+    Json(body): Json<CopilotPollRequest>,
+) -> impl IntoResponse {
+    let client = reqwest::Client::new();
+    let resp = client
+        .post("https://github.com/login/oauth/access_token")
+        .header("accept", "application/json")
+        .header("content-type", "application/json")
+        .json(&json!({
+            "client_id": COPILOT_CLIENT_ID,
+            "device_code": body.device_code,
+            "grant_type": "urn:ietf:params:oauth:grant-type:device_code"
+        }))
+        .send()
+        .await;
+
+    let resp = match resp {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({ "error": format!("Failed to poll OAuth: {}", e) })),
+            );
+        }
+    };
+
+    let poll_body: Value = match resp.json().await {
+        Ok(b) => b,
+        Err(e) => {
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({ "error": format!("Failed to parse OAuth response: {}", e) })),
+            );
+        }
+    };
+
+    // Check if we got an access token
+    if let Some(access_token) = poll_body.get("access_token").and_then(|v| v.as_str()) {
+        let token = access_token.to_string();
+
+        // Save to disk
+        if let Err(e) = save_github_token_to_disk(&token) {
+            tracing::warn!("Failed to persist GitHub token: {}", e);
+        }
+
+        // Store in state
+        {
+            let mut copilot = state.copilot.lock().unwrap();
+            copilot.github_token = Some(token.clone());
+        }
+
+        // Exchange for Copilot token
+        match exchange_copilot_token(&token).await {
+            Ok((copilot_token, expires_at)) => {
+                let mut copilot = state.copilot.lock().unwrap();
+                copilot.copilot_token = Some(copilot_token);
+                copilot.copilot_token_expires_at = Some(expires_at);
+            }
+            Err(e) => {
+                tracing::warn!("GitHub token obtained but Copilot token exchange failed: {}", e);
+                // Not fatal -- we have the github token and can retry later
+            }
+        }
+
+        return (
+            StatusCode::OK,
+            Json(json!({ "status": "complete" })),
+        );
+    }
+
+    // Check for known pending/slow_down errors
+    let error = poll_body.get("error").and_then(|v| v.as_str()).unwrap_or("");
+    match error {
+        "authorization_pending" | "slow_down" => {
+            (StatusCode::OK, Json(json!({ "status": "pending" })))
+        }
+        "expired_token" => {
+            (StatusCode::GONE, Json(json!({ "error": "Device code expired. Please restart authentication." })))
+        }
+        "access_denied" => {
+            (StatusCode::FORBIDDEN, Json(json!({ "error": "User denied access." })))
+        }
+        _ => {
+            (StatusCode::BAD_GATEWAY, Json(json!({ "error": format!("OAuth error: {}", error) })))
+        }
+    }
+}
+
+/// GET /api/copilot/auth/status - Check if authenticated
+async fn copilot_auth_status(State(state): State<AppState>) -> Json<Value> {
+    let copilot = state.copilot.lock().unwrap();
+    let authenticated = copilot.github_token.is_some();
+    let has_copilot_token = copilot.copilot_token.is_some();
+    let expired = copilot.copilot_token_expires_at
+        .map(|exp| Utc::now().timestamp() >= exp - 60)
+        .unwrap_or(true);
+
+    Json(json!({
+        "authenticated": authenticated,
+        "copilot_token_active": has_copilot_token && !expired
+    }))
+}
+
+/// GET /api/copilot/models - List available Copilot models
+async fn copilot_models(State(state): State<AppState>) -> impl IntoResponse {
+    let copilot_token = match ensure_copilot_token(&state.copilot).await {
+        Ok(t) => t,
+        Err(e) => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(json!({ "error": e })),
+            );
+        }
+    };
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .get("https://api.githubcopilot.com/models")
+        .header("Authorization", format!("Bearer {}", copilot_token))
+        .header("content-type", "application/json")
+        .header("copilot-integration-id", "vscode-chat")
+        .header("editor-version", COPILOT_EDITOR_VERSION)
+        .header("editor-plugin-version", COPILOT_PLUGIN_VERSION)
+        .header("user-agent", COPILOT_USER_AGENT)
+        .header("x-github-api-version", COPILOT_API_VERSION)
+        .send()
+        .await;
+
+    let resp = match resp {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({ "error": format!("Failed to fetch models: {}", e) })),
+            );
+        }
+    };
+
+    let status = resp.status();
+    let body: Value = match resp.json().await {
+        Ok(b) => b,
+        Err(e) => {
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({ "error": format!("Failed to parse models response: {}", e) })),
+            );
+        }
+    };
+
+    if !status.is_success() {
+        return (
+            StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY),
+            Json(json!({ "error": format!("Models API error: {}", body) })),
+        );
+    }
+
+    (StatusCode::OK, Json(body))
+}
+
+// ---------------------------------------------------------------------------
+// Chat proxy handler -- multi-provider
 // ---------------------------------------------------------------------------
 
 /// Resolve the API key: prefer the request-supplied key, then fall back to env.
@@ -470,20 +869,117 @@ async fn send_openai_compatible(
     Ok(reply)
 }
 
-async fn chat_handler(Json(body): Json<ChatRequest>) -> impl IntoResponse {
+/// Send a request to GitHub Copilot chat completions endpoint.
+async fn send_copilot(
+    client: &reqwest::Client,
+    copilot_token: &str,
+    model: &str,
+    user_content: &str,
+) -> Result<String, (StatusCode, Json<Value>)> {
+    let request_id = Uuid::new_v4().to_string();
+    let request_body = json!({
+        "model": model,
+        "messages": [
+            { "role": "user", "content": user_content }
+        ],
+        "max_tokens": 1024
+    });
+
+    let response = client
+        .post("https://api.githubcopilot.com/chat/completions")
+        .header("Authorization", format!("Bearer {}", copilot_token))
+        .header("content-type", "application/json")
+        .header("copilot-integration-id", "vscode-chat")
+        .header("editor-version", COPILOT_EDITOR_VERSION)
+        .header("editor-plugin-version", COPILOT_PLUGIN_VERSION)
+        .header("user-agent", COPILOT_USER_AGENT)
+        .header("openai-intent", "conversation-panel")
+        .header("x-github-api-version", COPILOT_API_VERSION)
+        .header("x-request-id", &request_id)
+        .json(&request_body)
+        .send()
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({ "error": format!("Failed to reach Copilot API: {}", e) })),
+            )
+        })?;
+
+    let status = response.status();
+    let resp_body: Value = response.json().await.map_err(|e| {
+        (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({ "error": format!("Failed to parse Copilot response: {}", e) })),
+        )
+    })?;
+
+    if !status.is_success() {
+        let api_error = resp_body
+            .get("error")
+            .and_then(|e| e.get("message").or_else(|| Some(e)))
+            .and_then(|m| m.as_str())
+            .unwrap_or("Unknown Copilot API error");
+        return Err((
+            StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY),
+            Json(json!({ "error": api_error })),
+        ));
+    }
+
+    let reply = resp_body
+        .get("choices")
+        .and_then(|c| c.as_array())
+        .and_then(|arr| arr.first())
+        .and_then(|choice| choice.get("message"))
+        .and_then(|msg| msg.get("content"))
+        .and_then(|t| t.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    Ok(reply)
+}
+
+async fn chat_handler(
+    State(state): State<AppState>,
+    Json(body): Json<ChatRequest>,
+) -> impl IntoResponse {
     let provider = body.provider.as_deref().unwrap_or("anthropic");
 
-    // Resolve API key and default model per provider
+    // Build user content (prepend context if present)
+    let user_content = match &body.context {
+        Some(ctx) if !ctx.is_empty() => format!("{}\n\n{}", ctx, body.message),
+        _ => body.message.clone(),
+    };
+
+    let client = reqwest::Client::new();
+
+    // Handle github-copilot provider separately (uses Copilot token, not API key)
+    if provider == "github-copilot" {
+        let model = body.model.as_deref().unwrap_or("gpt-4o");
+
+        let copilot_token = match ensure_copilot_token(&state.copilot).await {
+            Ok(t) => t,
+            Err(e) => {
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    Json(json!({ "error": e })),
+                );
+            }
+        };
+
+        let result = send_copilot(&client, &copilot_token, model, &user_content).await;
+        return match result {
+            Ok(reply) => (StatusCode::OK, Json(json!({ "reply": reply }))),
+            Err(e) => e,
+        };
+    }
+
+    // All other providers use API key auth
     let (default_model, base_url, env_var) = match provider {
         "anthropic" => (
             "claude-sonnet-4-20250514",
             "https://api.anthropic.com/v1/messages",
             "ANTHROPIC_API_KEY",
-        ),
-        "github-copilot" => (
-            "gpt-4o",
-            "https://models.inference.ai.azure.com/chat/completions",
-            "GITHUB_TOKEN",
         ),
         "openrouter" => (
             "anthropic/claude-sonnet-4-20250514",
@@ -519,14 +1015,6 @@ async fn chat_handler(Json(body): Json<ChatRequest>) -> impl IntoResponse {
     };
 
     let model = body.model.as_deref().unwrap_or(default_model);
-
-    // Build user content (prepend context if present)
-    let user_content = match &body.context {
-        Some(ctx) if !ctx.is_empty() => format!("{}\n\n{}", ctx, body.message),
-        _ => body.message.clone(),
-    };
-
-    let client = reqwest::Client::new();
 
     let result = if provider == "anthropic" {
         send_anthropic(&client, &key, model, &user_content).await

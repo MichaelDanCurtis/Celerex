@@ -126,3 +126,17 @@ export async function sendChatMessage(
   const data = await res.json();
   return data.reply;
 }
+
+// ---- Copilot auth endpoints -----------------------------------------------
+
+export async function startCopilotAuth(): Promise<{ user_code: string; verification_uri: string; device_code: string }> {
+  return request("/copilot/auth/start", { method: "POST" });
+}
+
+export async function pollCopilotAuth(deviceCode: string): Promise<{ status: "pending" | "complete" }> {
+  return request("/copilot/auth/poll", { method: "POST", body: JSON.stringify({ device_code: deviceCode }) });
+}
+
+export async function getCopilotAuthStatus(): Promise<{ authenticated: boolean }> {
+  return request("/copilot/auth/status");
+}
