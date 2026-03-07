@@ -762,6 +762,228 @@ const builtInTools: ToolDef[] = [
       { name: "operation", type: "string", description: "Operation", enum: ["resize", "crop", "rotate", "flip", "compress"] },
     ],
   },
+
+  /* ================================================================== */
+  /*  Tools with Execution Backends (Plugins)                           */
+  /* ================================================================== */
+
+  /* ---- MCP Server Plugins ---- */
+  {
+    id: "brave_web_search",
+    name: "Brave Web Search",
+    description: "Search the web using Brave Search via MCP. Returns ranked results with titles, URLs, and snippets from Brave's independent search index.",
+    category: "web",
+    parameters: [
+      { name: "query", type: "string", description: "Search query", required: true },
+      { name: "count", type: "number", description: "Number of results (default 10, max 20)" },
+      { name: "offset", type: "number", description: "Pagination offset" },
+    ],
+    execution: {
+      type: "mcp",
+      mcp: {
+        serverUrl: "",
+        transport: "stdio",
+        command: "npx",
+        args: ["-y", "@anthropic/mcp-server-brave-search"],
+        toolName: "brave_web_search",
+        env: { BRAVE_API_KEY: "" },
+      },
+    },
+  },
+  {
+    id: "mcp_fetch_url",
+    name: "Fetch Webpage (MCP)",
+    description: "Fetch any URL and return its content as clean markdown via the Fetch MCP server. Useful for reading documentation, articles, and web pages.",
+    category: "web",
+    parameters: [
+      { name: "url", type: "string", description: "URL to fetch", required: true },
+      { name: "max_length", type: "number", description: "Maximum content length in characters" },
+      { name: "raw", type: "boolean", description: "Return raw HTML instead of markdown" },
+    ],
+    execution: {
+      type: "mcp",
+      mcp: {
+        serverUrl: "",
+        transport: "stdio",
+        command: "npx",
+        args: ["-y", "@anthropic/mcp-server-fetch"],
+        toolName: "fetch",
+      },
+    },
+  },
+  {
+    id: "mcp_filesystem",
+    name: "File System Access (MCP)",
+    description: "Read, write, and manage files on the local filesystem via the Filesystem MCP server. Sandboxed to allowed directories.",
+    category: "filesystem",
+    parameters: [
+      { name: "operation", type: "string", description: "File operation", required: true, enum: ["read", "write", "list", "mkdir", "move", "search"] },
+      { name: "path", type: "string", description: "File or directory path", required: true },
+      { name: "content", type: "string", description: "Content to write (for write operation)" },
+    ],
+    execution: {
+      type: "mcp",
+      mcp: {
+        serverUrl: "",
+        transport: "stdio",
+        command: "npx",
+        args: ["-y", "@anthropic/mcp-server-filesystem", "/Users"],
+        toolName: "read_file",
+      },
+    },
+  },
+
+  /* ---- HTTP API Plugins ---- */
+  {
+    id: "newsapi_search",
+    name: "News Search (NewsAPI)",
+    description: "Search global news articles from 150,000+ sources via NewsAPI.org. Returns headlines, descriptions, source names, and publication dates.",
+    category: "web",
+    parameters: [
+      { name: "query", type: "string", description: "Keywords or phrases to search for", required: true },
+      { name: "language", type: "string", description: "2-letter language code", enum: ["en", "es", "fr", "de", "it", "pt", "zh", "ja", "ar", "ru"] },
+      { name: "sort_by", type: "string", description: "Sort order", enum: ["relevancy", "popularity", "publishedAt"] },
+      { name: "page_size", type: "number", description: "Number of results (max 100)" },
+    ],
+    execution: {
+      type: "http",
+      http: {
+        url: "https://newsapi.org/v2/everything",
+        method: "GET",
+        authType: "api-key",
+        authHeader: "X-Api-Key",
+        authValue: "",
+        headers: { "Content-Type": "application/json" },
+        bodyTemplate: "",
+      },
+    },
+  },
+  {
+    id: "github_search_repos",
+    name: "GitHub Repo Search",
+    description: "Search GitHub repositories by keyword, language, stars, and more using the GitHub REST API.",
+    category: "code",
+    parameters: [
+      { name: "query", type: "string", description: "Search query (e.g., 'machine learning language:python stars:>100')", required: true },
+      { name: "sort", type: "string", description: "Sort field", enum: ["stars", "forks", "help-wanted-issues", "updated"] },
+      { name: "order", type: "string", description: "Sort order", enum: ["asc", "desc"] },
+      { name: "per_page", type: "number", description: "Results per page (max 100)" },
+    ],
+    execution: {
+      type: "http",
+      http: {
+        url: "https://api.github.com/search/repositories",
+        method: "GET",
+        authType: "bearer",
+        authValue: "",
+        headers: { "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" },
+      },
+    },
+  },
+  {
+    id: "openweather_lookup",
+    name: "Weather Lookup",
+    description: "Get current weather conditions for any city worldwide using the OpenWeatherMap API. Returns temperature, humidity, wind, and conditions.",
+    category: "data",
+    parameters: [
+      { name: "city", type: "string", description: "City name (e.g., 'London' or 'London,UK')", required: true },
+      { name: "units", type: "string", description: "Temperature units", enum: ["metric", "imperial", "kelvin"] },
+    ],
+    execution: {
+      type: "http",
+      http: {
+        url: "https://api.openweathermap.org/data/2.5/weather",
+        method: "GET",
+        authType: "api-key",
+        authHeader: "appid",
+        authValue: "",
+        headers: { "Content-Type": "application/json" },
+      },
+    },
+  },
+
+  /* ---- Agent-to-Agent (A2A) Plugins ---- */
+  {
+    id: "a2a_research_summarize",
+    name: "Research & Summarize",
+    description: "Agent-to-agent pipeline: sends content to the Executive Summary agent to produce a concise summary. Chain this tool from any agent that needs summarization capabilities.",
+    category: "ai",
+    parameters: [
+      { name: "content", type: "string", description: "The text or document content to summarize", required: true },
+      { name: "style", type: "string", description: "Summary style", enum: ["executive", "technical", "bullet_points", "one_paragraph"] },
+      { name: "max_words", type: "number", description: "Maximum summary length in words" },
+    ],
+    execution: {
+      type: "agent",
+      agent: {
+        agentId: "executive-summary-agent",
+        inputMapping: { "content": "text", "style": "format" },
+      },
+    },
+  },
+  {
+    id: "a2a_draft_review",
+    name: "Draft & Review",
+    description: "Agent-to-agent pipeline: sends a draft document to the Grammar Corrector agent for editorial review. Returns corrected text with tracked changes and suggestions.",
+    category: "ai",
+    parameters: [
+      { name: "draft", type: "string", description: "The draft text to review", required: true },
+      { name: "focus", type: "string", description: "Review focus area", enum: ["grammar", "clarity", "tone", "all"] },
+      { name: "style_guide", type: "string", description: "Style guide to follow (e.g., 'AP', 'Chicago', 'APA')" },
+    ],
+    execution: {
+      type: "agent",
+      agent: {
+        agentId: "grammar-corrector",
+        inputMapping: { "draft": "text", "focus": "correction_type" },
+      },
+    },
+  },
+
+  /* ---- Local Script Plugin ---- */
+  {
+    id: "screenshot_webpage",
+    name: "Screenshot Webpage",
+    description: "Capture a full-page or viewport screenshot of any URL using a headless browser. Outputs a PNG image to the specified path.",
+    category: "media",
+    parameters: [
+      { name: "url", type: "string", description: "URL to screenshot", required: true },
+      { name: "output_path", type: "string", description: "Output file path for the PNG", required: true },
+      { name: "full_page", type: "boolean", description: "Capture full scrollable page (default: viewport only)" },
+      { name: "width", type: "number", description: "Viewport width in pixels (default: 1280)" },
+      { name: "height", type: "number", description: "Viewport height in pixels (default: 720)" },
+    ],
+    execution: {
+      type: "script",
+      script: {
+        command: "npx",
+        args: ["playwright", "screenshot"],
+        timeout: 30,
+      },
+    },
+  },
+
+  /* ---- Sandbox (Docker) Plugin ---- */
+  {
+    id: "python_execute",
+    name: "Python Execute",
+    description: "Execute Python code in an isolated Docker container. Supports numpy, pandas, requests, and standard library. Returns stdout, stderr, and exit code.",
+    category: "code",
+    parameters: [
+      { name: "code", type: "string", description: "Python code to execute", required: true },
+      { name: "packages", type: "array", description: "Additional pip packages to install before execution" },
+      { name: "timeout", type: "number", description: "Execution timeout in seconds (default: 30)" },
+    ],
+    execution: {
+      type: "sandbox",
+      sandbox: {
+        image: "python:3.12-slim",
+        command: "python3 -c",
+        timeout: 30,
+        env: { PYTHONDONTWRITEBYTECODE: "1" },
+      },
+    },
+  },
 ];
 
 /* ------------------------------------------------------------------ */
