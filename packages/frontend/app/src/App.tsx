@@ -4,7 +4,7 @@ import { Sidebar } from "./layout/Sidebar";
 import { EditorArea } from "./layout/EditorArea";
 import { AIPanel } from "./layout/AIPanel";
 import { themeAtom, engagementsAtom, activeDocIdAtom, genId, editorStoreAtom, openDocAtom, activeViewAtom } from "./state/atoms";
-import { exportDocAsMarkdown } from "./utils/export";
+import { exportDocAsMarkdown, printDocument } from "./utils/export";
 import { importMarkdownFile } from "./utils/import";
 import { addToastAtom } from "./state/toastAtom";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
@@ -19,6 +19,9 @@ import { AgentDashboard } from "./layout/AgentDashboard";
 import { TaskQueue } from "./layout/TaskQueue";
 import { PluginManager } from "./layout/PluginManager";
 import { Settings } from "./layout/Settings";
+import { Breadcrumb } from "./layout/Breadcrumb";
+import { unreadCountAtom } from "./state/notificationAtom";
+import { NotificationPanel } from "./layout/NotificationPanel";
 
 export function App() {
   const [mode, setMode] = useState<"page" | "edgeless">("page");
@@ -137,6 +140,9 @@ export function App() {
         case "export-markdown":
           if (editorStore) exportDocAsMarkdown(editorStore);
           break;
+        case "print-document":
+          if (editorStore) printDocument(editorStore);
+          break;
         case "import-markdown":
           handleImportMarkdown();
           break;
@@ -184,6 +190,7 @@ export function App() {
                 : "syncing"
           }
         />
+        <Breadcrumb />
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
           {activeView === "settings" ? (
             <Settings />
@@ -234,6 +241,8 @@ function Toolbar({
   syncStatus: "syncing" | "synced" | "offline" | "hidden";
 }) {
   const editorStore = useAtomValue(editorStoreAtom);
+  const unreadCount = useAtomValue(unreadCountAtom);
+  const [notifPanelOpen, setNotifPanelOpen] = useState(false);
 
   return (
     <div
@@ -278,6 +287,53 @@ function Toolbar({
         >
           Edgeless
         </button>
+      </div>
+
+      {/* Notification bell */}
+      <div style={{ position: "relative" }}>
+        <button
+          onClick={() => setNotifPanelOpen((prev) => !prev)}
+          style={{
+            padding: "6px 10px",
+            borderRadius: 6,
+            border: "1px solid var(--celerex-border)",
+            cursor: "pointer",
+            fontSize: 15,
+            background: notifPanelOpen ? "var(--celerex-accent)" : "transparent",
+            color: notifPanelOpen ? "#fff" : "var(--celerex-text-secondary)",
+            position: "relative",
+            lineHeight: 1,
+          }}
+          title="Notifications"
+        >
+          {"\uD83D\uDD14"}
+          {unreadCount > 0 && (
+            <span
+              style={{
+                position: "absolute",
+                top: 2,
+                right: 2,
+                minWidth: 16,
+                height: 16,
+                borderRadius: "50%",
+                background: "#ef4444",
+                color: "#fff",
+                fontSize: 10,
+                fontWeight: 700,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                lineHeight: 1,
+                padding: "0 3px",
+              }}
+            >
+              {unreadCount}
+            </span>
+          )}
+        </button>
+        {notifPanelOpen && (
+          <NotificationPanel onClose={() => setNotifPanelOpen(false)} />
+        )}
       </div>
 
       {syncStatus !== "hidden" && (
@@ -355,6 +411,25 @@ function Toolbar({
         title="Export document as Markdown"
       >
         Export
+      </button>
+
+      <button
+        onClick={() => editorStore && printDocument(editorStore)}
+        disabled={!editorStore}
+        style={{
+          padding: "6px 12px",
+          borderRadius: 6,
+          border: "1px solid var(--celerex-border)",
+          cursor: editorStore ? "pointer" : "not-allowed",
+          fontSize: 13,
+          fontWeight: 500,
+          background: "transparent",
+          color: "var(--celerex-text-secondary)",
+          opacity: editorStore ? 1 : 0.5,
+        }}
+        title="Print document / Save as PDF"
+      >
+        Print
       </button>
 
       <button

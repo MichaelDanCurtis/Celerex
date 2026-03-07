@@ -43,6 +43,7 @@ export function CommandPalette({ open, onClose, onAction }: CommandPaletteProps)
       { id: "action:export-markdown", label: "Export as Markdown", icon: "\u26A1", action: "export-markdown" },
       { id: "action:import-markdown", label: "Import Markdown", icon: "\u26A1", action: "import-markdown" },
       { id: "action:new-from-template", label: "New from Template...", icon: "\u26A1", action: "new-from-template" },
+      { id: "action:print-document", label: "Print Document", icon: "\u26A1", action: "print-document" },
     ];
 
     const docs: PaletteItem[] = engagements.flatMap((eng) =>
