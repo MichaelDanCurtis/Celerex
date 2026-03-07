@@ -1,10 +1,12 @@
 use axum::{
     Router,
     extract::{Path, State},
+    extract::ws::{Message, WebSocket, WebSocketUpgrade},
     http::StatusCode,
     response::{IntoResponse, Json},
     routing::{delete, get, post, put},
 };
+use futures_util::{SinkExt, StreamExt};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -105,6 +107,8 @@ async fn main() -> anyhow::Result<()> {
             "/api/engagements/{id}/docs/{doc_id}",
             delete(delete_doc),
         )
+        // WebSocket endpoint (will be extended for Yjs document sync)
+        .route("/api/ws", get(ws_handler))
         // Chat proxy
         .route("/api/chat", post(chat_handler))
         .with_state(state)
@@ -268,6 +272,50 @@ async fn delete_doc(
     };
     let removed = engagement.docs.remove(pos);
     (StatusCode::OK, Json(json!(removed)))
+}
+
+// ---------------------------------------------------------------------------
+// WebSocket handler — echo server, to be extended for Yjs document sync
+// ---------------------------------------------------------------------------
+
+async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
+    ws.on_upgrade(handle_ws_connection)
+}
+
+async fn handle_ws_connection(socket: WebSocket) {
+    tracing::info!("WebSocket client connected");
+
+    let (mut sender, mut receiver) = socket.split();
+
+    while let Some(msg) = receiver.next().await {
+        let msg = match msg {
+            Ok(m) => m,
+            Err(e) => {
+                tracing::warn!("WebSocket receive error: {e}");
+                break;
+            }
+        };
+
+        match msg {
+            Message::Text(text) => {
+                if sender.send(Message::Text(text)).await.is_err() {
+                    break;
+                }
+            }
+            Message::Binary(data) => {
+                if sender.send(Message::Binary(data)).await.is_err() {
+                    break;
+                }
+            }
+            Message::Close(_) => {
+                break;
+            }
+            // Ping/Pong are handled automatically by axum/tungstenite
+            _ => {}
+        }
+    }
+
+    tracing::info!("WebSocket client disconnected");
 }
 
 // ---------------------------------------------------------------------------

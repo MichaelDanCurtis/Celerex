@@ -6,12 +6,20 @@ export interface KeyboardShortcutCallbacks {
   onToggleTheme?: () => void;
   onToggleSidebar?: () => void;
   onCommandPalette?: () => void;
+  onNewFromTemplate?: () => void;
 }
 
 export function useKeyboardShortcuts(callbacks: KeyboardShortcutCallbacks) {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const mod = e.metaKey || e.ctrlKey;
+
+      // Cmd/Ctrl+Shift+N — open template dialog
+      if (mod && e.shiftKey && (e.key === "N" || e.key === "n")) {
+        e.preventDefault();
+        callbacks.onNewFromTemplate?.();
+        return;
+      }
 
       // Cmd/Ctrl+N — create new doc
       if (mod && e.key === "n" && !e.shiftKey) {

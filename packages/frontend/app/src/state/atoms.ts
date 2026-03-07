@@ -94,6 +94,16 @@ export const updateDocTitleAtom = atom(
   }
 );
 
+// Recently opened doc IDs (most recent first, max 10)
+export const recentDocIdsAtom = atom<string[]>([]);
+export const trackRecentDocAtom = atom(
+  null,
+  (get, set, docId: string) => {
+    const recent = get(recentDocIdsAtom).filter((id) => id !== docId);
+    set(recentDocIdsAtom, [docId, ...recent].slice(0, 10));
+  }
+);
+
 // Favorites (pinned doc IDs)
 export const favoritesAtom = atom<string[]>([]);
 export const toggleFavoriteAtom = atom(

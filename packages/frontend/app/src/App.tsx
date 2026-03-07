@@ -9,6 +9,8 @@ import { importMarkdownFile } from "./utils/import";
 import { addToastAtom } from "./state/toastAtom";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { CommandPalette } from "./layout/CommandPalette";
+import { TemplateDialog } from "./layout/TemplateDialog";
+import { type DocTemplate } from "./templates/templates";
 import { useApiSync } from "./hooks/useApiSync";
 import { useDocRouter } from "./hooks/useDocRouter";
 import { usePersistence } from "./hooks/usePersistence";
@@ -23,6 +25,7 @@ export function App() {
   const [aiPanelOpen, setAiPanelOpen] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const editorStore = useAtomValue(editorStoreAtom);
   const [theme, setTheme] = useAtom(themeAtom);
   const [engagements, setEngagements] = useAtom(engagementsAtom);
@@ -47,24 +50,35 @@ export function App() {
   }, [theme]);
 
   const handleNewDoc = useCallback(() => {
-    const eng = engagements[0];
-    if (!eng) return;
-    const docId = genId("doc");
-    setEngagements((prev) =>
-      prev.map((e) =>
-        e.id === eng.id
-          ? {
-              ...e,
-              docs: [
-                ...e.docs,
-                { id: docId, title: "Untitled", engagementId: eng.id, createdAt: Date.now() },
-              ],
-            }
-          : e
-      )
-    );
-    openDoc(docId);
-  }, [engagements, setEngagements, openDoc]);
+    setTemplateDialogOpen(true);
+  }, []);
+
+  const handleTemplateSelect = useCallback(
+    (template: DocTemplate) => {
+      const eng = engagements[0];
+      if (!eng) return;
+      const docId = genId("doc");
+      setEngagements((prev) =>
+        prev.map((e) =>
+          e.id === eng.id
+            ? {
+                ...e,
+                docs: [
+                  ...e.docs,
+                  { id: docId, title: template.titlePrefix, engagementId: eng.id, createdAt: Date.now() },
+                ],
+              }
+            : e
+        )
+      );
+      openDoc(docId);
+    },
+    [engagements, setEngagements, openDoc]
+  );
+
+  const handleOpenTemplateDialog = useCallback(() => {
+    setTemplateDialogOpen(true);
+  }, []);
 
   const handleImportMarkdown = useCallback(async () => {
     const result = await importMarkdownFile();
@@ -126,12 +140,15 @@ export function App() {
         case "import-markdown":
           handleImportMarkdown();
           break;
+        case "new-from-template":
+          handleOpenTemplateDialog();
+          break;
         case "open-doc":
           if (payload) openDoc(payload);
           break;
       }
     },
-    [handleNewDoc, handleToggleTheme, handleToggleAI, handleToggleSidebar, editorStore, openDoc, handleImportMarkdown]
+    [handleNewDoc, handleToggleTheme, handleToggleAI, handleToggleSidebar, editorStore, openDoc, handleImportMarkdown, handleOpenTemplateDialog]
   );
 
   useDocRouter();
@@ -142,6 +159,7 @@ export function App() {
     onToggleTheme: handleToggleTheme,
     onToggleSidebar: handleToggleSidebar,
     onCommandPalette: handleCommandPalette,
+    onNewFromTemplate: handleOpenTemplateDialog,
   });
 
   return (
@@ -186,6 +204,11 @@ export function App() {
         open={commandPaletteOpen}
         onClose={() => setCommandPaletteOpen(false)}
         onAction={handlePaletteAction}
+      />
+      <TemplateDialog
+        open={templateDialogOpen}
+        onClose={() => setTemplateDialogOpen(false)}
+        onSelect={handleTemplateSelect}
       />
     </div>
   );

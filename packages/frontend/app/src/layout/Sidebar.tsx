@@ -7,6 +7,8 @@ import {
   activeViewAtom,
   favoritesAtom,
   toggleFavoriteAtom,
+  recentDocIdsAtom,
+  trackRecentDocAtom,
   genId,
   type Engagement,
 } from "../state/atoms";
@@ -26,6 +28,8 @@ export function Sidebar({
   const addToast = useSetAtom(addToastAtom);
   const favorites = useAtomValue(favoritesAtom);
   const toggleFavorite = useSetAtom(toggleFavoriteAtom);
+  const recentDocIds = useAtomValue(recentDocIdsAtom);
+  const trackRecentDoc = useSetAtom(trackRecentDocAtom);
   const [creatingEngagement, setCreatingEngagement] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -35,6 +39,16 @@ export function Sidebar({
       .map((id) => allDocs.find((d) => d.id === id))
       .filter(Boolean) as typeof allDocs;
   }, [favorites, engagements]);
+
+  const recentDocs = useMemo(() => {
+    const allDocs = engagements.flatMap((e) => e.docs);
+    const favSet = new Set(favorites);
+    return recentDocIds
+      .filter((id) => !favSet.has(id))
+      .slice(0, 5)
+      .map((id) => allDocs.find((d) => d.id === id))
+      .filter(Boolean) as typeof allDocs;
+  }, [recentDocIds, favorites, engagements]);
 
   function handleCreateEngagement(name: string) {
     const eng: Engagement = {
@@ -64,6 +78,7 @@ export function Sidebar({
       )
     );
     setActiveDocId(docId);
+    trackRecentDoc(docId);
   }
 
   function handleDuplicateDoc(engagementId: string, docId: string) {
@@ -87,6 +102,7 @@ export function Sidebar({
       })
     );
     openDoc(newDocId);
+    trackRecentDoc(newDocId);
   }
 
   function handleDeleteDoc(engagementId: string, docId: string) {
@@ -198,10 +214,28 @@ export function Sidebar({
                   active={doc.id === activeDocId}
                   onClick={() => {
                     openDoc(doc.id);
+                    trackRecentDoc(doc.id);
                     setActiveView("editor");
                     setSearchQuery("");
                   }}
                   onUnpin={() => toggleFavorite(doc.id)}
+                />
+              ))}
+            </SidebarSection>
+          )}
+          {recentDocs.length > 0 && (
+            <SidebarSection title="Recent">
+              {recentDocs.map((doc) => (
+                <SidebarItem
+                  key={doc.id}
+                  label={doc.title || "Untitled"}
+                  active={doc.id === activeDocId}
+                  onClick={() => {
+                    openDoc(doc.id);
+                    trackRecentDoc(doc.id);
+                    setActiveView("editor");
+                    setSearchQuery("");
+                  }}
                 />
               ))}
             </SidebarSection>
@@ -232,6 +266,7 @@ export function Sidebar({
                     onToggleFavorite={toggleFavorite}
                     onSelectDoc={(id) => {
                       openDoc(id);
+                      trackRecentDoc(id);
                       setActiveView("editor");
                       setSearchQuery("");
                     }}
