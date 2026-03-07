@@ -45,6 +45,9 @@ export function CommandPalette({ open, onClose, onAction }: CommandPaletteProps)
       { id: "action:new-from-template", label: "New from Template...", icon: "\u26A1", action: "new-from-template" },
       { id: "action:print-document", label: "Print Document", icon: "\u26A1", action: "print-document" },
       { id: "action:version-history", label: "Version History", icon: "\u26A1", action: "version-history" },
+      { id: "action:keyboard-shortcuts", label: "Keyboard Shortcuts", icon: "\u26A1", action: "keyboard-shortcuts" },
+      { id: "action:toggle-outline", label: "Toggle Document Outline", icon: "\u26A1", action: "toggle-outline" },
+      { id: "action:focus-mode", label: "Toggle Focus Mode", icon: "\u26A1", action: "focus-mode" },
     ];
 
     const docs: PaletteItem[] = engagements.flatMap((eng) =>

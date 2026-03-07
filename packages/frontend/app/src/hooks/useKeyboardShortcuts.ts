@@ -7,6 +7,8 @@ export interface KeyboardShortcutCallbacks {
   onToggleSidebar?: () => void;
   onCommandPalette?: () => void;
   onNewFromTemplate?: () => void;
+  onShortcutsHelp?: () => void;
+  onFocusMode?: () => void;
 }
 
 export function useKeyboardShortcuts(callbacks: KeyboardShortcutCallbacks) {
@@ -53,6 +55,20 @@ export function useKeyboardShortcuts(callbacks: KeyboardShortcutCallbacks) {
       if (mod && e.shiftKey && e.key === "L") {
         e.preventDefault();
         callbacks.onToggleTheme?.();
+        return;
+      }
+
+      // Cmd/Ctrl+/ — keyboard shortcuts help
+      if (mod && e.key === "/" && !e.shiftKey) {
+        e.preventDefault();
+        callbacks.onShortcutsHelp?.();
+        return;
+      }
+
+      // Cmd/Ctrl+Shift+F — toggle focus mode
+      if (mod && e.shiftKey && (e.key === "F" || e.key === "f")) {
+        e.preventDefault();
+        callbacks.onFocusMode?.();
         return;
       }
     }

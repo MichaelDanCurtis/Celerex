@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { Sidebar } from "./layout/Sidebar";
 import { EditorArea } from "./layout/EditorArea";
@@ -23,6 +23,9 @@ import { Breadcrumb } from "./layout/Breadcrumb";
 import { unreadCountAtom } from "./state/notificationAtom";
 import { NotificationPanel } from "./layout/NotificationPanel";
 import { VersionHistory } from "./layout/VersionHistory";
+import { DocOutline } from "./layout/DocOutline";
+import { ShortcutsDialog } from "./layout/ShortcutsDialog";
+import { FocusModeOverlay } from "./layout/FocusModeOverlay";
 
 export function App() {
   const [mode, setMode] = useState<"page" | "edgeless">("page");
@@ -31,6 +34,10 @@ export function App() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
+  const [outlineOpen, setOutlineOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [focusModeActive, setFocusModeActive] = useState(false);
+  const preFocusStateRef = useRef<{ sidebarCollapsed: boolean; aiPanelOpen: boolean } | null>(null);
   const editorStore = useAtomValue(editorStoreAtom);
   const [theme, setTheme] = useAtom(themeAtom);
   const [engagements, setEngagements] = useAtom(engagementsAtom);
@@ -124,6 +131,25 @@ export function App() {
     setCommandPaletteOpen((prev) => !prev);
   }, []);
 
+  const handleToggleFocusMode = useCallback(() => {
+    setFocusModeActive((prev) => {
+      if (!prev) {
+        // Entering focus mode: save current state
+        preFocusStateRef.current = { sidebarCollapsed, aiPanelOpen };
+        setSidebarCollapsed(true);
+        setAiPanelOpen(false);
+      } else {
+        // Exiting focus mode: restore previous state
+        if (preFocusStateRef.current) {
+          setSidebarCollapsed(preFocusStateRef.current.sidebarCollapsed);
+          setAiPanelOpen(preFocusStateRef.current.aiPanelOpen);
+          preFocusStateRef.current = null;
+        }
+      }
+      return !prev;
+    });
+  }, [sidebarCollapsed, aiPanelOpen]);
+
   const handlePaletteAction = useCallback(
     (action: string, payload?: any) => {
       switch (action) {
@@ -157,9 +183,18 @@ export function App() {
         case "version-history":
           setVersionHistoryOpen((prev) => !prev);
           break;
+        case "toggle-outline":
+          setOutlineOpen((prev) => !prev);
+          break;
+        case "keyboard-shortcuts":
+          setShortcutsOpen(true);
+          break;
+        case "focus-mode":
+          handleToggleFocusMode();
+          break;
       }
     },
-    [handleNewDoc, handleToggleTheme, handleToggleAI, handleToggleSidebar, editorStore, openDoc, handleImportMarkdown, handleOpenTemplateDialog]
+    [handleNewDoc, handleToggleTheme, handleToggleAI, handleToggleSidebar, editorStore, openDoc, handleImportMarkdown, handleOpenTemplateDialog, handleToggleFocusMode]
   );
 
   useDocRouter();
@@ -171,33 +206,43 @@ export function App() {
     onToggleSidebar: handleToggleSidebar,
     onCommandPalette: handleCommandPalette,
     onNewFromTemplate: handleOpenTemplateDialog,
+    onShortcutsHelp: useCallback(() => setShortcutsOpen((prev) => !prev), []),
+    onFocusMode: handleToggleFocusMode,
   });
 
   return (
     <div style={{ display: "flex", height: "100vh", width: "100vw" }}>
-      <Sidebar collapsed={sidebarCollapsed} onToggleCollapse={handleToggleSidebar} />
+      {!focusModeActive && <Sidebar collapsed={sidebarCollapsed} onToggleCollapse={handleToggleSidebar} />}
       <main style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <Toolbar
-          mode={mode}
-          onModeChange={setMode}
-          aiPanelOpen={aiPanelOpen}
-          onToggleAI={handleToggleAI}
-          theme={theme}
-          onToggleTheme={handleToggleTheme}
-          onImportMarkdown={handleImportMarkdown}
-          versionHistoryOpen={versionHistoryOpen}
-          onToggleVersionHistory={() => setVersionHistoryOpen((prev) => !prev)}
-          syncStatus={
-            error
-              ? "offline"
-              : synced
-                ? showSynced
-                  ? "synced"
-                  : "hidden"
-                : "syncing"
-          }
-        />
-        <Breadcrumb />
+        {focusModeActive ? (
+          <FocusModeOverlay active={focusModeActive} onExit={handleToggleFocusMode} />
+        ) : (
+          <>
+            <Toolbar
+              mode={mode}
+              onModeChange={setMode}
+              aiPanelOpen={aiPanelOpen}
+              onToggleAI={handleToggleAI}
+              theme={theme}
+              onToggleTheme={handleToggleTheme}
+              onImportMarkdown={handleImportMarkdown}
+              versionHistoryOpen={versionHistoryOpen}
+              onToggleVersionHistory={() => setVersionHistoryOpen((prev) => !prev)}
+              outlineOpen={outlineOpen}
+              onToggleOutline={() => setOutlineOpen((prev) => !prev)}
+              syncStatus={
+                error
+                  ? "offline"
+                  : synced
+                    ? showSynced
+                      ? "synced"
+                      : "hidden"
+                    : "syncing"
+              }
+            />
+            <Breadcrumb />
+          </>
+        )}
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
           {activeView === "settings" ? (
             <Settings />
@@ -210,8 +255,9 @@ export function App() {
           ) : (
             <EditorArea mode={mode} activeView={activeView} />
           )}
+          {outlineOpen && <DocOutline onClose={() => setOutlineOpen(false)} />}
           {versionHistoryOpen && <VersionHistory onClose={() => setVersionHistoryOpen(false)} />}
-          {aiPanelOpen && <AIPanel />}
+          {!focusModeActive && aiPanelOpen && <AIPanel />}
         </div>
       </main>
       <ToastContainer />
@@ -224,6 +270,10 @@ export function App() {
         open={templateDialogOpen}
         onClose={() => setTemplateDialogOpen(false)}
         onSelect={handleTemplateSelect}
+      />
+      <ShortcutsDialog
+        open={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
       />
     </div>
   );
@@ -239,6 +289,8 @@ function Toolbar({
   onImportMarkdown,
   versionHistoryOpen,
   onToggleVersionHistory,
+  outlineOpen,
+  onToggleOutline,
   syncStatus,
 }: {
   mode: "page" | "edgeless";
@@ -250,6 +302,8 @@ function Toolbar({
   onImportMarkdown: () => void;
   versionHistoryOpen: boolean;
   onToggleVersionHistory: () => void;
+  outlineOpen: boolean;
+  onToggleOutline: () => void;
   syncStatus: "syncing" | "synced" | "offline" | "hidden";
 }) {
   const editorStore = useAtomValue(editorStoreAtom);
@@ -421,6 +475,23 @@ function Toolbar({
         title="Toggle version history"
       >
         History
+      </button>
+
+      <button
+        onClick={onToggleOutline}
+        style={{
+          padding: "6px 12px",
+          borderRadius: 6,
+          border: "1px solid var(--celerex-border)",
+          cursor: "pointer",
+          fontSize: 13,
+          fontWeight: 500,
+          background: outlineOpen ? "var(--celerex-accent)" : "transparent",
+          color: outlineOpen ? "#fff" : "var(--celerex-text-secondary)",
+        }}
+        title="Toggle document outline"
+      >
+        Outline
       </button>
 
       <button
