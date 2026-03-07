@@ -16,6 +16,7 @@ import { useDocRouter } from "./hooks/useDocRouter";
 import { usePersistence } from "./hooks/usePersistence";
 import { ToastContainer } from "./layout/ToastContainer";
 import { AgentDashboard } from "./layout/AgentDashboard";
+import { PipelineEditor } from "./layout/PipelineEditor";
 import { TaskQueue } from "./layout/TaskQueue";
 import { PluginManager } from "./layout/PluginManager";
 import { Settings } from "./layout/Settings";
@@ -288,6 +289,8 @@ export function App() {
             <Settings />
           ) : activeView === "agent-dashboard" ? (
             <AgentDashboard />
+          ) : activeView === "pipeline-editor" ? (
+            <PipelineEditor />
           ) : activeView === "task-queue" ? (
             <TaskQueue />
           ) : activeView === "timeline" ? (

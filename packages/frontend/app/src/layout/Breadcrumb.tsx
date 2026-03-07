@@ -28,6 +28,10 @@ export function Breadcrumb() {
       segments.push({ label: "Agents" });
       segments.push({ label: "Dashboard" });
       break;
+    case "pipeline-editor":
+      segments.push({ label: "Agents" });
+      segments.push({ label: "Pipeline Editor" });
+      break;
     case "task-queue":
       segments.push({ label: "Agents" });
       segments.push({ label: "Task Queue" });

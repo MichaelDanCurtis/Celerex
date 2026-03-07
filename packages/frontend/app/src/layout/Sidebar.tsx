@@ -346,6 +346,11 @@ export function Sidebar({
               onClick={() => setActiveView("agent-dashboard")}
             />
             <SidebarItem
+              label="Pipeline Editor"
+              active={activeView === "pipeline-editor"}
+              onClick={() => setActiveView("pipeline-editor")}
+            />
+            <SidebarItem
               label="Task Queue"
               active={activeView === "task-queue"}
               onClick={() => setActiveView("task-queue")}
