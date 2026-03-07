@@ -51,6 +51,8 @@ export function CommandPalette({ open, onClose, onAction }: CommandPaletteProps)
       { id: "action:split-view", label: "Toggle Split View", icon: "\u26A1", action: "split-view" },
       { id: "action:share-document", label: "Share Document", icon: "\u26A1", action: "share-document" },
       { id: "action:activity-log", label: "Activity Log", icon: "\u26A1", action: "activity-log" },
+      { id: "action:trash", label: "Open Trash", icon: "\u26A1", action: "trash" },
+      { id: "action:scratchpad", label: "Toggle Scratchpad", icon: "\u26A1", action: "scratchpad" },
     ];
 
     const docs: PaletteItem[] = engagements.flatMap((eng) =>

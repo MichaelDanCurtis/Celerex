@@ -29,6 +29,9 @@ import { ShareDialog } from "./layout/ShareDialog";
 import { FocusModeOverlay } from "./layout/FocusModeOverlay";
 import { SplitView } from "./layout/SplitView";
 import { ActivityLog } from "./layout/ActivityLog";
+import { Scratchpad } from "./layout/Scratchpad";
+import { PresenceIndicator } from "./layout/PresenceIndicator";
+import { TrashBin } from "./layout/TrashBin";
 
 export function App() {
   const [mode, setMode] = useState<"page" | "edgeless">("page");
@@ -43,6 +46,8 @@ export function App() {
   const [splitViewOpen, setSplitViewOpen] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [activityLogOpen, setActivityLogOpen] = useState(false);
+  const [scratchpadOpen, setScratchpadOpen] = useState(false);
+  const [trashOpen, setTrashOpen] = useState(false);
   const preFocusStateRef = useRef<{ sidebarCollapsed: boolean; aiPanelOpen: boolean } | null>(null);
   const editorStore = useAtomValue(editorStoreAtom);
   const [theme, setTheme] = useAtom(themeAtom);
@@ -207,6 +212,12 @@ export function App() {
         case "activity-log":
           setActivityLogOpen((prev) => !prev);
           break;
+        case "scratchpad":
+          setScratchpadOpen((prev) => !prev);
+          break;
+        case "trash":
+          setTrashOpen((prev) => !prev);
+          break;
       }
     },
     [handleNewDoc, handleToggleTheme, handleToggleAI, handleToggleSidebar, editorStore, openDoc, handleImportMarkdown, handleOpenTemplateDialog, handleToggleFocusMode]
@@ -278,6 +289,7 @@ export function App() {
           {outlineOpen && <DocOutline onClose={() => setOutlineOpen(false)} />}
           {versionHistoryOpen && <VersionHistory onClose={() => setVersionHistoryOpen(false)} />}
           {activityLogOpen && <ActivityLog onClose={() => setActivityLogOpen(false)} />}
+          {trashOpen && <TrashBin onClose={() => setTrashOpen(false)} />}
           {!focusModeActive && aiPanelOpen && <AIPanel />}
         </div>
       </main>
@@ -299,6 +311,10 @@ export function App() {
       <ShareDialog
         open={shareDialogOpen}
         onClose={() => setShareDialogOpen(false)}
+      />
+      <Scratchpad
+        open={scratchpadOpen}
+        onClose={() => setScratchpadOpen(false)}
       />
     </div>
   );
@@ -337,6 +353,7 @@ function Toolbar({
 }) {
   const editorStore = useAtomValue(editorStoreAtom);
   const unreadCount = useAtomValue(unreadCountAtom);
+  const activeDocId = useAtomValue(activeDocIdAtom);
   const [notifPanelOpen, setNotifPanelOpen] = useState(false);
 
   return (
@@ -469,6 +486,8 @@ function Toolbar({
               : "Offline"}
         </span>
       )}
+
+      <PresenceIndicator docId={activeDocId} />
 
       <div style={{ flex: 1 }} />
 
