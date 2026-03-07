@@ -641,7 +641,7 @@ export function PipelineEditor() {
                         transition: "transform 0.15s",
                       }}
                     >
-                      \u25BC
+                      {"▼"}
                     </span>
                   </button>
 
@@ -687,7 +687,7 @@ export function PipelineEditor() {
                                 transition: "transform 0.15s",
                               }}
                             >
-                              \u25BC
+                              {"▼"}
                             </span>
                             <span style={{ flex: 1, textAlign: "left" }}>
                               {subcat.label}
