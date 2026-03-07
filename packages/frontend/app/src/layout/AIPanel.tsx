@@ -14,6 +14,7 @@ import {
   apiKeysAtom,
 } from "../state/aiProviderAtom";
 import { AIProviderSelector } from "./AIProviderSelector";
+import { insertContentIntoDoc, extractDocText } from "../editor/insertContent";
 
 function formatTime(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString([], {
@@ -22,7 +23,15 @@ function formatTime(timestamp: number): string {
   });
 }
 
-function MessageBubble({ message }: { message: ChatMessage }) {
+interface MessageBubbleProps {
+  message: ChatMessage;
+  onInsert?: (content: string) => void;
+  onReplace?: (content: string) => void;
+}
+
+function MessageBubble({ message, onInsert, onReplace }: MessageBubbleProps) {
+  const [inserted, setInserted] = useState(false);
+
   if (message.role === "system") {
     return (
       <div
@@ -48,6 +57,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   }
 
   const isUser = message.role === "user";
+  const isAssistant = message.role === "assistant";
 
   return (
     <div
@@ -70,6 +80,65 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       >
         {message.content}
       </div>
+      {/* Action buttons for assistant messages */}
+      {isAssistant && (
+        <div
+          style={{
+            display: "flex",
+            gap: 6,
+            marginTop: 4,
+            flexWrap: "wrap",
+          }}
+        >
+          <button
+            onClick={() => {
+              onInsert?.(message.content);
+              setInserted(true);
+              setTimeout(() => setInserted(false), 2000);
+            }}
+            style={{
+              padding: "2px 8px",
+              borderRadius: 4,
+              border: "1px solid var(--celerex-border)",
+              background: inserted ? "var(--celerex-accent)" : "var(--celerex-bg-secondary)",
+              color: inserted ? "#fff" : "var(--celerex-text-secondary)",
+              cursor: "pointer",
+              fontSize: 11,
+              transition: "all 0.15s",
+            }}
+          >
+            {inserted ? "Inserted!" : "Insert into doc"}
+          </button>
+          <button
+            onClick={() => onReplace?.(message.content)}
+            style={{
+              padding: "2px 8px",
+              borderRadius: 4,
+              border: "1px solid var(--celerex-border)",
+              background: "var(--celerex-bg-secondary)",
+              color: "var(--celerex-text-secondary)",
+              cursor: "pointer",
+              fontSize: 11,
+            }}
+          >
+            Replace doc
+          </button>
+          <button
+            onClick={() => navigator.clipboard.writeText(message.content)}
+            style={{
+              padding: "2px 8px",
+              borderRadius: 4,
+              border: "1px solid var(--celerex-border)",
+              background: "var(--celerex-bg-secondary)",
+              color: "var(--celerex-text-secondary)",
+              cursor: "pointer",
+              fontSize: 11,
+            }}
+          >
+            Copy
+          </button>
+        </div>
+      )}
       <div
         style={{
           fontSize: 11,
@@ -84,6 +153,16 @@ function MessageBubble({ message }: { message: ChatMessage }) {
     </div>
   );
 }
+
+// Quick actions that read/edit the document
+const QUICK_ACTIONS = [
+  { id: "summarize", label: "Summarize", prompt: "Summarize the following document concisely:\n\n" },
+  { id: "improve", label: "Improve", prompt: "Improve the writing quality, clarity, and flow of the following text. Return the improved version:\n\n" },
+  { id: "grammar", label: "Fix Grammar", prompt: "Fix any grammar, spelling, and punctuation errors in the following text. Return the corrected version:\n\n" },
+  { id: "continue", label: "Continue", prompt: "Continue writing from where this document leaves off, maintaining the same style and tone:\n\n" },
+  { id: "shorter", label: "Make Shorter", prompt: "Make the following text more concise while preserving the key points. Return the shortened version:\n\n" },
+  { id: "expand", label: "Expand", prompt: "Expand on the following text with more detail, examples, and depth:\n\n" },
+];
 
 export function AIPanel() {
   const [input, setInput] = useState("");
@@ -102,55 +181,42 @@ export function AIPanel() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSend = useCallback(async () => {
-    const trimmed = input.trim();
-    if (!trimmed || loading) return;
+  const getDocContext = useCallback(() => {
+    if (!editorStore) return undefined;
+    try {
+      const text = extractDocText(editorStore);
+      return text ? text.slice(0, 2000) : undefined;
+    } catch {
+      return undefined;
+    }
+  }, [editorStore]);
+
+  const sendMessage = useCallback(async (userText: string, systemPrompt?: string) => {
+    if (loading) return;
+
+    const displayText = systemPrompt ? `[${userText}]` : userText;
+    const actualMessage = systemPrompt
+      ? systemPrompt + (getDocContext() || "(empty document)")
+      : userText;
 
     const userMessage: ChatMessage = {
       id: genId("msg"),
       role: "user",
-      content: trimmed,
+      content: displayText,
       timestamp: Date.now(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setLoading(true);
-
-    // Focus back on textarea
     textareaRef.current?.focus();
 
-    // Build document context from the editor store
-    let docContext: string | undefined;
-    try {
-      if (editorStore) {
-        const root = editorStore.document;
-        if (root && Array.isArray(root)) {
-          const textParts: string[] = [];
-          for (const block of root) {
-            if (block.content && Array.isArray(block.content)) {
-              for (const inline of block.content) {
-                if (typeof inline === "string") {
-                  textParts.push(inline);
-                } else if (inline?.text) {
-                  textParts.push(inline.text);
-                }
-              }
-            }
-          }
-          const fullText = textParts.join(" ").trim();
-          if (fullText) {
-            docContext = fullText.slice(0, 500);
-          }
-        }
-      }
-    } catch {
-      // Ignore context extraction errors
-    }
+    // Build context for non-quick-action messages
+    const docContext = systemPrompt ? undefined : getDocContext();
 
     try {
       const reply = await sendChatMessage(
-        trimmed,
+        actualMessage,
         docContext,
         providerId,
         selectedModel,
@@ -164,7 +230,6 @@ export function AIPanel() {
       };
       setMessages((prev) => [...prev, assistantMessage]);
     } catch {
-      // Fall back to mock response when backend is unavailable
       const docTitle = activeDoc?.title ?? "your document";
       const assistantMessage: ChatMessage = {
         id: genId("msg"),
@@ -176,7 +241,40 @@ export function AIPanel() {
     } finally {
       setLoading(false);
     }
-  }, [input, loading, activeDoc, editorStore, setMessages, providerId, selectedModel, apiKeys]);
+  }, [loading, activeDoc, getDocContext, setMessages, providerId, selectedModel, apiKeys]);
+
+  const handleSend = useCallback(() => {
+    const trimmed = input.trim();
+    if (!trimmed) return;
+    sendMessage(trimmed);
+  }, [input, sendMessage]);
+
+  const handleQuickAction = useCallback((action: typeof QUICK_ACTIONS[number]) => {
+    sendMessage(action.label, action.prompt);
+  }, [sendMessage]);
+
+  const handleInsert = useCallback((content: string) => {
+    if (!editorStore) return;
+    insertContentIntoDoc(editorStore, content);
+  }, [editorStore]);
+
+  const handleReplace = useCallback((content: string) => {
+    if (!editorStore) return;
+    // Clear existing content, then insert
+    const root = editorStore.root;
+    if (!root) return;
+    const noteBlock = root.children?.find((c: any) => c.flavour === "affine:note");
+    if (!noteBlock) return;
+
+    // Remove existing paragraph/list/code children from note
+    const childIds = [...(noteBlock.children || [])].map((c: any) => c.id);
+    for (const id of childIds) {
+      try { editorStore.deleteBlock(id); } catch { /* ignore */ }
+    }
+
+    // Insert new content
+    insertContentIntoDoc(editorStore, content);
+  }, [editorStore]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -233,7 +331,12 @@ export function AIPanel() {
         }}
       >
         {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
+          <MessageBubble
+            key={msg.id}
+            message={msg}
+            onInsert={handleInsert}
+            onReplace={handleReplace}
+          />
         ))}
         {loading && (
           <div
@@ -251,6 +354,39 @@ export function AIPanel() {
           </div>
         )}
         <div ref={messagesEndRef} />
+      </div>
+
+      {/* Quick Actions */}
+      <div
+        style={{
+          padding: "6px 12px",
+          borderTop: "1px solid var(--celerex-border)",
+          display: "flex",
+          gap: 4,
+          flexWrap: "wrap",
+        }}
+      >
+        {QUICK_ACTIONS.map((action) => (
+          <button
+            key={action.id}
+            onClick={() => handleQuickAction(action)}
+            disabled={loading}
+            style={{
+              padding: "3px 8px",
+              borderRadius: 4,
+              border: "1px solid var(--celerex-border)",
+              background: "var(--celerex-bg-secondary)",
+              color: loading ? "var(--celerex-text-secondary)" : "var(--celerex-text-primary)",
+              cursor: loading ? "not-allowed" : "pointer",
+              fontSize: 11,
+              fontWeight: 500,
+              opacity: loading ? 0.5 : 1,
+              transition: "opacity 0.15s",
+            }}
+          >
+            {action.label}
+          </button>
+        ))}
       </div>
 
       {/* Input */}
