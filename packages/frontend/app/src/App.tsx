@@ -20,6 +20,7 @@ import { PipelineEditor } from "./layout/PipelineEditor";
 import { ToolsManager } from "./layout/ToolsManager";
 import { TaskQueue } from "./layout/TaskQueue";
 import { PluginManager } from "./layout/PluginManager";
+import { AgentTriggers } from "./layout/AgentTriggers";
 import { Settings } from "./layout/Settings";
 import { Breadcrumb } from "./layout/Breadcrumb";
 import { unreadCountAtom } from "./state/notificationAtom";
@@ -296,6 +297,8 @@ export function App() {
             <ToolsManager />
           ) : activeView === "task-queue" ? (
             <TaskQueue />
+          ) : activeView === "agent-triggers" ? (
+            <AgentTriggers />
           ) : activeView === "timeline" ? (
             <TimelineView />
           ) : activeView === "plugin-manager" ? (

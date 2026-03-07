@@ -41,7 +41,7 @@ export const themeAtom = atom<"light" | "dark">("light");
 export const accentColorAtom = atom<string>("#3b82f6");
 export const fontSizeAtom = atom<"small" | "medium" | "large">("medium");
 
-export const activeViewAtom = atom<"editor" | "agent-dashboard" | "pipeline-editor" | "task-queue" | "plugin-manager" | "tools-manager" | "settings" | "timeline">("editor");
+export const activeViewAtom = atom<"editor" | "agent-dashboard" | "pipeline-editor" | "task-queue" | "agent-triggers" | "plugin-manager" | "tools-manager" | "settings" | "timeline">("editor");
 
 export const editorStoreAtom = atom<any>(null);
 

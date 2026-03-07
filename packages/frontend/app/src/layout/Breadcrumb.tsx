@@ -40,6 +40,10 @@ export function Breadcrumb() {
       segments.push({ label: "Agents" });
       segments.push({ label: "Tools Manager" });
       break;
+    case "agent-triggers":
+      segments.push({ label: "Agents" });
+      segments.push({ label: "Triggers" });
+      break;
     case "plugin-manager":
       segments.push({ label: "Plugins" });
       segments.push({ label: "Manager" });
