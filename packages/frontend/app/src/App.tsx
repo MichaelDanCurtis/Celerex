@@ -25,8 +25,10 @@ import { NotificationPanel } from "./layout/NotificationPanel";
 import { VersionHistory } from "./layout/VersionHistory";
 import { DocOutline } from "./layout/DocOutline";
 import { ShortcutsDialog } from "./layout/ShortcutsDialog";
+import { ShareDialog } from "./layout/ShareDialog";
 import { FocusModeOverlay } from "./layout/FocusModeOverlay";
 import { SplitView } from "./layout/SplitView";
+import { ActivityLog } from "./layout/ActivityLog";
 
 export function App() {
   const [mode, setMode] = useState<"page" | "edgeless">("page");
@@ -39,6 +41,8 @@ export function App() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [focusModeActive, setFocusModeActive] = useState(false);
   const [splitViewOpen, setSplitViewOpen] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [activityLogOpen, setActivityLogOpen] = useState(false);
   const preFocusStateRef = useRef<{ sidebarCollapsed: boolean; aiPanelOpen: boolean } | null>(null);
   const editorStore = useAtomValue(editorStoreAtom);
   const [theme, setTheme] = useAtom(themeAtom);
@@ -197,6 +201,12 @@ export function App() {
         case "split-view":
           setSplitViewOpen((prev) => !prev);
           break;
+        case "share-document":
+          setShareDialogOpen(true);
+          break;
+        case "activity-log":
+          setActivityLogOpen((prev) => !prev);
+          break;
       }
     },
     [handleNewDoc, handleToggleTheme, handleToggleAI, handleToggleSidebar, editorStore, openDoc, handleImportMarkdown, handleOpenTemplateDialog, handleToggleFocusMode]
@@ -235,6 +245,8 @@ export function App() {
               onToggleVersionHistory={() => setVersionHistoryOpen((prev) => !prev)}
               outlineOpen={outlineOpen}
               onToggleOutline={() => setOutlineOpen((prev) => !prev)}
+              activityLogOpen={activityLogOpen}
+              onToggleActivityLog={() => setActivityLogOpen((prev) => !prev)}
               syncStatus={
                 error
                   ? "offline"
@@ -265,6 +277,7 @@ export function App() {
           )}
           {outlineOpen && <DocOutline onClose={() => setOutlineOpen(false)} />}
           {versionHistoryOpen && <VersionHistory onClose={() => setVersionHistoryOpen(false)} />}
+          {activityLogOpen && <ActivityLog onClose={() => setActivityLogOpen(false)} />}
           {!focusModeActive && aiPanelOpen && <AIPanel />}
         </div>
       </main>
@@ -283,6 +296,10 @@ export function App() {
         open={shortcutsOpen}
         onClose={() => setShortcutsOpen(false)}
       />
+      <ShareDialog
+        open={shareDialogOpen}
+        onClose={() => setShareDialogOpen(false)}
+      />
     </div>
   );
 }
@@ -299,6 +316,8 @@ function Toolbar({
   onToggleVersionHistory,
   outlineOpen,
   onToggleOutline,
+  activityLogOpen,
+  onToggleActivityLog,
   syncStatus,
 }: {
   mode: "page" | "edgeless";
@@ -312,6 +331,8 @@ function Toolbar({
   onToggleVersionHistory: () => void;
   outlineOpen: boolean;
   onToggleOutline: () => void;
+  activityLogOpen: boolean;
+  onToggleActivityLog: () => void;
   syncStatus: "syncing" | "synced" | "offline" | "hidden";
 }) {
   const editorStore = useAtomValue(editorStoreAtom);
@@ -500,6 +521,23 @@ function Toolbar({
         title="Toggle document outline"
       >
         Outline
+      </button>
+
+      <button
+        onClick={onToggleActivityLog}
+        style={{
+          padding: "6px 12px",
+          borderRadius: 6,
+          border: "1px solid var(--celerex-border)",
+          cursor: "pointer",
+          fontSize: 13,
+          fontWeight: 500,
+          background: activityLogOpen ? "var(--celerex-accent)" : "transparent",
+          color: activityLogOpen ? "#fff" : "var(--celerex-text-secondary)",
+        }}
+        title="Toggle activity log"
+      >
+        Activity
       </button>
 
       <button

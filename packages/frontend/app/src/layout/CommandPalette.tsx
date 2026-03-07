@@ -49,6 +49,8 @@ export function CommandPalette({ open, onClose, onAction }: CommandPaletteProps)
       { id: "action:toggle-outline", label: "Toggle Document Outline", icon: "\u26A1", action: "toggle-outline" },
       { id: "action:focus-mode", label: "Toggle Focus Mode", icon: "\u26A1", action: "focus-mode" },
       { id: "action:split-view", label: "Toggle Split View", icon: "\u26A1", action: "split-view" },
+      { id: "action:share-document", label: "Share Document", icon: "\u26A1", action: "share-document" },
+      { id: "action:activity-log", label: "Activity Log", icon: "\u26A1", action: "activity-log" },
     ];
 
     const docs: PaletteItem[] = engagements.flatMap((eng) =>

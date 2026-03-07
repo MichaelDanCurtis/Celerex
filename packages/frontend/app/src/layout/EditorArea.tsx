@@ -7,6 +7,7 @@ import { TabBar } from "./TabBar";
 import { TagPicker } from "./TagPicker";
 import { StatusBar } from "./StatusBar";
 import { WordGoalTracker } from "./WordGoalTracker";
+import { ReactionBar } from "./ReactionBar";
 
 interface EditorAreaProps {
   mode: "page" | "edgeless";
@@ -53,6 +54,7 @@ export function EditorArea({ mode, activeView }: EditorAreaProps) {
     >
       <TabBar />
       <TagPicker />
+      <ReactionBar />
       <WordGoalTracker />
       <div style={{ flex: 1, overflow: "hidden" }}>
         <BlockSuiteEditor mode={mode} workspace={workspace} docId={activeDocId} />
