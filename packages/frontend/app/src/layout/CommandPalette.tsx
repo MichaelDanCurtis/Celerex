@@ -41,6 +41,7 @@ export function CommandPalette({ open, onClose, onAction }: CommandPaletteProps)
       { id: "action:toggle-ai-panel", label: "Toggle AI Panel", icon: "\u26A1", action: "toggle-ai" },
       { id: "action:toggle-sidebar", label: "Toggle Sidebar", icon: "\u26A1", action: "toggle-sidebar" },
       { id: "action:export-markdown", label: "Export as Markdown", icon: "\u26A1", action: "export-markdown" },
+      { id: "action:import-markdown", label: "Import Markdown", icon: "\u26A1", action: "import-markdown" },
     ];
 
     const docs: PaletteItem[] = engagements.flatMap((eng) =>

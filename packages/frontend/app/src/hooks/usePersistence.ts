@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAtom } from "jotai";
-import { engagementsAtom, activeDocIdAtom, themeAtom } from "../state/atoms";
+import { engagementsAtom, activeDocIdAtom, themeAtom, favoritesAtom } from "../state/atoms";
 import {
   saveEngagements,
   loadEngagements,
@@ -13,6 +13,7 @@ export function usePersistence(): { loaded: boolean } {
   const [engagements, setEngagements] = useAtom(engagementsAtom);
   const [activeDocId, setActiveDocId] = useAtom(activeDocIdAtom);
   const [theme, setTheme] = useAtom(themeAtom);
+  const [favorites, setFavorites] = useAtom(favoritesAtom);
 
   // Track whether initial load has completed so we don't persist defaults
   const initialLoadDone = useRef(false);
@@ -21,17 +22,19 @@ export function usePersistence(): { loaded: boolean } {
   const engagementsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeDocIdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const themeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const favoritesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // --- Load from IndexedDB on mount ---
   useEffect(() => {
     let cancelled = false;
 
     async function hydrate() {
-      const [savedEngagements, savedActiveDocId, savedTheme] =
+      const [savedEngagements, savedActiveDocId, savedTheme, savedFavorites] =
         await Promise.all([
           loadEngagements(),
           loadSetting("activeDocId"),
           loadSetting("theme"),
+          loadSetting("favorites"),
         ]);
 
       if (cancelled) return;
@@ -44,6 +47,9 @@ export function usePersistence(): { loaded: boolean } {
       }
       if (savedTheme) {
         setTheme(savedTheme);
+      }
+      if (savedFavorites) {
+        setFavorites(savedFavorites);
       }
 
       initialLoadDone.current = true;
@@ -98,12 +104,19 @@ export function usePersistence(): { loaded: boolean } {
     debouncedSaveSetting("theme", theme, themeTimer);
   }, [theme, debouncedSaveSetting]);
 
+  // --- Persist favorites on change ---
+  useEffect(() => {
+    if (!initialLoadDone.current) return;
+    debouncedSaveSetting("favorites", favorites, favoritesTimer);
+  }, [favorites, debouncedSaveSetting]);
+
   // --- Cleanup timers on unmount ---
   useEffect(() => {
     return () => {
       if (engagementsTimer.current) clearTimeout(engagementsTimer.current);
       if (activeDocIdTimer.current) clearTimeout(activeDocIdTimer.current);
       if (themeTimer.current) clearTimeout(themeTimer.current);
+      if (favoritesTimer.current) clearTimeout(favoritesTimer.current);
     };
   }, []);
 

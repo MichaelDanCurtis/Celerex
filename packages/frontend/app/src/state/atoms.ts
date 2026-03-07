@@ -38,6 +38,8 @@ const defaultEngagement: Engagement = {
 
 export const themeAtom = atom<"light" | "dark">("light");
 
+export const activeViewAtom = atom<"editor" | "agent-dashboard" | "task-queue" | "plugin-manager">("editor");
+
 export const editorStoreAtom = atom<any>(null);
 
 export const engagementsAtom = atom<Engagement[]>([defaultEngagement]);
@@ -89,6 +91,20 @@ export const updateDocTitleAtom = atom(
         ),
       }))
     );
+  }
+);
+
+// Favorites (pinned doc IDs)
+export const favoritesAtom = atom<string[]>([]);
+export const toggleFavoriteAtom = atom(
+  null,
+  (get, set, docId: string) => {
+    const favorites = get(favoritesAtom);
+    if (favorites.includes(docId)) {
+      set(favoritesAtom, favorites.filter((id) => id !== docId));
+    } else {
+      set(favoritesAtom, [...favorites, docId]);
+    }
   }
 );
 

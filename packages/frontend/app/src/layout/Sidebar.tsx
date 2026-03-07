@@ -1,9 +1,12 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import {
   engagementsAtom,
   activeDocIdAtom,
   openDocAtom,
+  activeViewAtom,
+  favoritesAtom,
+  toggleFavoriteAtom,
   genId,
   type Engagement,
 } from "../state/atoms";
@@ -19,9 +22,19 @@ export function Sidebar({
   const [engagements, setEngagements] = useAtom(engagementsAtom);
   const [activeDocId, setActiveDocId] = useAtom(activeDocIdAtom);
   const openDoc = useSetAtom(openDocAtom);
+  const [activeView, setActiveView] = useAtom(activeViewAtom);
   const addToast = useSetAtom(addToastAtom);
+  const favorites = useAtomValue(favoritesAtom);
+  const toggleFavorite = useSetAtom(toggleFavoriteAtom);
   const [creatingEngagement, setCreatingEngagement] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+
+  const favoriteDocs = useMemo(() => {
+    const allDocs = engagements.flatMap((e) => e.docs);
+    return favorites
+      .map((id) => allDocs.find((d) => d.id === id))
+      .filter(Boolean) as typeof allDocs;
+  }, [favorites, engagements]);
 
   function handleCreateEngagement(name: string) {
     const eng: Engagement = {
@@ -176,6 +189,23 @@ export function Sidebar({
       )}
       {!collapsed && (
         <div style={{ flex: 1, padding: "12px 8px", overflow: "auto" }}>
+          {favoriteDocs.length > 0 && (
+            <SidebarSection title="Favorites">
+              {favoriteDocs.map((doc) => (
+                <SidebarItem
+                  key={doc.id}
+                  label={doc.title || "Untitled"}
+                  active={doc.id === activeDocId}
+                  onClick={() => {
+                    openDoc(doc.id);
+                    setActiveView("editor");
+                    setSearchQuery("");
+                  }}
+                  onUnpin={() => toggleFavorite(doc.id)}
+                />
+              ))}
+            </SidebarSection>
+          )}
           <SidebarSection title="Engagements">
             {engagements
               .filter((eng) => {
@@ -198,8 +228,11 @@ export function Sidebar({
                     key={eng.id}
                     engagement={{ ...eng, docs: filteredDocs }}
                     activeDocId={activeDocId}
+                    favorites={favorites}
+                    onToggleFavorite={toggleFavorite}
                     onSelectDoc={(id) => {
                       openDoc(id);
+                      setActiveView("editor");
                       setSearchQuery("");
                     }}
                     onCreateDoc={(title) => handleCreateDoc(eng.id, title)}
@@ -231,12 +264,24 @@ export function Sidebar({
           </SidebarSection>
 
           <SidebarSection title="Agents">
-            <SidebarItem label="Agent Dashboard" />
-            <SidebarItem label="Task Queue" />
+            <SidebarItem
+              label="Agent Dashboard"
+              active={activeView === "agent-dashboard"}
+              onClick={() => setActiveView("agent-dashboard")}
+            />
+            <SidebarItem
+              label="Task Queue"
+              active={activeView === "task-queue"}
+              onClick={() => setActiveView("task-queue")}
+            />
           </SidebarSection>
 
           <SidebarSection title="Plugins">
-            <SidebarItem label="Plugin Manager" />
+            <SidebarItem
+              label="Plugin Manager"
+              active={activeView === "plugin-manager"}
+              onClick={() => setActiveView("plugin-manager")}
+            />
           </SidebarSection>
         </div>
       )}
@@ -275,6 +320,8 @@ export function Sidebar({
 function EngagementGroup({
   engagement,
   activeDocId,
+  favorites,
+  onToggleFavorite,
   onSelectDoc,
   onCreateDoc,
   onDeleteDoc,
@@ -285,6 +332,8 @@ function EngagementGroup({
 }: {
   engagement: Engagement;
   activeDocId: string;
+  favorites: string[];
+  onToggleFavorite: (docId: string) => void;
   onSelectDoc: (id: string) => void;
   onCreateDoc: (title: string) => void;
   onDeleteDoc: (docId: string) => void;
@@ -421,6 +470,8 @@ function EngagementGroup({
               onClick={() => onSelectDoc(doc.id)}
               onDelete={() => onDeleteDoc(doc.id)}
               onDuplicate={() => onDuplicateDoc(doc.id)}
+              isFavorited={favorites.includes(doc.id)}
+              onToggleFavorite={() => onToggleFavorite(doc.id)}
               draggable
               isDragging={draggingDocId === doc.id}
               dropIndicator={
@@ -537,6 +588,9 @@ function SidebarItem({
   onClick,
   onDelete,
   onDuplicate,
+  onUnpin,
+  isFavorited,
+  onToggleFavorite,
   draggable: isDraggable,
   isDragging,
   dropIndicator,
@@ -552,6 +606,9 @@ function SidebarItem({
   onClick?: () => void;
   onDelete?: () => void;
   onDuplicate?: () => void;
+  onUnpin?: () => void;
+  isFavorited?: boolean;
+  onToggleFavorite?: () => void;
   draggable?: boolean;
   isDragging?: boolean;
   dropIndicator?: "above" | "below";
@@ -597,6 +654,44 @@ function SidebarItem({
       <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {label}
       </span>
+      {onUnpin && hovered && (
+        <span
+          onClick={(e) => {
+            e.stopPropagation();
+            onUnpin();
+          }}
+          style={{
+            marginLeft: 4,
+            fontSize: 13,
+            lineHeight: 1,
+            opacity: 0.5,
+            cursor: "pointer",
+            flexShrink: 0,
+          }}
+          title="Unpin"
+        >
+          {"\uD83D\uDCCC"}
+        </span>
+      )}
+      {onToggleFavorite && hovered && (
+        <span
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleFavorite();
+          }}
+          style={{
+            marginLeft: 4,
+            fontSize: 13,
+            lineHeight: 1,
+            opacity: isFavorited ? 0.8 : 0.5,
+            cursor: "pointer",
+            flexShrink: 0,
+          }}
+          title={isFavorited ? "Unfavorite" : "Favorite"}
+        >
+          {isFavorited ? "\u2605" : "\u2606"}
+        </span>
+      )}
       {onDuplicate && hovered && (
         <span
           onClick={(e) => {

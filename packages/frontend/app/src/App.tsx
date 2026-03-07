@@ -3,14 +3,17 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { Sidebar } from "./layout/Sidebar";
 import { EditorArea } from "./layout/EditorArea";
 import { AIPanel } from "./layout/AIPanel";
-import { themeAtom, engagementsAtom, activeDocIdAtom, genId, editorStoreAtom, openDocAtom } from "./state/atoms";
+import { themeAtom, engagementsAtom, activeDocIdAtom, genId, editorStoreAtom, openDocAtom, activeViewAtom } from "./state/atoms";
 import { exportDocAsMarkdown } from "./utils/export";
+import { importMarkdownFile } from "./utils/import";
+import { addToastAtom } from "./state/toastAtom";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { CommandPalette } from "./layout/CommandPalette";
 import { useApiSync } from "./hooks/useApiSync";
 import { useDocRouter } from "./hooks/useDocRouter";
 import { usePersistence } from "./hooks/usePersistence";
 import { ToastContainer } from "./layout/ToastContainer";
+import { AgentDashboard } from "./layout/AgentDashboard";
 
 export function App() {
   const [mode, setMode] = useState<"page" | "edgeless">("page");
@@ -22,6 +25,8 @@ export function App() {
   const [engagements, setEngagements] = useAtom(engagementsAtom);
   const [, setActiveDocId] = useAtom(activeDocIdAtom);
   const openDoc = useSetAtom(openDocAtom);
+  const addToast = useSetAtom(addToastAtom);
+  const activeView = useAtomValue(activeViewAtom);
 
   usePersistence();
   const { synced, error } = useApiSync();
@@ -58,6 +63,29 @@ export function App() {
     openDoc(docId);
   }, [engagements, setEngagements, openDoc]);
 
+  const handleImportMarkdown = useCallback(async () => {
+    const result = await importMarkdownFile();
+    if (!result) return;
+    const eng = engagements[0];
+    if (!eng) return;
+    const docId = genId("doc");
+    setEngagements((prev) =>
+      prev.map((e) =>
+        e.id === eng.id
+          ? {
+              ...e,
+              docs: [
+                ...e.docs,
+                { id: docId, title: result.title, engagementId: eng.id, createdAt: Date.now() },
+              ],
+            }
+          : e
+      )
+    );
+    openDoc(docId);
+    addToast({ message: `Imported: ${result.title}`, type: "success" });
+  }, [engagements, setEngagements, openDoc, addToast]);
+
   const handleToggleAI = useCallback(() => {
     setAiPanelOpen((prev) => !prev);
   }, []);
@@ -92,12 +120,15 @@ export function App() {
         case "export-markdown":
           if (editorStore) exportDocAsMarkdown(editorStore);
           break;
+        case "import-markdown":
+          handleImportMarkdown();
+          break;
         case "open-doc":
           if (payload) openDoc(payload);
           break;
       }
     },
-    [handleNewDoc, handleToggleTheme, handleToggleAI, handleToggleSidebar, editorStore, openDoc]
+    [handleNewDoc, handleToggleTheme, handleToggleAI, handleToggleSidebar, editorStore, openDoc, handleImportMarkdown]
   );
 
   useDocRouter();
@@ -121,6 +152,7 @@ export function App() {
           onToggleAI={handleToggleAI}
           theme={theme}
           onToggleTheme={handleToggleTheme}
+          onImportMarkdown={handleImportMarkdown}
           syncStatus={
             error
               ? "offline"
@@ -132,7 +164,11 @@ export function App() {
           }
         />
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-          <EditorArea mode={mode} />
+          {activeView === "agent-dashboard" ? (
+            <AgentDashboard />
+          ) : (
+            <EditorArea mode={mode} activeView={activeView} />
+          )}
           {aiPanelOpen && <AIPanel />}
         </div>
       </main>
@@ -153,6 +189,7 @@ function Toolbar({
   onToggleAI,
   theme,
   onToggleTheme,
+  onImportMarkdown,
   syncStatus,
 }: {
   mode: "page" | "edgeless";
@@ -161,6 +198,7 @@ function Toolbar({
   onToggleAI: () => void;
   theme: "light" | "dark";
   onToggleTheme: () => void;
+  onImportMarkdown: () => void;
   syncStatus: "syncing" | "synced" | "offline" | "hidden";
 }) {
   const editorStore = useAtomValue(editorStoreAtom);
@@ -285,6 +323,23 @@ function Toolbar({
         title="Export document as Markdown"
       >
         Export
+      </button>
+
+      <button
+        onClick={onImportMarkdown}
+        style={{
+          padding: "6px 12px",
+          borderRadius: 6,
+          border: "1px solid var(--celerex-border)",
+          cursor: "pointer",
+          fontSize: 13,
+          fontWeight: 500,
+          background: "transparent",
+          color: "var(--celerex-text-secondary)",
+        }}
+        title="Import a Markdown file as a new document"
+      >
+        Import
       </button>
 
       <button

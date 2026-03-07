@@ -8,11 +8,16 @@ import { StatusBar } from "./StatusBar";
 
 interface EditorAreaProps {
   mode: "page" | "edgeless";
+  activeView?: string;
 }
 
-export function EditorArea({ mode }: EditorAreaProps) {
+export function EditorArea({ mode, activeView }: EditorAreaProps) {
   const workspace = useMemo(() => getWorkspace(), []);
   const activeDocId = useAtomValue(activeDocIdAtom);
+
+  if (activeView && activeView !== "editor") {
+    return null;
+  }
 
   if (!activeDocId) {
     return (
