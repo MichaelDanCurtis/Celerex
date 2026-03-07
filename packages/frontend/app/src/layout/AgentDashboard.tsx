@@ -334,148 +334,11 @@ export function AgentDashboard() {
           {totalPages > 1 && ` (page ${page + 1} of ${totalPages})`}
         </div>
 
-        {/* Agent Grid — Grouped or Flat */}
-        {groupBySubcategory && grouped ? (
-          <>
-            {grouped.map((group) => (
-              <div key={group.id} style={{ marginBottom: 24 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    marginBottom: 10,
-                    paddingBottom: 6,
-                    borderBottom: "1px solid var(--celerex-border)",
-                  }}
-                >
-                  <h3
-                    style={{
-                      margin: 0,
-                      fontSize: 14,
-                      fontWeight: 600,
-                      color: "var(--celerex-text-primary)",
-                    }}
-                  >
-                    {group.label}
-                  </h3>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      color: "var(--celerex-text-secondary)",
-                      background: "var(--celerex-bg-secondary)",
-                      padding: "2px 8px",
-                      borderRadius: 10,
-                    }}
-                  >
-                    {group.agents.length}
-                  </span>
-                </div>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-                    gap: 12,
-                  }}
-                >
-                  {group.agents.map((agent) => (
-                    <AgentCard
-                      key={agent.id}
-                      agent={agent}
-                      selected={selectedAgent?.id === agent.id}
-                      onSelect={() =>
-                        setSelectedAgent(selectedAgent?.id === agent.id ? null : agent)
-                      }
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
-            {grouped.length === 0 && (
-              <div
-                style={{
-                  padding: "40px 16px",
-                  textAlign: "center",
-                  color: "var(--celerex-text-secondary)",
-                  fontSize: 14,
-                }}
-              >
-                No agents found{search ? ` matching "${search}"` : ""}
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-                gap: 12,
-              }}
-            >
-              {paged.map((agent) => (
-                <AgentCard
-                  key={agent.id}
-                  agent={agent}
-                  selected={selectedAgent?.id === agent.id}
-                  onSelect={() =>
-                    setSelectedAgent(selectedAgent?.id === agent.id ? null : agent)
-                  }
-                />
-              ))}
-            </div>
-
-            {paged.length === 0 && (
-              <div
-                style={{
-                  padding: "40px 16px",
-                  textAlign: "center",
-                  color: "var(--celerex-text-secondary)",
-                  fontSize: 14,
-                }}
-              >
-                No agents found{search ? ` matching "${search}"` : ""}
-              </div>
-            )}
-
-            {/* Pagination (flat view only) */}
-            {totalPages > 1 && (
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "center",
-                  gap: 8,
-                  marginTop: 20,
-                }}
-              >
-                <PageButton
-                  label="Prev"
-                  disabled={page === 0}
-                  onClick={() => setPage((p) => p - 1)}
-                />
-                {Array.from({ length: totalPages }, (_, i) => (
-                  <PageButton
-                    key={i}
-                    label={String(i + 1)}
-                    active={i === page}
-                    onClick={() => setPage(i)}
-                  />
-                ))}
-                <PageButton
-                  label="Next"
-                  disabled={page >= totalPages - 1}
-                  onClick={() => setPage((p) => p + 1)}
-                />
-              </div>
-            )}
-          </>
-        )}
-
         {/* Selected Agent Detail */}
         {selectedAgent && (
           <div
             style={{
-              marginTop: 24,
+              marginBottom: 16,
               padding: 20,
               borderRadius: 10,
               border: "1px solid var(--celerex-accent)",
@@ -631,6 +494,144 @@ export function AgentDashboard() {
             </div>
           </div>
         )}
+
+        {/* Agent Grid — Grouped or Flat */}
+        {groupBySubcategory && grouped ? (
+          <>
+            {grouped.map((group) => (
+              <div key={group.id} style={{ marginBottom: 24 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    marginBottom: 10,
+                    paddingBottom: 6,
+                    borderBottom: "1px solid var(--celerex-border)",
+                  }}
+                >
+                  <h3
+                    style={{
+                      margin: 0,
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: "var(--celerex-text-primary)",
+                    }}
+                  >
+                    {group.label}
+                  </h3>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: "var(--celerex-text-secondary)",
+                      background: "var(--celerex-bg-secondary)",
+                      padding: "2px 8px",
+                      borderRadius: 10,
+                    }}
+                  >
+                    {group.agents.length}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+                    gap: 12,
+                  }}
+                >
+                  {group.agents.map((agent) => (
+                    <AgentCard
+                      key={agent.id}
+                      agent={agent}
+                      selected={selectedAgent?.id === agent.id}
+                      onSelect={() =>
+                        setSelectedAgent(selectedAgent?.id === agent.id ? null : agent)
+                      }
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+            {grouped.length === 0 && (
+              <div
+                style={{
+                  padding: "40px 16px",
+                  textAlign: "center",
+                  color: "var(--celerex-text-secondary)",
+                  fontSize: 14,
+                }}
+              >
+                No agents found{search ? ` matching "${search}"` : ""}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+                gap: 12,
+              }}
+            >
+              {paged.map((agent) => (
+                <AgentCard
+                  key={agent.id}
+                  agent={agent}
+                  selected={selectedAgent?.id === agent.id}
+                  onSelect={() =>
+                    setSelectedAgent(selectedAgent?.id === agent.id ? null : agent)
+                  }
+                />
+              ))}
+            </div>
+
+            {paged.length === 0 && (
+              <div
+                style={{
+                  padding: "40px 16px",
+                  textAlign: "center",
+                  color: "var(--celerex-text-secondary)",
+                  fontSize: 14,
+                }}
+              >
+                No agents found{search ? ` matching "${search}"` : ""}
+              </div>
+            )}
+
+            {/* Pagination (flat view only) */}
+            {totalPages > 1 && (
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  gap: 8,
+                  marginTop: 20,
+                }}
+              >
+                <PageButton
+                  label="Prev"
+                  disabled={page === 0}
+                  onClick={() => setPage((p) => p - 1)}
+                />
+                {Array.from({ length: totalPages }, (_, i) => (
+                  <PageButton
+                    key={i}
+                    label={String(i + 1)}
+                    active={i === page}
+                    onClick={() => setPage(i)}
+                  />
+                ))}
+                <PageButton
+                  label="Next"
+                  disabled={page >= totalPages - 1}
+                  onClick={() => setPage((p) => p + 1)}
+                />
+              </div>
+            )}
+          </>
+        )}
+
       </div>
 
       <AgentEditorDialog
