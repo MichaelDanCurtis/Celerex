@@ -13,6 +13,7 @@ import {
   type Engagement,
 } from "../state/atoms";
 import { addToastAtom } from "../state/toastAtom";
+import { SearchPanel } from "./SearchPanel";
 
 export function Sidebar({
   collapsed,
@@ -32,6 +33,7 @@ export function Sidebar({
   const trackRecentDoc = useSetAtom(trackRecentDocAtom);
   const [creatingEngagement, setCreatingEngagement] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showSearchPanel, setShowSearchPanel] = useState(false);
 
   const favoriteDocs = useMemo(() => {
     const allDocs = engagements.flatMap((e) => e.docs);
@@ -174,8 +176,39 @@ export function Sidebar({
           letterSpacing: "-0.02em",
         }}
       >
-        {collapsed ? "C" : "Celerex"}
+        {collapsed ? "C" : (
+          <>
+            <span style={{ flex: 1 }}>Celerex</span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowSearchPanel((v) => !v);
+              }}
+              title="Search All Docs"
+              style={{
+                background: showSearchPanel ? "rgba(59, 130, 246, 0.12)" : "transparent",
+                border: "none",
+                cursor: "pointer",
+                fontSize: 15,
+                lineHeight: 1,
+                padding: "2px 4px",
+                borderRadius: 4,
+                color: showSearchPanel ? "var(--celerex-accent)" : "var(--celerex-text-secondary)",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                transition: "color 0.15s ease, background 0.15s ease",
+              }}
+            >
+              {"\uD83D\uDD0D"}
+            </button>
+          </>
+        )}
       </div>
+
+      {showSearchPanel && (
+        <SearchPanel onClose={() => setShowSearchPanel(false)} />
+      )}
 
       {!collapsed && (
         <div style={{ padding: "8px 8px 0" }}>

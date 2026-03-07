@@ -22,6 +22,7 @@ import { Settings } from "./layout/Settings";
 import { Breadcrumb } from "./layout/Breadcrumb";
 import { unreadCountAtom } from "./state/notificationAtom";
 import { NotificationPanel } from "./layout/NotificationPanel";
+import { VersionHistory } from "./layout/VersionHistory";
 
 export function App() {
   const [mode, setMode] = useState<"page" | "edgeless">("page");
@@ -29,6 +30,7 @@ export function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   const editorStore = useAtomValue(editorStoreAtom);
   const [theme, setTheme] = useAtom(themeAtom);
   const [engagements, setEngagements] = useAtom(engagementsAtom);
@@ -152,6 +154,9 @@ export function App() {
         case "open-doc":
           if (payload) openDoc(payload);
           break;
+        case "version-history":
+          setVersionHistoryOpen((prev) => !prev);
+          break;
       }
     },
     [handleNewDoc, handleToggleTheme, handleToggleAI, handleToggleSidebar, editorStore, openDoc, handleImportMarkdown, handleOpenTemplateDialog]
@@ -180,6 +185,8 @@ export function App() {
           theme={theme}
           onToggleTheme={handleToggleTheme}
           onImportMarkdown={handleImportMarkdown}
+          versionHistoryOpen={versionHistoryOpen}
+          onToggleVersionHistory={() => setVersionHistoryOpen((prev) => !prev)}
           syncStatus={
             error
               ? "offline"
@@ -203,6 +210,7 @@ export function App() {
           ) : (
             <EditorArea mode={mode} activeView={activeView} />
           )}
+          {versionHistoryOpen && <VersionHistory onClose={() => setVersionHistoryOpen(false)} />}
           {aiPanelOpen && <AIPanel />}
         </div>
       </main>
@@ -229,6 +237,8 @@ function Toolbar({
   theme,
   onToggleTheme,
   onImportMarkdown,
+  versionHistoryOpen,
+  onToggleVersionHistory,
   syncStatus,
 }: {
   mode: "page" | "edgeless";
@@ -238,6 +248,8 @@ function Toolbar({
   theme: "light" | "dark";
   onToggleTheme: () => void;
   onImportMarkdown: () => void;
+  versionHistoryOpen: boolean;
+  onToggleVersionHistory: () => void;
   syncStatus: "syncing" | "synced" | "offline" | "hidden";
 }) {
   const editorStore = useAtomValue(editorStoreAtom);
@@ -392,6 +404,23 @@ function Toolbar({
         title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
       >
         {theme === "light" ? "\u263D Dark" : "\u2600 Light"}
+      </button>
+
+      <button
+        onClick={onToggleVersionHistory}
+        style={{
+          padding: "6px 12px",
+          borderRadius: 6,
+          border: "1px solid var(--celerex-border)",
+          cursor: "pointer",
+          fontSize: 13,
+          fontWeight: 500,
+          background: versionHistoryOpen ? "var(--celerex-accent)" : "transparent",
+          color: versionHistoryOpen ? "#fff" : "var(--celerex-text-secondary)",
+        }}
+        title="Toggle version history"
+      >
+        History
       </button>
 
       <button

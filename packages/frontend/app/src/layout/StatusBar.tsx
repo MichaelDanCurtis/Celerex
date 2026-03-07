@@ -6,32 +6,37 @@ interface StatusBarProps {
   mode: "page" | "edgeless";
 }
 
+function getDocStats(store: any): { words: number; chars: number } {
+  if (!store?.root?.children) return { words: 0, chars: 0 };
+
+  let fullText = "";
+  for (const child of store.root.children) {
+    const text = child.yBlock?.get("prop:text")?.toString();
+    if (text) {
+      fullText += text + "\n";
+    }
+  }
+
+  const trimmed = fullText.trim();
+  const chars = trimmed.length;
+  const words = trimmed === "" ? 0 : trimmed.split(/\s+/).length;
+
+  return { words, chars };
+}
+
 export function StatusBar({ mode }: StatusBarProps) {
   const store = useAtomValue(editorStoreAtom);
-  const [wordCount, setWordCount] = useState(0);
-  const [charCount, setCharCount] = useState(0);
+  const [stats, setStats] = useState({ words: 0, chars: 0 });
 
   useEffect(() => {
-    function update() {
-      if (!store?.root) {
-        setWordCount(0);
-        setCharCount(0);
-        return;
-      }
-      const children = store.root.children ?? [];
-      const texts: string[] = [];
-      for (const child of children) {
-        const text = child.yBlock?.get("prop:text")?.toString();
-        if (text) texts.push(text);
-      }
-      const fullText = texts.join(" ");
-      const words = fullText.split(/\s+/).filter(Boolean);
-      setWordCount(words.length);
-      setCharCount(fullText.length);
-    }
+    if (!store) return;
 
-    update();
-    const id = setInterval(update, 1000);
+    setStats(getDocStats(store));
+
+    const id = setInterval(() => {
+      setStats(getDocStats(store));
+    }, 2000);
+
     return () => clearInterval(id);
   }, [store]);
 
@@ -42,22 +47,28 @@ export function StatusBar({ mode }: StatusBarProps) {
       style={{
         height: 24,
         minHeight: 24,
-        borderTop: "1px solid var(--celerex-border, #e0e0e0)",
+        borderTop: "1px solid var(--celerex-border)",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
         padding: "0 12px",
         fontSize: 11,
-        color: "var(--celerex-text-secondary, #888)",
-        background: "var(--celerex-bg-primary, #fff)",
+        color: "var(--celerex-text-secondary)",
+        background: "var(--celerex-bg-secondary)",
         userSelect: "none",
       }}
     >
-      <span>{modeLabel}</span>
-      <span>
-        {wordCount} word{wordCount !== 1 ? "s" : ""} &middot;{" "}
-        {charCount} character{charCount !== 1 ? "s" : ""}
-      </span>
+      <div style={{ display: "flex", gap: 12 }}>
+        {store ? (
+          <>
+            <span>{stats.words} words</span>
+            <span>{stats.chars} characters</span>
+          </>
+        ) : (
+          <span>No document</span>
+        )}
+      </div>
+      <div>{modeLabel}</div>
     </div>
   );
 }
