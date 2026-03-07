@@ -309,9 +309,35 @@ export function Sidebar({
           fontSize: 12,
           color: "var(--celerex-text-secondary)",
           textAlign: collapsed ? "center" : "left",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: collapsed ? "center" : "space-between",
         }}
       >
-        {collapsed ? "v0.1" : "Celerex v0.1.0"}
+        <span>{collapsed ? "v0.1" : "Celerex v0.1.0"}</span>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setActiveView("settings");
+          }}
+          title="Settings"
+          style={{
+            background: activeView === "settings" ? "rgba(59, 130, 246, 0.12)" : "transparent",
+            border: "none",
+            cursor: "pointer",
+            fontSize: 16,
+            lineHeight: 1,
+            padding: collapsed ? "2px 0" : "2px 4px",
+            borderRadius: 4,
+            color: activeView === "settings" ? "var(--celerex-accent)" : "var(--celerex-text-secondary)",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            transition: "color 0.15s ease, background 0.15s ease",
+          }}
+        >
+          {"\u2699"}
+        </button>
       </div>
     </aside>
   );

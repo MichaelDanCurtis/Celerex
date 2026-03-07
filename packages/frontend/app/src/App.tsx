@@ -14,6 +14,9 @@ import { useDocRouter } from "./hooks/useDocRouter";
 import { usePersistence } from "./hooks/usePersistence";
 import { ToastContainer } from "./layout/ToastContainer";
 import { AgentDashboard } from "./layout/AgentDashboard";
+import { TaskQueue } from "./layout/TaskQueue";
+import { PluginManager } from "./layout/PluginManager";
+import { Settings } from "./layout/Settings";
 
 export function App() {
   const [mode, setMode] = useState<"page" | "edgeless">("page");
@@ -164,8 +167,14 @@ export function App() {
           }
         />
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-          {activeView === "agent-dashboard" ? (
+          {activeView === "settings" ? (
+            <Settings />
+          ) : activeView === "agent-dashboard" ? (
             <AgentDashboard />
+          ) : activeView === "task-queue" ? (
+            <TaskQueue />
+          ) : activeView === "plugin-manager" ? (
+            <PluginManager />
           ) : (
             <EditorArea mode={mode} activeView={activeView} />
           )}
