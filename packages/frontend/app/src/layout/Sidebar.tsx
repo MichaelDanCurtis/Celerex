@@ -331,6 +331,14 @@ export function Sidebar({
             )}
           </SidebarSection>
 
+          <SidebarSection title="Views">
+            <SidebarItem
+              label="Timeline"
+              active={activeView === "timeline"}
+              onClick={() => setActiveView("timeline")}
+            />
+          </SidebarSection>
+
           <SidebarSection title="Agents">
             <SidebarItem
               label="Agent Dashboard"

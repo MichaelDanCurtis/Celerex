@@ -32,6 +32,9 @@ import { ActivityLog } from "./layout/ActivityLog";
 import { Scratchpad } from "./layout/Scratchpad";
 import { PresenceIndicator } from "./layout/PresenceIndicator";
 import { TrashBin } from "./layout/TrashBin";
+import { TimelineView } from "./layout/TimelineView";
+import { FindReplace } from "./layout/FindReplace";
+import { ExportDialog } from "./layout/ExportDialog";
 
 export function App() {
   const [mode, setMode] = useState<"page" | "edgeless">("page");
@@ -48,6 +51,8 @@ export function App() {
   const [activityLogOpen, setActivityLogOpen] = useState(false);
   const [scratchpadOpen, setScratchpadOpen] = useState(false);
   const [trashOpen, setTrashOpen] = useState(false);
+  const [findReplaceOpen, setFindReplaceOpen] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const preFocusStateRef = useRef<{ sidebarCollapsed: boolean; aiPanelOpen: boolean } | null>(null);
   const editorStore = useAtomValue(editorStoreAtom);
   const [theme, setTheme] = useAtom(themeAtom);
@@ -177,7 +182,7 @@ export function App() {
           handleToggleSidebar();
           break;
         case "export-markdown":
-          if (editorStore) exportDocAsMarkdown(editorStore);
+          setExportDialogOpen(true);
           break;
         case "print-document":
           if (editorStore) printDocument(editorStore);
@@ -218,6 +223,9 @@ export function App() {
         case "trash":
           setTrashOpen((prev) => !prev);
           break;
+        case "find-replace":
+          setFindReplaceOpen((prev) => !prev);
+          break;
       }
     },
     [handleNewDoc, handleToggleTheme, handleToggleAI, handleToggleSidebar, editorStore, openDoc, handleImportMarkdown, handleOpenTemplateDialog, handleToggleFocusMode]
@@ -234,6 +242,7 @@ export function App() {
     onNewFromTemplate: handleOpenTemplateDialog,
     onShortcutsHelp: useCallback(() => setShortcutsOpen((prev) => !prev), []),
     onFocusMode: handleToggleFocusMode,
+    onFind: useCallback(() => setFindReplaceOpen((prev) => !prev), []),
   });
 
   return (
@@ -271,6 +280,7 @@ export function App() {
             <Breadcrumb />
           </>
         )}
+        <FindReplace open={findReplaceOpen} onClose={() => setFindReplaceOpen(false)} />
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
           {activeView === "settings" ? (
             <Settings />
@@ -278,6 +288,8 @@ export function App() {
             <AgentDashboard />
           ) : activeView === "task-queue" ? (
             <TaskQueue />
+          ) : activeView === "timeline" ? (
+            <TimelineView />
           ) : activeView === "plugin-manager" ? (
             <PluginManager />
           ) : (
@@ -315,6 +327,10 @@ export function App() {
       <Scratchpad
         open={scratchpadOpen}
         onClose={() => setScratchpadOpen(false)}
+      />
+      <ExportDialog
+        open={exportDialogOpen}
+        onClose={() => setExportDialogOpen(false)}
       />
     </div>
   );

@@ -9,6 +9,7 @@ export interface KeyboardShortcutCallbacks {
   onNewFromTemplate?: () => void;
   onShortcutsHelp?: () => void;
   onFocusMode?: () => void;
+  onFind?: () => void;
 }
 
 export function useKeyboardShortcuts(callbacks: KeyboardShortcutCallbacks) {
@@ -62,6 +63,13 @@ export function useKeyboardShortcuts(callbacks: KeyboardShortcutCallbacks) {
       if (mod && e.key === "/" && !e.shiftKey) {
         e.preventDefault();
         callbacks.onShortcutsHelp?.();
+        return;
+      }
+
+      // Cmd/Ctrl+F — find & replace
+      if (mod && e.key === "f" && !e.shiftKey) {
+        e.preventDefault();
+        callbacks.onFind?.();
         return;
       }
 

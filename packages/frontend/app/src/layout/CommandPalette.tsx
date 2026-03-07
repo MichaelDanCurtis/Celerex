@@ -40,7 +40,7 @@ export function CommandPalette({ open, onClose, onAction }: CommandPaletteProps)
       { id: "action:toggle-dark-mode", label: "Toggle Dark Mode", icon: "\u26A1", action: "toggle-theme" },
       { id: "action:toggle-ai-panel", label: "Toggle AI Panel", icon: "\u26A1", action: "toggle-ai" },
       { id: "action:toggle-sidebar", label: "Toggle Sidebar", icon: "\u26A1", action: "toggle-sidebar" },
-      { id: "action:export-markdown", label: "Export as Markdown", icon: "\u26A1", action: "export-markdown" },
+      { id: "action:export-markdown", label: "Export Document...", icon: "\u26A1", action: "export-markdown" },
       { id: "action:import-markdown", label: "Import Markdown", icon: "\u26A1", action: "import-markdown" },
       { id: "action:new-from-template", label: "New from Template...", icon: "\u26A1", action: "new-from-template" },
       { id: "action:print-document", label: "Print Document", icon: "\u26A1", action: "print-document" },
@@ -53,6 +53,7 @@ export function CommandPalette({ open, onClose, onAction }: CommandPaletteProps)
       { id: "action:activity-log", label: "Activity Log", icon: "\u26A1", action: "activity-log" },
       { id: "action:trash", label: "Open Trash", icon: "\u26A1", action: "trash" },
       { id: "action:scratchpad", label: "Toggle Scratchpad", icon: "\u26A1", action: "scratchpad" },
+      { id: "action:find-replace", label: "Find & Replace", icon: "\u26A1", action: "find-replace" },
     ];
 
     const docs: PaletteItem[] = engagements.flatMap((eng) =>
