@@ -8,7 +8,7 @@ import {
   selectedProviderAtom,
   copilotAuthenticatedAtom,
 } from "../state/aiProviderAtom";
-import { getCopilotAuthStatus } from "../api/client";
+import { getCopilotAuthStatus, fetchCopilotModels, type CopilotModel } from "../api/client";
 import { CopilotAuthDialog } from "./CopilotAuthDialog";
 
 export function AIProviderSelector() {
@@ -23,6 +23,8 @@ export function AIProviderSelector() {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [copilotAuthenticated, setCopilotAuthenticated] = useAtom(copilotAuthenticatedAtom);
   const [copilotDialogOpen, setCopilotDialogOpen] = useState(false);
+  const [copilotModels, setCopilotModels] = useState<CopilotModel[]>([]);
+  const [copilotModelsLoading, setCopilotModelsLoading] = useState(false);
 
   // Check Copilot auth status on mount
   useEffect(() => {
@@ -30,6 +32,17 @@ export function AIProviderSelector() {
       .then((data) => setCopilotAuthenticated(data.authenticated))
       .catch(() => {});
   }, [setCopilotAuthenticated]);
+
+  // Fetch dynamic Copilot models when authenticated
+  useEffect(() => {
+    if (copilotAuthenticated && copilotModels.length === 0) {
+      setCopilotModelsLoading(true);
+      fetchCopilotModels()
+        .then((models) => setCopilotModels(models))
+        .catch(() => {})
+        .finally(() => setCopilotModelsLoading(false));
+    }
+  }, [copilotAuthenticated, copilotModels.length]);
 
   // Sync local key input when provider changes or popover opens
   useEffect(() => {
@@ -195,26 +208,53 @@ export function AIProviderSelector() {
             >
               Model
             </div>
-            <select
-              value={model}
-              onChange={(e) => handleModelChange(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "6px 8px",
-                borderRadius: 6,
-                border: "1px solid var(--celerex-border)",
-                background: "var(--celerex-bg-secondary)",
-                color: "var(--celerex-text-primary)",
-                fontSize: 12,
-                outline: "none",
-              }}
-            >
-              {provider.models.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
+            {providerId === "github-copilot" && copilotAuthenticated && copilotModels.length > 0 ? (
+              <select
+                value={model}
+                onChange={(e) => handleModelChange(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "6px 8px",
+                  borderRadius: 6,
+                  border: "1px solid var(--celerex-border)",
+                  background: "var(--celerex-bg-secondary)",
+                  color: "var(--celerex-text-primary)",
+                  fontSize: 12,
+                  outline: "none",
+                }}
+              >
+                {copilotModels.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} ({m.vendor})
+                  </option>
+                ))}
+              </select>
+            ) : providerId === "github-copilot" && copilotModelsLoading ? (
+              <div style={{ fontSize: 12, color: "var(--celerex-text-secondary)", padding: "6px 0" }}>
+                Loading models...
+              </div>
+            ) : (
+              <select
+                value={model}
+                onChange={(e) => handleModelChange(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "6px 8px",
+                  borderRadius: 6,
+                  border: "1px solid var(--celerex-border)",
+                  background: "var(--celerex-bg-secondary)",
+                  color: "var(--celerex-text-primary)",
+                  fontSize: 12,
+                  outline: "none",
+                }}
+              >
+                {provider.models.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           {/* API key or Copilot connect */}
