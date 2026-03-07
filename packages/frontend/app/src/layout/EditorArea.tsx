@@ -4,7 +4,9 @@ import { BlockSuiteEditor } from "../editor/BlockSuiteEditor";
 import { getWorkspace } from "../editor/setup";
 import { activeDocIdAtom } from "../state/atoms";
 import { TabBar } from "./TabBar";
+import { TagPicker } from "./TagPicker";
 import { StatusBar } from "./StatusBar";
+import { WordGoalTracker } from "./WordGoalTracker";
 
 interface EditorAreaProps {
   mode: "page" | "edgeless";
@@ -50,6 +52,8 @@ export function EditorArea({ mode, activeView }: EditorAreaProps) {
       }}
     >
       <TabBar />
+      <TagPicker />
+      <WordGoalTracker />
       <div style={{ flex: 1, overflow: "hidden" }}>
         <BlockSuiteEditor mode={mode} workspace={workspace} docId={activeDocId} />
       </div>

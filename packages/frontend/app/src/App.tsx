@@ -26,6 +26,7 @@ import { VersionHistory } from "./layout/VersionHistory";
 import { DocOutline } from "./layout/DocOutline";
 import { ShortcutsDialog } from "./layout/ShortcutsDialog";
 import { FocusModeOverlay } from "./layout/FocusModeOverlay";
+import { SplitView } from "./layout/SplitView";
 
 export function App() {
   const [mode, setMode] = useState<"page" | "edgeless">("page");
@@ -37,6 +38,7 @@ export function App() {
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [focusModeActive, setFocusModeActive] = useState(false);
+  const [splitViewOpen, setSplitViewOpen] = useState(false);
   const preFocusStateRef = useRef<{ sidebarCollapsed: boolean; aiPanelOpen: boolean } | null>(null);
   const editorStore = useAtomValue(editorStoreAtom);
   const [theme, setTheme] = useAtom(themeAtom);
@@ -192,6 +194,9 @@ export function App() {
         case "focus-mode":
           handleToggleFocusMode();
           break;
+        case "split-view":
+          setSplitViewOpen((prev) => !prev);
+          break;
       }
     },
     [handleNewDoc, handleToggleTheme, handleToggleAI, handleToggleSidebar, editorStore, openDoc, handleImportMarkdown, handleOpenTemplateDialog, handleToggleFocusMode]
@@ -253,7 +258,10 @@ export function App() {
           ) : activeView === "plugin-manager" ? (
             <PluginManager />
           ) : (
-            <EditorArea mode={mode} activeView={activeView} />
+            <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+              <EditorArea mode={mode} activeView={activeView} />
+              {splitViewOpen && <SplitView onClose={() => setSplitViewOpen(false)} />}
+            </div>
           )}
           {outlineOpen && <DocOutline onClose={() => setOutlineOpen(false)} />}
           {versionHistoryOpen && <VersionHistory onClose={() => setVersionHistoryOpen(false)} />}

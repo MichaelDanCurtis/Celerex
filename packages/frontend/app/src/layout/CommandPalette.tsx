@@ -48,6 +48,7 @@ export function CommandPalette({ open, onClose, onAction }: CommandPaletteProps)
       { id: "action:keyboard-shortcuts", label: "Keyboard Shortcuts", icon: "\u26A1", action: "keyboard-shortcuts" },
       { id: "action:toggle-outline", label: "Toggle Document Outline", icon: "\u26A1", action: "toggle-outline" },
       { id: "action:focus-mode", label: "Toggle Focus Mode", icon: "\u26A1", action: "focus-mode" },
+      { id: "action:split-view", label: "Toggle Split View", icon: "\u26A1", action: "split-view" },
     ];
 
     const docs: PaletteItem[] = engagements.flatMap((eng) =>
