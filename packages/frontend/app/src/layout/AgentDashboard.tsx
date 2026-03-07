@@ -2,9 +2,18 @@ import { useState, useMemo } from "react";
 import {
   CATEGORIES,
   searchAgents,
+  getAllAgents,
+  addCustomAgent,
+  updateCustomAgent,
+  deleteCustomAgent,
+  IO_TYPES,
+  getIOType,
   type AgentDef,
   type CategoryId,
+  type IOTypeId,
 } from "../data/agents";
+import { AgentEditorDialog } from "./AgentEditorDialog";
+import { SUBCATEGORIES, classifyAgent, getSubcategoryLabel } from "../data/subcategories";
 
 const statusColors: Record<AgentDef["status"], string> = {
   active: "#22c55e",
@@ -26,6 +35,10 @@ export function AgentDashboard() {
   const [statusFilter, setStatusFilter] = useState<AgentDef["status"] | "all">("all");
   const [page, setPage] = useState(0);
   const [selectedAgent, setSelectedAgent] = useState<AgentDef | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingAgent, setEditingAgent] = useState<AgentDef | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0); // force re-render after custom agent changes
+  const [groupBySubcategory, setGroupBySubcategory] = useState(true);
 
   const filtered = useMemo(() => {
     let results = searchAgents(search, activeCategory);
@@ -33,7 +46,36 @@ export function AgentDashboard() {
       results = results.filter((a) => a.status === statusFilter);
     }
     return results;
-  }, [search, activeCategory, statusFilter]);
+  }, [search, activeCategory, statusFilter, refreshKey]);
+
+  const grouped = useMemo(() => {
+    if (!groupBySubcategory) return null;
+    const subs = SUBCATEGORIES[activeCategory] ?? [];
+    const groups: { id: string; label: string; agents: AgentDef[] }[] = [];
+    const otherAgents: AgentDef[] = [];
+    const agentsBySubcat = new Map<string, AgentDef[]>();
+
+    for (const agent of filtered) {
+      const subId = classifyAgent(agent.name, agent.description, activeCategory);
+      if (subId === "other") {
+        otherAgents.push(agent);
+      } else {
+        if (!agentsBySubcat.has(subId)) agentsBySubcat.set(subId, []);
+        agentsBySubcat.get(subId)!.push(agent);
+      }
+    }
+
+    for (const sub of subs) {
+      const agents = agentsBySubcat.get(sub.id);
+      if (agents && agents.length > 0) {
+        groups.push({ id: sub.id, label: sub.label, agents });
+      }
+    }
+    if (otherAgents.length > 0) {
+      groups.push({ id: "other", label: "Other", agents: otherAgents });
+    }
+    return groups;
+  }, [filtered, groupBySubcategory, activeCategory]);
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -46,7 +88,7 @@ export function AgentDashboard() {
       idle: all.filter((a) => a.status === "idle").length,
       disabled: all.filter((a) => a.status === "disabled").length,
     };
-  }, [activeCategory]);
+  }, [activeCategory, refreshKey]);
 
   // Reset page when filters change
   const handleCategoryChange = (id: CategoryId) => {
@@ -63,6 +105,33 @@ export function AgentDashboard() {
     setPage(0);
   };
 
+  const handleCreateAgent = () => {
+    setEditingAgent(null);
+    setEditorOpen(true);
+  };
+
+  const handleEditAgent = (agent: AgentDef) => {
+    setEditingAgent(agent);
+    setEditorOpen(true);
+  };
+
+  const handleSaveAgent = (agent: AgentDef) => {
+    if (editingAgent?.isCustom) {
+      updateCustomAgent(agent.id, agent);
+    } else if (!editingAgent) {
+      addCustomAgent(agent);
+    }
+    setEditorOpen(false);
+    setRefreshKey((k) => k + 1);
+  };
+
+  const handleDeleteAgent = (id: string) => {
+    deleteCustomAgent(id);
+    setEditorOpen(false);
+    setSelectedAgent(null);
+    setRefreshKey((k) => k + 1);
+  };
+
   return (
     <div
       style={{
@@ -74,16 +143,42 @@ export function AgentDashboard() {
     >
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 24px" }}>
         {/* Header */}
-        <h1
+        <div
           style={{
-            margin: 0,
-            fontSize: 22,
-            fontWeight: 700,
-            color: "var(--celerex-text-primary)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
           }}
         >
-          Agent Dashboard
-        </h1>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: 22,
+              fontWeight: 700,
+              color: "var(--celerex-text-primary)",
+            }}
+          >
+            Agent Dashboard
+          </h1>
+          <button
+            onClick={handleCreateAgent}
+            style={{
+              padding: "8px 20px",
+              borderRadius: 8,
+              border: "none",
+              background: "var(--celerex-accent)",
+              color: "#fff",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            + Create Agent
+          </button>
+        </div>
         <p
           style={{
             margin: "4px 0 20px",
@@ -187,6 +282,24 @@ export function AgentDashboard() {
               outline: "none",
             }}
           />
+          <button
+            onClick={() => setGroupBySubcategory((g) => !g)}
+            style={{
+              padding: "8px 14px",
+              borderRadius: 6,
+              border: "1px solid var(--celerex-border)",
+              background: groupBySubcategory
+                ? "var(--celerex-accent)"
+                : "var(--celerex-bg-secondary)",
+              color: groupBySubcategory ? "#fff" : "var(--celerex-text-primary)",
+              fontSize: 12,
+              fontWeight: 500,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {groupBySubcategory ? "Grouped" : "Flat"}
+          </button>
           <select
             value={statusFilter}
             onChange={(e) => handleStatusChange(e.target.value as any)}
@@ -221,68 +334,141 @@ export function AgentDashboard() {
           {totalPages > 1 && ` (page ${page + 1} of ${totalPages})`}
         </div>
 
-        {/* Agent Grid */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-            gap: 12,
-          }}
-        >
-          {paged.map((agent) => (
-            <AgentCard
-              key={agent.id}
-              agent={agent}
-              selected={selectedAgent?.id === agent.id}
-              onSelect={() =>
-                setSelectedAgent(selectedAgent?.id === agent.id ? null : agent)
-              }
-            />
-          ))}
-        </div>
-
-        {paged.length === 0 && (
-          <div
-            style={{
-              padding: "40px 16px",
-              textAlign: "center",
-              color: "var(--celerex-text-secondary)",
-              fontSize: 14,
-            }}
-          >
-            No agents found{search ? ` matching "${search}"` : ""}
-          </div>
-        )}
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              gap: 8,
-              marginTop: 20,
-            }}
-          >
-            <PageButton
-              label="Prev"
-              disabled={page === 0}
-              onClick={() => setPage((p) => p - 1)}
-            />
-            {Array.from({ length: totalPages }, (_, i) => (
-              <PageButton
-                key={i}
-                label={String(i + 1)}
-                active={i === page}
-                onClick={() => setPage(i)}
-              />
+        {/* Agent Grid — Grouped or Flat */}
+        {groupBySubcategory && grouped ? (
+          <>
+            {grouped.map((group) => (
+              <div key={group.id} style={{ marginBottom: 24 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    marginBottom: 10,
+                    paddingBottom: 6,
+                    borderBottom: "1px solid var(--celerex-border)",
+                  }}
+                >
+                  <h3
+                    style={{
+                      margin: 0,
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: "var(--celerex-text-primary)",
+                    }}
+                  >
+                    {group.label}
+                  </h3>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: "var(--celerex-text-secondary)",
+                      background: "var(--celerex-bg-secondary)",
+                      padding: "2px 8px",
+                      borderRadius: 10,
+                    }}
+                  >
+                    {group.agents.length}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+                    gap: 12,
+                  }}
+                >
+                  {group.agents.map((agent) => (
+                    <AgentCard
+                      key={agent.id}
+                      agent={agent}
+                      selected={selectedAgent?.id === agent.id}
+                      onSelect={() =>
+                        setSelectedAgent(selectedAgent?.id === agent.id ? null : agent)
+                      }
+                    />
+                  ))}
+                </div>
+              </div>
             ))}
-            <PageButton
-              label="Next"
-              disabled={page >= totalPages - 1}
-              onClick={() => setPage((p) => p + 1)}
-            />
-          </div>
+            {grouped.length === 0 && (
+              <div
+                style={{
+                  padding: "40px 16px",
+                  textAlign: "center",
+                  color: "var(--celerex-text-secondary)",
+                  fontSize: 14,
+                }}
+              >
+                No agents found{search ? ` matching "${search}"` : ""}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+                gap: 12,
+              }}
+            >
+              {paged.map((agent) => (
+                <AgentCard
+                  key={agent.id}
+                  agent={agent}
+                  selected={selectedAgent?.id === agent.id}
+                  onSelect={() =>
+                    setSelectedAgent(selectedAgent?.id === agent.id ? null : agent)
+                  }
+                />
+              ))}
+            </div>
+
+            {paged.length === 0 && (
+              <div
+                style={{
+                  padding: "40px 16px",
+                  textAlign: "center",
+                  color: "var(--celerex-text-secondary)",
+                  fontSize: 14,
+                }}
+              >
+                No agents found{search ? ` matching "${search}"` : ""}
+              </div>
+            )}
+
+            {/* Pagination (flat view only) */}
+            {totalPages > 1 && (
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  gap: 8,
+                  marginTop: 20,
+                }}
+              >
+                <PageButton
+                  label="Prev"
+                  disabled={page === 0}
+                  onClick={() => setPage((p) => p - 1)}
+                />
+                {Array.from({ length: totalPages }, (_, i) => (
+                  <PageButton
+                    key={i}
+                    label={String(i + 1)}
+                    active={i === page}
+                    onClick={() => setPage(i)}
+                  />
+                ))}
+                <PageButton
+                  label="Next"
+                  disabled={page >= totalPages - 1}
+                  onClick={() => setPage((p) => p + 1)}
+                />
+              </div>
+            )}
+          </>
         )}
 
         {/* Selected Agent Detail */}
@@ -332,14 +518,110 @@ export function AgentDashboard() {
                 gap: 8,
                 fontSize: 12,
                 color: "var(--celerex-text-secondary)",
-                marginBottom: 16,
+                marginBottom: 12,
               }}
             >
               <span>ID: <code style={{ fontFamily: "monospace", fontSize: 11 }}>{selectedAgent.id}</code></span>
               <span>Category: {CATEGORIES.find((c) => c.id === selectedAgent.category)?.label}</span>
+              {selectedAgent.isCustom && (
+                <span style={{ color: "var(--celerex-accent)", fontWeight: 500 }}>Custom</span>
+              )}
             </div>
+
+            {/* I/O Type Chips */}
+            <div
+              style={{
+                display: "flex",
+                gap: 16,
+                marginBottom: 12,
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 11, color: "var(--celerex-text-secondary)", fontWeight: 600 }}>Inputs:</span>
+                {(selectedAgent.inputs ?? []).map((ioId) => {
+                  const io = getIOType(ioId);
+                  return (
+                    <span
+                      key={ioId}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 3,
+                        padding: "2px 8px",
+                        borderRadius: 10,
+                        fontSize: 11,
+                        fontWeight: 500,
+                        background: io.color + "22",
+                        color: io.color,
+                        border: `1px solid ${io.color}44`,
+                      }}
+                    >
+                      {io.icon} {io.label}
+                    </span>
+                  );
+                })}
+                {(!selectedAgent.inputs || selectedAgent.inputs.length === 0) && (
+                  <span style={{ fontSize: 11, color: "var(--celerex-text-secondary)" }}>None</span>
+                )}
+              </div>
+              <span style={{ color: "var(--celerex-text-secondary)", fontSize: 14 }}>&rarr;</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 11, color: "var(--celerex-text-secondary)", fontWeight: 600 }}>Outputs:</span>
+                {(selectedAgent.outputs ?? []).map((ioId) => {
+                  const io = getIOType(ioId);
+                  return (
+                    <span
+                      key={ioId}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 3,
+                        padding: "2px 8px",
+                        borderRadius: 10,
+                        fontSize: 11,
+                        fontWeight: 500,
+                        background: io.color + "22",
+                        color: io.color,
+                        border: `1px solid ${io.color}44`,
+                      }}
+                    >
+                      {io.icon} {io.label}
+                    </span>
+                  );
+                })}
+                {(!selectedAgent.outputs || selectedAgent.outputs.length === 0) && (
+                  <span style={{ fontSize: 11, color: "var(--celerex-text-secondary)" }}>None</span>
+                )}
+              </div>
+            </div>
+
+            {/* System Prompt */}
+            {selectedAgent.systemPrompt && (
+              <div
+                style={{
+                  marginBottom: 12,
+                  padding: "10px 14px",
+                  borderRadius: 6,
+                  background: "var(--celerex-bg-primary)",
+                  border: "1px solid var(--celerex-border)",
+                  fontFamily: "monospace",
+                  fontSize: 11,
+                  lineHeight: 1.5,
+                  color: "var(--celerex-text-secondary)",
+                  maxHeight: 120,
+                  overflow: "auto",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                }}
+              >
+                {selectedAgent.systemPrompt}
+              </div>
+            )}
+
             <div style={{ display: "flex", gap: 8 }}>
-              <ActionButton label="Configure" />
+              <ActionButton label="Edit" onClick={() => handleEditAgent(selectedAgent)} />
               <ActionButton label="View Logs" />
               {selectedAgent.status === "disabled" ? (
                 <ActionButton label="Enable" accent />
@@ -350,6 +632,14 @@ export function AgentDashboard() {
           </div>
         )}
       </div>
+
+      <AgentEditorDialog
+        open={editorOpen}
+        onClose={() => setEditorOpen(false)}
+        agent={editingAgent}
+        onSave={handleSaveAgent}
+        onDelete={handleDeleteAgent}
+      />
     </div>
   );
 }
@@ -459,6 +749,71 @@ function AgentCard({
       >
         {agent.description}
       </p>
+      {/* I/O type badges */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+          fontSize: 10,
+          color: "var(--celerex-text-secondary)",
+          marginTop: 2,
+        }}
+      >
+        <span style={{ fontWeight: 600, marginRight: 1 }}>In:</span>
+        {(agent.inputs ?? []).map((ioId) => {
+          const io = getIOType(ioId);
+          return (
+            <span
+              key={ioId}
+              title={io.label}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 16,
+                height: 16,
+                borderRadius: 4,
+                fontSize: 8,
+                fontWeight: 700,
+                background: io.color + "22",
+                color: io.color,
+                border: `1px solid ${io.color}44`,
+                lineHeight: 1,
+              }}
+            >
+              {io.icon}
+            </span>
+          );
+        })}
+        <span style={{ margin: "0 2px", opacity: 0.5 }}>&rarr;</span>
+        <span style={{ fontWeight: 600, marginRight: 1 }}>Out:</span>
+        {(agent.outputs ?? []).map((ioId) => {
+          const io = getIOType(ioId);
+          return (
+            <span
+              key={ioId}
+              title={io.label}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 16,
+                height: 16,
+                borderRadius: 4,
+                fontSize: 8,
+                fontWeight: 700,
+                background: io.color + "22",
+                color: io.color,
+                border: `1px solid ${io.color}44`,
+                lineHeight: 1,
+              }}
+            >
+              {io.icon}
+            </span>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -499,14 +854,16 @@ function ActionButton({
   label,
   accent,
   danger,
+  onClick,
 }: {
   label: string;
   accent?: boolean;
   danger?: boolean;
+  onClick?: () => void;
 }) {
   return (
     <button
-      onClick={() => {}}
+      onClick={onClick ?? (() => {})}
       style={{
         padding: "6px 16px",
         borderRadius: 6,
