@@ -60,15 +60,108 @@ export interface ScriptConfig {
   timeout?: number;
 }
 
-export interface SandboxConfig {
+/* ---- Sandbox Execution Targets ---- */
+
+export type SandboxTarget = "local_docker" | "docker_host" | "slurm" | "cloud_function" | "kubernetes";
+
+export interface LocalDockerConfig {
   image: string;
   command: string;
   env?: Record<string, string>;
-  /** Timeout in seconds */
   timeout?: number;
-  /** Mount paths from host */
   mounts?: string[];
 }
+
+export interface DockerHostConfig {
+  /** Remote Docker daemon URL (e.g., tcp://vm-host:2376 or ssh://user@host) */
+  host_url: string;
+  image: string;
+  command: string;
+  env?: Record<string, string>;
+  timeout?: number;
+  /** TLS cert paths for secure Docker daemon connections */
+  tls_cert?: string;
+  tls_key?: string;
+  tls_ca?: string;
+  /** Resource limits */
+  memory_limit?: string;  // e.g., "512m", "2g"
+  cpu_limit?: number;     // e.g., 1.5 (cores)
+  gpu?: boolean;
+}
+
+export interface SlurmConfig {
+  /** Slurm cluster SSH endpoint (e.g., user@slurm-head.cluster.local) */
+  cluster_url: string;
+  /** Slurm partition to submit to */
+  partition: string;
+  /** Job script or command to execute */
+  command: string;
+  /** Resource requests */
+  nodes?: number;
+  cpus_per_task?: number;
+  memory?: string;        // e.g., "8G"
+  gpus?: string;          // e.g., "1" or "a100:2"
+  time_limit?: string;    // e.g., "01:00:00"
+  /** Working directory on the cluster */
+  work_dir?: string;
+  /** Environment modules to load */
+  modules?: string[];
+  env?: Record<string, string>;
+}
+
+export interface CloudFunctionConfig {
+  provider: "gcp" | "aws_lambda" | "azure_functions";
+  /** Function name or ARN */
+  function_name: string;
+  region: string;
+  /** Runtime (e.g., "python3.12", "nodejs20", "java21") */
+  runtime?: string;
+  /** Memory in MB */
+  memory?: number;
+  timeout?: number;
+  env?: Record<string, string>;
+  /** Authentication — service account key, IAM role, etc. */
+  auth_config?: string;
+}
+
+export interface KubernetesConfig {
+  /** Cluster context name or kubeconfig path */
+  cluster: string;
+  namespace: string;
+  image: string;
+  command: string;
+  /** Resource requests and limits */
+  cpu_request?: string;    // e.g., "100m"
+  cpu_limit?: string;      // e.g., "1000m"
+  memory_request?: string; // e.g., "128Mi"
+  memory_limit?: string;   // e.g., "512Mi"
+  gpu_limit?: number;
+  /** Service account for pod identity */
+  service_account?: string;
+  /** Node selector labels */
+  node_selector?: Record<string, string>;
+  env?: Record<string, string>;
+  timeout?: number;
+  /** Pull secrets for private registries */
+  image_pull_secret?: string;
+}
+
+export interface SandboxConfig {
+  target: SandboxTarget;
+  local_docker?: LocalDockerConfig;
+  docker_host?: DockerHostConfig;
+  slurm?: SlurmConfig;
+  cloud_function?: CloudFunctionConfig;
+  kubernetes?: KubernetesConfig;
+}
+
+export const SANDBOX_TARGETS: { id: SandboxTarget; label: string; description: string; icon: string }[] = [
+  { id: "local_docker",   label: "Local Docker",      description: "Run in Docker on the Celerex host",                icon: "🐳" },
+  { id: "docker_host",    label: "Remote Docker Host", description: "Run on a remote Docker daemon (VM, bare metal)",  icon: "🖥️" },
+  { id: "slurm",          label: "Slurm (HPC)",        description: "Submit job to an HPC cluster via Slurm",          icon: "🔬" },
+  { id: "cloud_function", label: "Cloud Function",     description: "Invoke a serverless function (GCP/AWS/Azure)",    icon: "☁️" },
+  { id: "kubernetes",     label: "Kubernetes",          description: "Run as a Job in a Kubernetes cluster",            icon: "⎈" },
+];
 
 export interface ExecutionConfig {
   type: ExecutionType;
@@ -84,7 +177,7 @@ export const EXECUTION_TYPES: { id: ExecutionType; label: string; description: s
   { id: "http", label: "HTTP API", description: "Call a REST API endpoint", icon: "🌐" },
   { id: "agent", label: "Agent (A2A)", description: "Invoke another Celerex agent", icon: "🤖" },
   { id: "script", label: "Local Script", description: "Run a local command or script", icon: "⚙️" },
-  { id: "sandbox", label: "Sandbox (Docker)", description: "Run in an isolated container", icon: "📦" },
+  { id: "sandbox", label: "Sandbox", description: "Run in an isolated environment (Docker, Slurm, K8s, Cloud Function)", icon: "📦" },
 ];
 
 export interface ToolDef {
@@ -977,10 +1070,157 @@ const builtInTools: ToolDef[] = [
     execution: {
       type: "sandbox",
       sandbox: {
-        image: "python:3.12-slim",
-        command: "python3 -c",
-        timeout: 30,
-        env: { PYTHONDONTWRITEBYTECODE: "1" },
+        target: "local_docker",
+        local_docker: {
+          image: "python:3.12-slim",
+          command: "python3 -c",
+          timeout: 30,
+          env: { PYTHONDONTWRITEBYTECODE: "1" },
+        },
+      },
+    },
+  },
+
+  /* ---- Additional sandbox examples showing different targets ---- */
+  {
+    id: "slurm_ml_training",
+    name: "ML Training Job (Slurm)",
+    description: "Submit a machine learning training job to an HPC cluster via Slurm. Supports GPU allocation, distributed training, and long-running workloads.",
+    category: "ai",
+    parameters: [
+      { name: "script_path", type: "string", description: "Path to training script on the cluster", required: true },
+      { name: "dataset", type: "string", description: "Dataset path or identifier", required: true },
+      { name: "epochs", type: "number", description: "Number of training epochs" },
+      { name: "batch_size", type: "number", description: "Training batch size" },
+      { name: "gpus", type: "number", description: "Number of GPUs to request" },
+    ],
+    execution: {
+      type: "sandbox",
+      sandbox: {
+        target: "slurm",
+        slurm: {
+          cluster_url: "user@slurm-head.cluster.local",
+          partition: "gpu",
+          command: "python train.py",
+          cpus_per_task: 8,
+          memory: "32G",
+          gpus: "a100:1",
+          time_limit: "04:00:00",
+          work_dir: "/scratch/ml-jobs",
+          modules: ["cuda/12.1", "python/3.12", "pytorch/2.2"],
+          env: { WANDB_PROJECT: "celerex-ml" },
+        },
+      },
+    },
+  },
+  {
+    id: "cloud_function_pdf",
+    name: "PDF Generator (Cloud Function)",
+    description: "Generate PDF documents from HTML/Markdown using a serverless GCP Cloud Function. Scales automatically with demand.",
+    category: "document",
+    parameters: [
+      { name: "content", type: "string", description: "HTML or Markdown content to convert", required: true },
+      { name: "format", type: "string", description: "Page format", enum: ["A4", "Letter", "Legal"] },
+      { name: "orientation", type: "string", description: "Page orientation", enum: ["portrait", "landscape"] },
+    ],
+    execution: {
+      type: "sandbox",
+      sandbox: {
+        target: "cloud_function",
+        cloud_function: {
+          provider: "gcp",
+          function_name: "celerex-pdf-generator",
+          region: "us-central1",
+          runtime: "nodejs20",
+          memory: 512,
+          timeout: 60,
+        },
+      },
+    },
+  },
+  {
+    id: "k8s_data_pipeline",
+    name: "Data Pipeline (Kubernetes)",
+    description: "Run a data processing pipeline as a Kubernetes Job. Processes large datasets with configurable resource limits and automatic cleanup.",
+    category: "data",
+    parameters: [
+      { name: "input_path", type: "string", description: "Input data path (S3, GCS, or PVC path)", required: true },
+      { name: "output_path", type: "string", description: "Output path for processed data", required: true },
+      { name: "pipeline", type: "string", description: "Pipeline name", required: true, enum: ["etl", "aggregation", "enrichment", "dedup", "validation"] },
+    ],
+    execution: {
+      type: "sandbox",
+      sandbox: {
+        target: "kubernetes",
+        kubernetes: {
+          cluster: "production-cluster",
+          namespace: "data-jobs",
+          image: "celerex/data-pipeline:latest",
+          command: "python -m pipeline.run",
+          cpu_request: "500m",
+          cpu_limit: "2000m",
+          memory_request: "1Gi",
+          memory_limit: "4Gi",
+          service_account: "data-pipeline-sa",
+          timeout: 1800,
+          image_pull_secret: "registry-credentials",
+        },
+      },
+    },
+  },
+  {
+    id: "lambda_image_resize",
+    name: "Image Processor (AWS Lambda)",
+    description: "Resize and optimize images using an AWS Lambda function. Supports batch processing with automatic scaling.",
+    category: "media",
+    parameters: [
+      { name: "source_url", type: "string", description: "Source image URL or S3 path", required: true },
+      { name: "width", type: "number", description: "Target width in pixels", required: true },
+      { name: "height", type: "number", description: "Target height in pixels" },
+      { name: "quality", type: "number", description: "Output quality (1-100)" },
+      { name: "format", type: "string", description: "Output format", enum: ["webp", "png", "jpeg", "avif"] },
+    ],
+    execution: {
+      type: "sandbox",
+      sandbox: {
+        target: "cloud_function",
+        cloud_function: {
+          provider: "aws_lambda",
+          function_name: "arn:aws:lambda:us-east-1:123456789:function:celerex-image-processor",
+          region: "us-east-1",
+          runtime: "python3.12",
+          memory: 1024,
+          timeout: 30,
+        },
+      },
+    },
+  },
+  {
+    id: "docker_host_java",
+    name: "Java Runtime (Remote Docker)",
+    description: "Execute Java applications on a dedicated remote Docker host with GPU support. Suitable for heavy compute tasks.",
+    category: "code",
+    parameters: [
+      { name: "jar_path", type: "string", description: "Path to JAR file or Maven coordinates", required: true },
+      { name: "main_class", type: "string", description: "Main class to execute" },
+      { name: "args", type: "string", description: "Command-line arguments" },
+      { name: "jvm_opts", type: "string", description: "JVM options (e.g., -Xmx4g)" },
+    ],
+    execution: {
+      type: "sandbox",
+      sandbox: {
+        target: "docker_host",
+        docker_host: {
+          host_url: "tcp://compute-vm-01.internal:2376",
+          image: "eclipse-temurin:21-jre",
+          command: "java -jar",
+          memory_limit: "4g",
+          cpu_limit: 4,
+          gpu: false,
+          tls_cert: "/certs/client-cert.pem",
+          tls_key: "/certs/client-key.pem",
+          tls_ca: "/certs/ca.pem",
+        },
       },
     },
   },

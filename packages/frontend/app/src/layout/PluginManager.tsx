@@ -56,7 +56,14 @@ function configSummary(exec: ExecutionConfig): string {
     case "sandbox": {
       const sb = exec.sandbox;
       if (!sb) return "No sandbox config";
-      return `${sb.image} — ${sb.command}`;
+      switch (sb.target) {
+        case "local_docker": return sb.local_docker ? `🐳 ${sb.local_docker.image}` : "Local Docker";
+        case "docker_host": return sb.docker_host ? `🖥️ ${sb.docker_host.host_url} — ${sb.docker_host.image}` : "Remote Docker";
+        case "slurm": return sb.slurm ? `🔬 ${sb.slurm.cluster_url} — ${sb.slurm.partition}` : "Slurm";
+        case "cloud_function": return sb.cloud_function ? `☁️ ${sb.cloud_function.provider.toUpperCase()} — ${sb.cloud_function.function_name}` : "Cloud Function";
+        case "kubernetes": return sb.kubernetes ? `⎈ ${sb.kubernetes.cluster}/${sb.kubernetes.namespace}` : "Kubernetes";
+        default: return sb.target;
+      }
     }
     default:
       return "";
@@ -97,8 +104,26 @@ function pluginStatus(exec: ExecutionConfig): "connected" | "configured" | "need
     }
     case "sandbox": {
       const sb = exec.sandbox;
-      if (!sb || !sb.image || !sb.command) return "needs-setup";
-      return "configured";
+      if (!sb) return "needs-setup";
+      switch (sb.target) {
+        case "local_docker":
+          if (!sb.local_docker?.image || !sb.local_docker?.command) return "needs-setup";
+          return "configured";
+        case "docker_host":
+          if (!sb.docker_host?.host_url || !sb.docker_host?.image || !sb.docker_host?.command) return "needs-setup";
+          return "configured";
+        case "slurm":
+          if (!sb.slurm?.cluster_url || !sb.slurm?.partition || !sb.slurm?.command) return "needs-setup";
+          return "configured";
+        case "cloud_function":
+          if (!sb.cloud_function?.function_name || !sb.cloud_function?.region) return "needs-setup";
+          return "configured";
+        case "kubernetes":
+          if (!sb.kubernetes?.cluster || !sb.kubernetes?.namespace || !sb.kubernetes?.image) return "needs-setup";
+          return "configured";
+        default:
+          return "needs-setup";
+      }
     }
     default:
       return "needs-setup";
@@ -240,13 +265,59 @@ function PluginDetail({
       case "sandbox": {
         const sb = exec.sandbox;
         if (!sb) return null;
+        const targetLabels: Record<string, string> = {
+          local_docker: "Local Docker",
+          docker_host: "Remote Docker Host",
+          slurm: "Slurm HPC",
+          cloud_function: "Cloud Function",
+          kubernetes: "Kubernetes",
+        };
         return (
           <>
-            <ConfigRow label="Image" value={sb.image} />
-            <ConfigRow label="Command" value={sb.command} />
-            {sb.timeout != null && <ConfigRow label="Timeout" value={`${sb.timeout}s`} />}
-            {sb.mounts && sb.mounts.length > 0 && (
-              <ConfigRow label="Mounts" value={sb.mounts.join(", ")} />
+            <ConfigRow label="Target" value={targetLabels[sb.target] ?? sb.target} />
+            {sb.target === "local_docker" && sb.local_docker && (
+              <>
+                <ConfigRow label="Image" value={sb.local_docker.image} />
+                <ConfigRow label="Command" value={sb.local_docker.command} />
+                {sb.local_docker.timeout != null && <ConfigRow label="Timeout" value={`${sb.local_docker.timeout}s`} />}
+              </>
+            )}
+            {sb.target === "docker_host" && sb.docker_host && (
+              <>
+                <ConfigRow label="Host URL" value={sb.docker_host.host_url} />
+                <ConfigRow label="Image" value={sb.docker_host.image} />
+                <ConfigRow label="Command" value={sb.docker_host.command} />
+                {sb.docker_host.gpu && <ConfigRow label="GPU" value="Enabled" />}
+                {sb.docker_host.memory_limit && <ConfigRow label="Memory" value={sb.docker_host.memory_limit} />}
+              </>
+            )}
+            {sb.target === "slurm" && sb.slurm && (
+              <>
+                <ConfigRow label="Cluster" value={sb.slurm.cluster_url} />
+                <ConfigRow label="Partition" value={sb.slurm.partition} />
+                <ConfigRow label="Command" value={sb.slurm.command} />
+                {sb.slurm.gpus && <ConfigRow label="GPUs" value={sb.slurm.gpus} />}
+                {sb.slurm.time_limit && <ConfigRow label="Time Limit" value={sb.slurm.time_limit} />}
+              </>
+            )}
+            {sb.target === "cloud_function" && sb.cloud_function && (
+              <>
+                <ConfigRow label="Provider" value={sb.cloud_function.provider.toUpperCase()} />
+                <ConfigRow label="Function" value={sb.cloud_function.function_name} />
+                <ConfigRow label="Region" value={sb.cloud_function.region} />
+                {sb.cloud_function.runtime && <ConfigRow label="Runtime" value={sb.cloud_function.runtime} />}
+                {sb.cloud_function.memory != null && <ConfigRow label="Memory" value={`${sb.cloud_function.memory} MB`} />}
+              </>
+            )}
+            {sb.target === "kubernetes" && sb.kubernetes && (
+              <>
+                <ConfigRow label="Cluster" value={sb.kubernetes.cluster} />
+                <ConfigRow label="Namespace" value={sb.kubernetes.namespace} />
+                <ConfigRow label="Image" value={sb.kubernetes.image} />
+                <ConfigRow label="Command" value={sb.kubernetes.command} />
+                {sb.kubernetes.gpu_limit != null && <ConfigRow label="GPU Limit" value={String(sb.kubernetes.gpu_limit)} />}
+                {sb.kubernetes.service_account && <ConfigRow label="Service Acct" value={sb.kubernetes.service_account} />}
+              </>
             )}
           </>
         );

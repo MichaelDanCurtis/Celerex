@@ -7,11 +7,13 @@ import {
   deleteCustomTool,
   TOOL_CATEGORIES,
   EXECUTION_TYPES,
+  SANDBOX_TARGETS,
   type ToolDef,
   type ToolCategoryId,
   type ToolParameter,
   type ExecutionConfig,
   type ExecutionType,
+  type SandboxTarget,
 } from "../data/tools";
 import { getAllAgents } from "../data/agents";
 
@@ -837,7 +839,7 @@ function ToolEditorDialog({
                     if (et.id === "http") base.http = { url: "", method: "POST", authType: "none" };
                     if (et.id === "agent") base.agent = { agentId: "" };
                     if (et.id === "script") base.script = { command: "" };
-                    if (et.id === "sandbox") base.sandbox = { image: "", command: "" };
+                    if (et.id === "sandbox") base.sandbox = { target: "local_docker", local_docker: { image: "", command: "" } };
                     setExecConfig(base);
                   }
                 }}
@@ -1005,14 +1007,7 @@ function ExecutionDisplay({ execution }: { execution?: ExecutionConfig }) {
         )}
 
         {execution.type === "sandbox" && execution.sandbox && (
-          <div style={{ display: "grid", gap: 4, fontSize: 12 }}>
-            <KV label="Image" value={execution.sandbox.image} />
-            <KV label="Command" value={execution.sandbox.command} />
-            {execution.sandbox.timeout && <KV label="Timeout" value={`${execution.sandbox.timeout}s`} />}
-            {execution.sandbox.mounts && execution.sandbox.mounts.length > 0 && (
-              <KV label="Mounts" value={execution.sandbox.mounts.join(", ")} />
-            )}
-          </div>
+          <SandboxDisplay sandbox={execution.sandbox} />
         )}
       </div>
     </div>
@@ -1269,47 +1264,242 @@ function ScriptConfigEditor({ config, onChange }: { config: NonNullable<import("
 }
 
 function SandboxConfigEditor({ config, onChange }: { config: NonNullable<import("../data/tools").SandboxConfig>; onChange: (c: typeof config) => void }) {
+  const handleTargetChange = (target: SandboxTarget) => {
+    const base: import("../data/tools").SandboxConfig = { target };
+    if (target === "local_docker") base.local_docker = { image: "", command: "" };
+    if (target === "docker_host") base.docker_host = { host_url: "", image: "", command: "" };
+    if (target === "slurm") base.slurm = { cluster_url: "", partition: "", command: "" };
+    if (target === "cloud_function") base.cloud_function = { provider: "gcp", function_name: "", region: "" };
+    if (target === "kubernetes") base.kubernetes = { cluster: "", namespace: "default", image: "", command: "" };
+    onChange(base);
+  };
+
   return (
     <ConfigSection>
-      <ConfigField label="Docker Image">
-        <input value={config.image} onChange={(e) => onChange({ ...config, image: e.target.value })} placeholder="e.g., python:3.12-slim" style={cfgInputStyle} />
+      <ConfigField label="Execution Target">
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4 }}>
+          {SANDBOX_TARGETS.map((t) => (
+            <button key={t.id} onClick={() => handleTargetChange(t.id)} style={{
+              padding: "6px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer", textAlign: "left",
+              border: config.target === t.id ? "2px solid var(--celerex-accent)" : "1px solid var(--celerex-border)",
+              background: config.target === t.id ? "var(--celerex-accent)" + "15" : "transparent",
+              color: "var(--celerex-text-primary)",
+            }}>
+              <div style={{ fontWeight: 600 }}>{t.icon} {t.label}</div>
+              <div style={{ fontSize: 9, color: "var(--celerex-text-secondary)", marginTop: 1 }}>{t.description}</div>
+            </button>
+          ))}
+        </div>
       </ConfigField>
 
-      <ConfigField label="Command">
-        <input value={config.command} onChange={(e) => onChange({ ...config, command: e.target.value })} placeholder="e.g., python /app/run.py" style={cfgInputStyle} />
-      </ConfigField>
+      {config.target === "local_docker" && config.local_docker && (
+        <>
+          <ConfigField label="Docker Image">
+            <input value={config.local_docker.image} onChange={(e) => onChange({ ...config, local_docker: { ...config.local_docker!, image: e.target.value } })} placeholder="python:3.12-slim" style={cfgInputStyle} />
+          </ConfigField>
+          <ConfigField label="Command">
+            <input value={config.local_docker.command} onChange={(e) => onChange({ ...config, local_docker: { ...config.local_docker!, command: e.target.value } })} placeholder="python3 -c" style={cfgInputStyle} />
+          </ConfigField>
+          <ConfigField label="Timeout (seconds)">
+            <input type="number" value={config.local_docker.timeout ?? ""} onChange={(e) => onChange({ ...config, local_docker: { ...config.local_docker!, timeout: e.target.value ? Number(e.target.value) : undefined } })} placeholder="60" style={{ ...cfgInputStyle, width: 120 }} />
+          </ConfigField>
+        </>
+      )}
 
-      <ConfigField label="Timeout (seconds)">
-        <input type="number" value={config.timeout ?? ""} onChange={(e) => onChange({ ...config, timeout: e.target.value ? Number(e.target.value) : undefined })} placeholder="60" style={{ ...cfgInputStyle, width: 120 }} />
-      </ConfigField>
+      {config.target === "docker_host" && config.docker_host && (
+        <>
+          <ConfigField label="Remote Docker Host URL">
+            <input value={config.docker_host.host_url} onChange={(e) => onChange({ ...config, docker_host: { ...config.docker_host!, host_url: e.target.value } })} placeholder="tcp://vm-host:2376 or ssh://user@host" style={cfgInputStyle} />
+          </ConfigField>
+          <ConfigField label="Docker Image">
+            <input value={config.docker_host.image} onChange={(e) => onChange({ ...config, docker_host: { ...config.docker_host!, image: e.target.value } })} placeholder="python:3.12-slim" style={cfgInputStyle} />
+          </ConfigField>
+          <ConfigField label="Command">
+            <input value={config.docker_host.command} onChange={(e) => onChange({ ...config, docker_host: { ...config.docker_host!, command: e.target.value } })} placeholder="python3 -c" style={cfgInputStyle} />
+          </ConfigField>
+          <div style={{ display: "flex", gap: 8 }}>
+            <ConfigField label="Memory Limit">
+              <input value={config.docker_host.memory_limit ?? ""} onChange={(e) => onChange({ ...config, docker_host: { ...config.docker_host!, memory_limit: e.target.value || undefined } })} placeholder="4g" style={{ ...cfgInputStyle, width: 100 }} />
+            </ConfigField>
+            <ConfigField label="CPU Limit">
+              <input type="number" value={config.docker_host.cpu_limit ?? ""} onChange={(e) => onChange({ ...config, docker_host: { ...config.docker_host!, cpu_limit: e.target.value ? Number(e.target.value) : undefined } })} placeholder="4" style={{ ...cfgInputStyle, width: 80 }} />
+            </ConfigField>
+            <ConfigField label="GPU">
+              <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--celerex-text-secondary)" }}>
+                <input type="checkbox" checked={!!config.docker_host.gpu} onChange={(e) => onChange({ ...config, docker_host: { ...config.docker_host!, gpu: e.target.checked } })} /> Enable GPU
+              </label>
+            </ConfigField>
+          </div>
+        </>
+      )}
 
-      <ConfigField label="Volume Mounts (one per line, host:container)">
-        <textarea
-          value={(config.mounts ?? []).join("\n")}
-          onChange={(e) => onChange({ ...config, mounts: e.target.value.split("\n").filter(Boolean) })}
-          placeholder="./data:/app/data"
-          rows={2}
-          style={{ ...cfgInputStyle, resize: "vertical" }}
-        />
-      </ConfigField>
+      {config.target === "slurm" && config.slurm && (
+        <>
+          <ConfigField label="Cluster SSH Endpoint">
+            <input value={config.slurm.cluster_url} onChange={(e) => onChange({ ...config, slurm: { ...config.slurm!, cluster_url: e.target.value } })} placeholder="user@slurm-head.cluster.local" style={cfgInputStyle} />
+          </ConfigField>
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ flex: 1 }}><ConfigField label="Partition">
+              <input value={config.slurm.partition} onChange={(e) => onChange({ ...config, slurm: { ...config.slurm!, partition: e.target.value } })} placeholder="gpu" style={cfgInputStyle} />
+            </ConfigField></div>
+            <div style={{ flex: 1 }}><ConfigField label="Time Limit">
+              <input value={config.slurm.time_limit ?? ""} onChange={(e) => onChange({ ...config, slurm: { ...config.slurm!, time_limit: e.target.value || undefined } })} placeholder="04:00:00" style={cfgInputStyle} />
+            </ConfigField></div>
+          </div>
+          <ConfigField label="Command">
+            <input value={config.slurm.command} onChange={(e) => onChange({ ...config, slurm: { ...config.slurm!, command: e.target.value } })} placeholder="python train.py" style={cfgInputStyle} />
+          </ConfigField>
+          <div style={{ display: "flex", gap: 8 }}>
+            <ConfigField label="Memory">
+              <input value={config.slurm.memory ?? ""} onChange={(e) => onChange({ ...config, slurm: { ...config.slurm!, memory: e.target.value || undefined } })} placeholder="32G" style={{ ...cfgInputStyle, width: 80 }} />
+            </ConfigField>
+            <ConfigField label="CPUs">
+              <input type="number" value={config.slurm.cpus_per_task ?? ""} onChange={(e) => onChange({ ...config, slurm: { ...config.slurm!, cpus_per_task: e.target.value ? Number(e.target.value) : undefined } })} placeholder="8" style={{ ...cfgInputStyle, width: 70 }} />
+            </ConfigField>
+            <ConfigField label="GPUs">
+              <input value={config.slurm.gpus ?? ""} onChange={(e) => onChange({ ...config, slurm: { ...config.slurm!, gpus: e.target.value || undefined } })} placeholder="a100:1" style={{ ...cfgInputStyle, width: 100 }} />
+            </ConfigField>
+          </div>
+          <ConfigField label="Modules to load (one per line)">
+            <textarea value={(config.slurm.modules ?? []).join("\n")} onChange={(e) => onChange({ ...config, slurm: { ...config.slurm!, modules: e.target.value.split("\n").filter(Boolean) } })} placeholder="cuda/12.1&#10;python/3.12" rows={2} style={{ ...cfgInputStyle, resize: "vertical" }} />
+          </ConfigField>
+        </>
+      )}
 
-      <ConfigField label="Environment Variables (KEY=VALUE, one per line)">
-        <textarea
-          value={Object.entries(config.env ?? {}).map(([k, v]) => `${k}=${v}`).join("\n")}
-          onChange={(e) => {
-            const env: Record<string, string> = {};
-            e.target.value.split("\n").filter(Boolean).forEach((line) => {
-              const eq = line.indexOf("=");
-              if (eq > 0) env[line.slice(0, eq)] = line.slice(eq + 1);
-            });
-            onChange({ ...config, env: Object.keys(env).length > 0 ? env : undefined });
-          }}
-          placeholder="API_KEY=sk-..."
-          rows={2}
-          style={{ ...cfgInputStyle, resize: "vertical" }}
-        />
-      </ConfigField>
+      {config.target === "cloud_function" && config.cloud_function && (
+        <>
+          <ConfigField label="Cloud Provider">
+            <select value={config.cloud_function.provider} onChange={(e) => onChange({ ...config, cloud_function: { ...config.cloud_function!, provider: e.target.value as any } })} style={cfgInputStyle}>
+              <option value="gcp">Google Cloud Functions</option>
+              <option value="aws_lambda">AWS Lambda</option>
+              <option value="azure_functions">Azure Functions</option>
+            </select>
+          </ConfigField>
+          <ConfigField label="Function Name / ARN">
+            <input value={config.cloud_function.function_name} onChange={(e) => onChange({ ...config, cloud_function: { ...config.cloud_function!, function_name: e.target.value } })} placeholder="my-function or arn:aws:lambda:..." style={cfgInputStyle} />
+          </ConfigField>
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ flex: 1 }}><ConfigField label="Region">
+              <input value={config.cloud_function.region} onChange={(e) => onChange({ ...config, cloud_function: { ...config.cloud_function!, region: e.target.value } })} placeholder="us-central1" style={cfgInputStyle} />
+            </ConfigField></div>
+            <div style={{ flex: 1 }}><ConfigField label="Runtime">
+              <input value={config.cloud_function.runtime ?? ""} onChange={(e) => onChange({ ...config, cloud_function: { ...config.cloud_function!, runtime: e.target.value || undefined } })} placeholder="python3.12" style={cfgInputStyle} />
+            </ConfigField></div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <ConfigField label="Memory (MB)">
+              <input type="number" value={config.cloud_function.memory ?? ""} onChange={(e) => onChange({ ...config, cloud_function: { ...config.cloud_function!, memory: e.target.value ? Number(e.target.value) : undefined } })} placeholder="512" style={{ ...cfgInputStyle, width: 100 }} />
+            </ConfigField>
+            <ConfigField label="Timeout (seconds)">
+              <input type="number" value={config.cloud_function.timeout ?? ""} onChange={(e) => onChange({ ...config, cloud_function: { ...config.cloud_function!, timeout: e.target.value ? Number(e.target.value) : undefined } })} placeholder="60" style={{ ...cfgInputStyle, width: 100 }} />
+            </ConfigField>
+          </div>
+        </>
+      )}
+
+      {config.target === "kubernetes" && config.kubernetes && (
+        <>
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ flex: 1 }}><ConfigField label="Cluster">
+              <input value={config.kubernetes.cluster} onChange={(e) => onChange({ ...config, kubernetes: { ...config.kubernetes!, cluster: e.target.value } })} placeholder="production-cluster" style={cfgInputStyle} />
+            </ConfigField></div>
+            <div style={{ flex: 1 }}><ConfigField label="Namespace">
+              <input value={config.kubernetes.namespace} onChange={(e) => onChange({ ...config, kubernetes: { ...config.kubernetes!, namespace: e.target.value } })} placeholder="default" style={cfgInputStyle} />
+            </ConfigField></div>
+          </div>
+          <ConfigField label="Container Image">
+            <input value={config.kubernetes.image} onChange={(e) => onChange({ ...config, kubernetes: { ...config.kubernetes!, image: e.target.value } })} placeholder="myregistry/my-app:latest" style={cfgInputStyle} />
+          </ConfigField>
+          <ConfigField label="Command">
+            <input value={config.kubernetes.command} onChange={(e) => onChange({ ...config, kubernetes: { ...config.kubernetes!, command: e.target.value } })} placeholder="python -m pipeline.run" style={cfgInputStyle} />
+          </ConfigField>
+          <div style={{ display: "flex", gap: 8 }}>
+            <ConfigField label="CPU Request">
+              <input value={config.kubernetes.cpu_request ?? ""} onChange={(e) => onChange({ ...config, kubernetes: { ...config.kubernetes!, cpu_request: e.target.value || undefined } })} placeholder="500m" style={{ ...cfgInputStyle, width: 80 }} />
+            </ConfigField>
+            <ConfigField label="CPU Limit">
+              <input value={config.kubernetes.cpu_limit ?? ""} onChange={(e) => onChange({ ...config, kubernetes: { ...config.kubernetes!, cpu_limit: e.target.value || undefined } })} placeholder="2000m" style={{ ...cfgInputStyle, width: 80 }} />
+            </ConfigField>
+            <ConfigField label="Memory Request">
+              <input value={config.kubernetes.memory_request ?? ""} onChange={(e) => onChange({ ...config, kubernetes: { ...config.kubernetes!, memory_request: e.target.value || undefined } })} placeholder="1Gi" style={{ ...cfgInputStyle, width: 80 }} />
+            </ConfigField>
+            <ConfigField label="Memory Limit">
+              <input value={config.kubernetes.memory_limit ?? ""} onChange={(e) => onChange({ ...config, kubernetes: { ...config.kubernetes!, memory_limit: e.target.value || undefined } })} placeholder="4Gi" style={{ ...cfgInputStyle, width: 80 }} />
+            </ConfigField>
+          </div>
+          <ConfigField label="Service Account">
+            <input value={config.kubernetes.service_account ?? ""} onChange={(e) => onChange({ ...config, kubernetes: { ...config.kubernetes!, service_account: e.target.value || undefined } })} placeholder="my-service-account" style={cfgInputStyle} />
+          </ConfigField>
+          <ConfigField label="Image Pull Secret">
+            <input value={config.kubernetes.image_pull_secret ?? ""} onChange={(e) => onChange({ ...config, kubernetes: { ...config.kubernetes!, image_pull_secret: e.target.value || undefined } })} placeholder="registry-credentials" style={cfgInputStyle} />
+          </ConfigField>
+        </>
+      )}
     </ConfigSection>
+  );
+}
+
+function SandboxDisplay({ sandbox }: { sandbox: import("../data/tools").SandboxConfig }) {
+  const targetInfo = SANDBOX_TARGETS.find((t) => t.id === sandbox.target);
+  return (
+    <div style={{ display: "grid", gap: 4, fontSize: 12 }}>
+      <KV label="Target" value={`${targetInfo?.icon ?? ""} ${targetInfo?.label ?? sandbox.target}`} />
+
+      {sandbox.target === "local_docker" && sandbox.local_docker && (
+        <>
+          <KV label="Image" value={sandbox.local_docker.image} />
+          <KV label="Command" value={sandbox.local_docker.command} />
+          {sandbox.local_docker.timeout && <KV label="Timeout" value={`${sandbox.local_docker.timeout}s`} />}
+        </>
+      )}
+
+      {sandbox.target === "docker_host" && sandbox.docker_host && (
+        <>
+          <KV label="Host" value={sandbox.docker_host.host_url} />
+          <KV label="Image" value={sandbox.docker_host.image} />
+          <KV label="Command" value={sandbox.docker_host.command} />
+          {sandbox.docker_host.memory_limit && <KV label="Memory" value={sandbox.docker_host.memory_limit} />}
+          {sandbox.docker_host.cpu_limit && <KV label="CPUs" value={String(sandbox.docker_host.cpu_limit)} />}
+          {sandbox.docker_host.gpu && <KV label="GPU" value="Enabled" />}
+        </>
+      )}
+
+      {sandbox.target === "slurm" && sandbox.slurm && (
+        <>
+          <KV label="Cluster" value={sandbox.slurm.cluster_url} />
+          <KV label="Partition" value={sandbox.slurm.partition} />
+          <KV label="Command" value={sandbox.slurm.command} />
+          {sandbox.slurm.gpus && <KV label="GPUs" value={sandbox.slurm.gpus} />}
+          {sandbox.slurm.memory && <KV label="Memory" value={sandbox.slurm.memory} />}
+          {sandbox.slurm.time_limit && <KV label="Time Limit" value={sandbox.slurm.time_limit} />}
+          {sandbox.slurm.modules && sandbox.slurm.modules.length > 0 && (
+            <KV label="Modules" value={sandbox.slurm.modules.join(", ")} />
+          )}
+        </>
+      )}
+
+      {sandbox.target === "cloud_function" && sandbox.cloud_function && (
+        <>
+          <KV label="Provider" value={sandbox.cloud_function.provider.replace("_", " ").toUpperCase()} />
+          <KV label="Function" value={sandbox.cloud_function.function_name} />
+          <KV label="Region" value={sandbox.cloud_function.region} />
+          {sandbox.cloud_function.runtime && <KV label="Runtime" value={sandbox.cloud_function.runtime} />}
+          {sandbox.cloud_function.memory && <KV label="Memory" value={`${sandbox.cloud_function.memory}MB`} />}
+        </>
+      )}
+
+      {sandbox.target === "kubernetes" && sandbox.kubernetes && (
+        <>
+          <KV label="Cluster" value={sandbox.kubernetes.cluster} />
+          <KV label="Namespace" value={sandbox.kubernetes.namespace} />
+          <KV label="Image" value={sandbox.kubernetes.image} />
+          <KV label="Command" value={sandbox.kubernetes.command} />
+          {sandbox.kubernetes.cpu_limit && <KV label="CPU Limit" value={sandbox.kubernetes.cpu_limit} />}
+          {sandbox.kubernetes.memory_limit && <KV label="Memory Limit" value={sandbox.kubernetes.memory_limit} />}
+          {sandbox.kubernetes.service_account && <KV label="Service Account" value={sandbox.kubernetes.service_account} />}
+        </>
+      )}
+    </div>
   );
 }
 
