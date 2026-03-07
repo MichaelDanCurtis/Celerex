@@ -49,6 +49,9 @@ struct CreateEngagement {
 struct ChatRequest {
     message: String,
     context: Option<String>,
+    provider: Option<String>,  // "anthropic", "github-copilot", "openrouter", "zhipu", "kimi"
+    model: Option<String>,     // model ID override
+    api_key: Option<String>,   // API key from frontend (fallback: env var)
 }
 
 #[derive(Debug, Deserialize)]
@@ -319,65 +322,63 @@ async fn handle_ws_connection(socket: WebSocket) {
 }
 
 // ---------------------------------------------------------------------------
-// Chat proxy handler
+// Chat proxy handler — multi-provider
 // ---------------------------------------------------------------------------
 
-async fn chat_handler(Json(body): Json<ChatRequest>) -> impl IntoResponse {
-    let api_key = match env::var("ANTHROPIC_API_KEY") {
-        Ok(key) => key,
-        Err(_) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": "ANTHROPIC_API_KEY is not set" })),
-            );
+/// Resolve the API key: prefer the request-supplied key, then fall back to env.
+fn resolve_api_key(request_key: &Option<String>, env_var: &str, provider_label: &str)
+    -> Result<String, (StatusCode, Json<Value>)>
+{
+    if let Some(k) = request_key {
+        if !k.is_empty() {
+            return Ok(k.clone());
         }
-    };
+    }
+    env::var(env_var).map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": format!("API key for provider '{}' is not set. Supply it in the request body or set the {} environment variable.", provider_label, env_var) })),
+        )
+    })
+}
 
-    let user_content = match &body.context {
-        Some(ctx) if !ctx.is_empty() => format!("{}\n\n{}", ctx, body.message),
-        _ => body.message.clone(),
-    };
-
+/// Send a request to the Anthropic Messages API and return the reply text.
+async fn send_anthropic(
+    client: &reqwest::Client,
+    api_key: &str,
+    model: &str,
+    user_content: &str,
+) -> Result<String, (StatusCode, Json<Value>)> {
     let request_body = json!({
-        "model": "claude-sonnet-4-20250514",
+        "model": model,
         "max_tokens": 1024,
         "messages": [
-            {
-                "role": "user",
-                "content": user_content
-            }
+            { "role": "user", "content": user_content }
         ]
     });
 
-    let client = reqwest::Client::new();
-    let response = match client
+    let response = client
         .post("https://api.anthropic.com/v1/messages")
-        .header("x-api-key", &api_key)
+        .header("x-api-key", api_key)
         .header("anthropic-version", "2023-06-01")
         .header("content-type", "application/json")
         .json(&request_body)
         .send()
         .await
-    {
-        Ok(resp) => resp,
-        Err(e) => {
-            return (
+        .map_err(|e| {
+            (
                 StatusCode::BAD_GATEWAY,
                 Json(json!({ "error": format!("Failed to reach Anthropic API: {}", e) })),
-            );
-        }
-    };
+            )
+        })?;
 
     let status = response.status();
-    let resp_body: Value = match response.json().await {
-        Ok(v) => v,
-        Err(e) => {
-            return (
-                StatusCode::BAD_GATEWAY,
-                Json(json!({ "error": format!("Failed to parse Anthropic response: {}", e) })),
-            );
-        }
-    };
+    let resp_body: Value = response.json().await.map_err(|e| {
+        (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({ "error": format!("Failed to parse Anthropic response: {}", e) })),
+        )
+    })?;
 
     if !status.is_success() {
         let api_error = resp_body
@@ -385,10 +386,10 @@ async fn chat_handler(Json(body): Json<ChatRequest>) -> impl IntoResponse {
             .and_then(|e| e.get("message"))
             .and_then(|m| m.as_str())
             .unwrap_or("Unknown Anthropic API error");
-        return (
+        return Err((
             StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY),
             Json(json!({ "error": api_error })),
-        );
+        ));
     }
 
     let reply = resp_body
@@ -400,5 +401,149 @@ async fn chat_handler(Json(body): Json<ChatRequest>) -> impl IntoResponse {
         .unwrap_or("")
         .to_string();
 
-    (StatusCode::OK, Json(json!({ "reply": reply })))
+    Ok(reply)
+}
+
+/// Send a request to any OpenAI-compatible chat completions endpoint.
+async fn send_openai_compatible(
+    client: &reqwest::Client,
+    base_url: &str,
+    api_key: &str,
+    model: &str,
+    user_content: &str,
+    extra_headers: Vec<(&str, &str)>,
+) -> Result<String, (StatusCode, Json<Value>)> {
+    let request_body = json!({
+        "model": model,
+        "messages": [
+            { "role": "user", "content": user_content }
+        ],
+        "max_tokens": 1024
+    });
+
+    let mut req = client
+        .post(base_url)
+        .header("Authorization", format!("Bearer {}", api_key))
+        .header("Content-Type", "application/json");
+
+    for (name, value) in &extra_headers {
+        req = req.header(*name, *value);
+    }
+
+    let response = req.json(&request_body).send().await.map_err(|e| {
+        (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({ "error": format!("Failed to reach provider API: {}", e) })),
+        )
+    })?;
+
+    let status = response.status();
+    let resp_body: Value = response.json().await.map_err(|e| {
+        (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({ "error": format!("Failed to parse provider response: {}", e) })),
+        )
+    })?;
+
+    if !status.is_success() {
+        let api_error = resp_body
+            .get("error")
+            .and_then(|e| e.get("message").or_else(|| Some(e)))
+            .and_then(|m| m.as_str())
+            .unwrap_or("Unknown provider API error");
+        return Err((
+            StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY),
+            Json(json!({ "error": api_error })),
+        ));
+    }
+
+    let reply = resp_body
+        .get("choices")
+        .and_then(|c| c.as_array())
+        .and_then(|arr| arr.first())
+        .and_then(|choice| choice.get("message"))
+        .and_then(|msg| msg.get("content"))
+        .and_then(|t| t.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    Ok(reply)
+}
+
+async fn chat_handler(Json(body): Json<ChatRequest>) -> impl IntoResponse {
+    let provider = body.provider.as_deref().unwrap_or("anthropic");
+
+    // Resolve API key and default model per provider
+    let (default_model, base_url, env_var) = match provider {
+        "anthropic" => (
+            "claude-sonnet-4-20250514",
+            "https://api.anthropic.com/v1/messages",
+            "ANTHROPIC_API_KEY",
+        ),
+        "github-copilot" => (
+            "gpt-4o",
+            "https://models.inference.ai.azure.com/chat/completions",
+            "GITHUB_TOKEN",
+        ),
+        "openrouter" => (
+            "anthropic/claude-sonnet-4-20250514",
+            "https://openrouter.ai/api/v1/chat/completions",
+            "OPENROUTER_API_KEY",
+        ),
+        "zhipu" => (
+            "glm-5",
+            "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+            "ZHIPUAI_API_KEY",
+        ),
+        "xai" => (
+            "grok-3",
+            "https://api.x.ai/v1/chat/completions",
+            "XAI_API_KEY",
+        ),
+        "kimi" => (
+            "kimi-k2-0711",
+            "https://api.moonshot.cn/v1/chat/completions",
+            "MOONSHOT_API_KEY",
+        ),
+        other => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": format!("Unknown provider: '{}'. Supported: anthropic, github-copilot, openrouter, zhipu, xai, kimi", other) })),
+            );
+        }
+    };
+
+    let key = match resolve_api_key(&body.api_key, env_var, provider) {
+        Ok(k) => k,
+        Err(e) => return e,
+    };
+
+    let model = body.model.as_deref().unwrap_or(default_model);
+
+    // Build user content (prepend context if present)
+    let user_content = match &body.context {
+        Some(ctx) if !ctx.is_empty() => format!("{}\n\n{}", ctx, body.message),
+        _ => body.message.clone(),
+    };
+
+    let client = reqwest::Client::new();
+
+    let result = if provider == "anthropic" {
+        send_anthropic(&client, &key, model, &user_content).await
+    } else {
+        // Build extra headers per provider
+        let extra_headers: Vec<(&str, &str)> = match provider {
+            "openrouter" => vec![
+                ("HTTP-Referer", "http://localhost:5173"),
+                ("X-Title", "Celerex"),
+            ],
+            _ => vec![],
+        };
+        send_openai_compatible(&client, base_url, &key, model, &user_content, extra_headers).await
+    };
+
+    match result {
+        Ok(reply) => (StatusCode::OK, Json(json!({ "reply": reply }))),
+        Err(e) => e,
+    }
 }

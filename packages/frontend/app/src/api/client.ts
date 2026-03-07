@@ -107,11 +107,17 @@ export async function deleteDoc(
 
 // ---- Chat endpoint -------------------------------------------------------
 
-export async function sendChatMessage(message: string, context?: string): Promise<string> {
+export async function sendChatMessage(
+  message: string,
+  context?: string,
+  provider?: string,
+  model?: string,
+  apiKey?: string,
+): Promise<string> {
   const res = await fetch(`${API_BASE}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, context }),
+    body: JSON.stringify({ message, context, provider, model, apiKey }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "Chat request failed" }));

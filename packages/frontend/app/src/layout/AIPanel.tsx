@@ -8,6 +8,12 @@ import {
   type ChatMessage,
 } from "../state/atoms";
 import { sendChatMessage } from "../api/client";
+import {
+  selectedProviderIdAtom,
+  selectedModelAtom,
+  apiKeysAtom,
+} from "../state/aiProviderAtom";
+import { AIProviderSelector } from "./AIProviderSelector";
 
 function formatTime(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString([], {
@@ -85,6 +91,9 @@ export function AIPanel() {
   const [messages, setMessages] = useAtom(chatMessagesAtom);
   const activeDoc = useAtomValue(activeDocAtom);
   const editorStore = useAtomValue(editorStoreAtom);
+  const providerId = useAtomValue(selectedProviderIdAtom);
+  const selectedModel = useAtomValue(selectedModelAtom);
+  const apiKeys = useAtomValue(apiKeysAtom);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -140,7 +149,13 @@ export function AIPanel() {
     }
 
     try {
-      const reply = await sendChatMessage(trimmed, docContext);
+      const reply = await sendChatMessage(
+        trimmed,
+        docContext,
+        providerId,
+        selectedModel,
+        apiKeys[providerId],
+      );
       const assistantMessage: ChatMessage = {
         id: genId("msg"),
         role: "assistant",
@@ -161,7 +176,7 @@ export function AIPanel() {
     } finally {
       setLoading(false);
     }
-  }, [input, loading, activeDoc, editorStore, setMessages]);
+  }, [input, loading, activeDoc, editorStore, setMessages, providerId, selectedModel, apiKeys]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -202,6 +217,8 @@ export function AIPanel() {
         <span style={{ color: "var(--celerex-text-secondary)", fontWeight: 400 }}>
           Co-Pilot
         </span>
+        <span style={{ flex: 1 }} />
+        <AIProviderSelector />
       </div>
 
       {/* Messages Area */}
