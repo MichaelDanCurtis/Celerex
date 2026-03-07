@@ -6,10 +6,14 @@ import {
   updateCustomTool,
   deleteCustomTool,
   TOOL_CATEGORIES,
+  EXECUTION_TYPES,
   type ToolDef,
   type ToolCategoryId,
   type ToolParameter,
+  type ExecutionConfig,
+  type ExecutionType,
 } from "../data/tools";
+import { getAllAgents } from "../data/agents";
 
 export function ToolsManager() {
   const [search, setSearch] = useState("");
@@ -375,6 +379,9 @@ export function ToolsManager() {
               </div>
             )}
 
+            {/* Execution Config */}
+            <ExecutionDisplay execution={selectedTool.execution} />
+
             <div style={{ display: "flex", gap: 8 }}>
               {selectedTool.isCustom && (
                 <>
@@ -602,6 +609,8 @@ function ToolEditorDialog({
   const [description, setDescription] = useState(tool?.description ?? "");
   const [category, setCategory] = useState<ToolCategoryId>(tool?.category ?? "code");
   const [parameters, setParameters] = useState<ToolParameter[]>(tool?.parameters ?? []);
+  const [execType, setExecType] = useState<ExecutionType | "none">(tool?.execution?.type ?? "none");
+  const [execConfig, setExecConfig] = useState<ExecutionConfig | undefined>(tool?.execution);
 
   const handleAddParam = () => {
     setParameters((prev) => [
@@ -628,6 +637,7 @@ function ToolEditorDialog({
       description,
       category,
       parameters,
+      execution: execType !== "none" ? execConfig : undefined,
       isCustom: true,
     });
   };
@@ -789,6 +799,84 @@ function ToolEditorDialog({
           </div>
         ))}
 
+        {/* Execution Backend */}
+        <div style={{ marginTop: 20, marginBottom: 4 }}>
+          <label style={{ ...labelStyle, margin: 0, marginBottom: 8, fontSize: 14, fontWeight: 700, color: "var(--celerex-text-primary)" }}>
+            Execution Backend
+          </label>
+          <p style={{ margin: "0 0 10px", fontSize: 12, color: "var(--celerex-text-secondary)" }}>
+            How should this tool run? Choose an execution type to connect it to a real backend.
+          </p>
+
+          {/* Type selector cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 12 }}>
+            <button
+              onClick={() => { setExecType("none"); setExecConfig(undefined); }}
+              style={{
+                padding: "8px 10px",
+                borderRadius: 8,
+                border: execType === "none" ? "2px solid var(--celerex-accent)" : "1px solid var(--celerex-border)",
+                background: execType === "none" ? "var(--celerex-accent)" + "15" : "var(--celerex-bg-primary)",
+                color: "var(--celerex-text-primary)",
+                fontSize: 12,
+                fontWeight: 500,
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
+              <div style={{ fontWeight: 600 }}>None (metadata only)</div>
+            </button>
+            {EXECUTION_TYPES.map((et) => (
+              <button
+                key={et.id}
+                onClick={() => {
+                  setExecType(et.id);
+                  if (!execConfig || execConfig.type !== et.id) {
+                    const base: ExecutionConfig = { type: et.id };
+                    if (et.id === "mcp") base.mcp = { serverUrl: "", transport: "stdio", command: "", toolName: "" };
+                    if (et.id === "http") base.http = { url: "", method: "POST", authType: "none" };
+                    if (et.id === "agent") base.agent = { agentId: "" };
+                    if (et.id === "script") base.script = { command: "" };
+                    if (et.id === "sandbox") base.sandbox = { image: "", command: "" };
+                    setExecConfig(base);
+                  }
+                }}
+                style={{
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  border: execType === et.id ? "2px solid var(--celerex-accent)" : "1px solid var(--celerex-border)",
+                  background: execType === et.id ? "var(--celerex-accent)" + "15" : "var(--celerex-bg-primary)",
+                  color: "var(--celerex-text-primary)",
+                  fontSize: 12,
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+              >
+                <div style={{ fontWeight: 600 }}>{et.icon} {et.label}</div>
+                <div style={{ fontSize: 10, color: "var(--celerex-text-secondary)", marginTop: 2 }}>{et.description}</div>
+              </button>
+            ))}
+          </div>
+
+          {/* Type-specific config forms */}
+          {execType === "mcp" && execConfig?.mcp && (
+            <McpConfigEditor config={execConfig.mcp} onChange={(mcp) => setExecConfig({ ...execConfig, mcp })} />
+          )}
+          {execType === "http" && execConfig?.http && (
+            <HttpConfigEditor config={execConfig.http} onChange={(http) => setExecConfig({ ...execConfig, http })} />
+          )}
+          {execType === "agent" && execConfig?.agent && (
+            <AgentConfigEditor config={execConfig.agent} onChange={(agent) => setExecConfig({ ...execConfig, agent })} />
+          )}
+          {execType === "script" && execConfig?.script && (
+            <ScriptConfigEditor config={execConfig.script} onChange={(script) => setExecConfig({ ...execConfig, script })} />
+          )}
+          {execType === "sandbox" && execConfig?.sandbox && (
+            <SandboxConfigEditor config={execConfig.sandbox} onChange={(sandbox) => setExecConfig({ ...execConfig, sandbox })} />
+          )}
+        </div>
+
         {/* Actions */}
         <div style={{ display: "flex", gap: 8, marginTop: 20, justifyContent: "flex-end" }}>
           {onDelete && tool && (
@@ -842,6 +930,399 @@ function ToolEditorDialog({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Execution Config Display (read-only, in detail panel)             */
+/* ------------------------------------------------------------------ */
+
+function ExecutionDisplay({ execution }: { execution?: ExecutionConfig }) {
+  if (!execution) {
+    return (
+      <div style={{ marginBottom: 12, padding: 12, borderRadius: 8, border: "1px dashed var(--celerex-border)", background: "var(--celerex-bg-primary)" }}>
+        <div style={{ fontSize: 12, color: "var(--celerex-text-secondary)", display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ opacity: 0.5 }}>{"⚡"}</span>
+          No execution backend configured — this tool is metadata only
+        </div>
+      </div>
+    );
+  }
+
+  const typeInfo = EXECUTION_TYPES.find((t) => t.id === execution.type);
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--celerex-text-primary)", marginBottom: 6 }}>
+        Execution Backend
+      </div>
+      <div style={{ padding: 12, borderRadius: 8, border: "1px solid var(--celerex-border)", background: "var(--celerex-bg-primary)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <span style={{ fontSize: 16 }}>{typeInfo?.icon ?? "⚡"}</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--celerex-text-primary)" }}>{typeInfo?.label ?? execution.type}</span>
+          <span style={{ fontSize: 11, color: "var(--celerex-text-secondary)" }}>{typeInfo?.description}</span>
+        </div>
+
+        {execution.type === "mcp" && execution.mcp && (
+          <div style={{ display: "grid", gap: 4, fontSize: 12 }}>
+            <KV label="Transport" value={execution.mcp.transport} />
+            {execution.mcp.serverUrl && <KV label="Server URL" value={execution.mcp.serverUrl} />}
+            {execution.mcp.command && <KV label="Command" value={`${execution.mcp.command} ${(execution.mcp.args ?? []).join(" ")}`} />}
+            {execution.mcp.toolName && <KV label="MCP Tool Name" value={execution.mcp.toolName} />}
+            {execution.mcp.env && Object.keys(execution.mcp.env).length > 0 && (
+              <KV label="Env Vars" value={Object.keys(execution.mcp.env).join(", ")} />
+            )}
+          </div>
+        )}
+
+        {execution.type === "http" && execution.http && (
+          <div style={{ display: "grid", gap: 4, fontSize: 12 }}>
+            <KV label="Method" value={execution.http.method} />
+            <KV label="URL" value={execution.http.url} />
+            {execution.http.authType && execution.http.authType !== "none" && (
+              <KV label="Auth" value={execution.http.authType} />
+            )}
+            {execution.http.bodyTemplate && <KV label="Body Template" value={execution.http.bodyTemplate} mono />}
+          </div>
+        )}
+
+        {execution.type === "agent" && execution.agent && (
+          <div style={{ display: "grid", gap: 4, fontSize: 12 }}>
+            <KV label="Target Agent" value={execution.agent.agentId} />
+            {execution.agent.inputMapping && Object.keys(execution.agent.inputMapping).length > 0 && (
+              <KV label="Input Mapping" value={JSON.stringify(execution.agent.inputMapping)} mono />
+            )}
+          </div>
+        )}
+
+        {execution.type === "script" && execution.script && (
+          <div style={{ display: "grid", gap: 4, fontSize: 12 }}>
+            <KV label="Command" value={`${execution.script.command} ${(execution.script.args ?? []).join(" ")}`} />
+            {execution.script.cwd && <KV label="Working Dir" value={execution.script.cwd} />}
+            {execution.script.timeout && <KV label="Timeout" value={`${execution.script.timeout}s`} />}
+          </div>
+        )}
+
+        {execution.type === "sandbox" && execution.sandbox && (
+          <div style={{ display: "grid", gap: 4, fontSize: 12 }}>
+            <KV label="Image" value={execution.sandbox.image} />
+            <KV label="Command" value={execution.sandbox.command} />
+            {execution.sandbox.timeout && <KV label="Timeout" value={`${execution.sandbox.timeout}s`} />}
+            {execution.sandbox.mounts && execution.sandbox.mounts.length > 0 && (
+              <KV label="Mounts" value={execution.sandbox.mounts.join(", ")} />
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Execution Config Editors                                          */
+/* ------------------------------------------------------------------ */
+
+function ConfigSection({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ padding: 12, borderRadius: 8, border: "1px solid var(--celerex-border)", background: "var(--celerex-bg-primary)", display: "grid", gap: 8 }}>
+      {children}
+    </div>
+  );
+}
+
+function ConfigField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--celerex-text-secondary)", marginBottom: 3 }}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+const cfgInputStyle: React.CSSProperties = {
+  display: "block",
+  width: "100%",
+  boxSizing: "border-box",
+  padding: "6px 8px",
+  borderRadius: 5,
+  border: "1px solid var(--celerex-border)",
+  background: "var(--celerex-bg-secondary)",
+  color: "var(--celerex-text-primary)",
+  fontSize: 12,
+  fontFamily: "monospace",
+  outline: "none",
+};
+
+function McpConfigEditor({ config, onChange }: { config: NonNullable<import("../data/tools").McpConfig>; onChange: (c: typeof config) => void }) {
+  return (
+    <ConfigSection>
+      <ConfigField label="Transport">
+        <select value={config.transport} onChange={(e) => onChange({ ...config, transport: e.target.value as any })} style={cfgInputStyle}>
+          <option value="stdio">stdio (local process)</option>
+          <option value="sse">SSE (Server-Sent Events)</option>
+          <option value="streamable-http">Streamable HTTP</option>
+        </select>
+      </ConfigField>
+
+      {config.transport === "stdio" ? (
+        <>
+          <ConfigField label="Command">
+            <input value={config.command ?? ""} onChange={(e) => onChange({ ...config, command: e.target.value })} placeholder="e.g., npx -y @anthropic/mcp-news-server" style={cfgInputStyle} />
+          </ConfigField>
+          <ConfigField label="Arguments (one per line)">
+            <textarea value={(config.args ?? []).join("\n")} onChange={(e) => onChange({ ...config, args: e.target.value.split("\n").filter(Boolean) })} placeholder="--port 3001" rows={2} style={{ ...cfgInputStyle, resize: "vertical" }} />
+          </ConfigField>
+        </>
+      ) : (
+        <ConfigField label="Server URL">
+          <input value={config.serverUrl} onChange={(e) => onChange({ ...config, serverUrl: e.target.value })} placeholder="e.g., http://localhost:3001/mcp" style={cfgInputStyle} />
+        </ConfigField>
+      )}
+
+      <ConfigField label="MCP Tool Name (the tool name on the server)">
+        <input value={config.toolName ?? ""} onChange={(e) => onChange({ ...config, toolName: e.target.value })} placeholder="e.g., fetch_news" style={cfgInputStyle} />
+      </ConfigField>
+
+      <ConfigField label="Environment Variables (KEY=VALUE, one per line)">
+        <textarea
+          value={Object.entries(config.env ?? {}).map(([k, v]) => `${k}=${v}`).join("\n")}
+          onChange={(e) => {
+            const env: Record<string, string> = {};
+            e.target.value.split("\n").filter(Boolean).forEach((line) => {
+              const eq = line.indexOf("=");
+              if (eq > 0) env[line.slice(0, eq)] = line.slice(eq + 1);
+            });
+            onChange({ ...config, env });
+          }}
+          placeholder="API_KEY=sk-..."
+          rows={2}
+          style={{ ...cfgInputStyle, resize: "vertical" }}
+        />
+      </ConfigField>
+    </ConfigSection>
+  );
+}
+
+function HttpConfigEditor({ config, onChange }: { config: NonNullable<import("../data/tools").HttpConfig>; onChange: (c: typeof config) => void }) {
+  return (
+    <ConfigSection>
+      <div style={{ display: "flex", gap: 8 }}>
+        <ConfigField label="Method">
+          <select value={config.method} onChange={(e) => onChange({ ...config, method: e.target.value as any })} style={{ ...cfgInputStyle, width: 100 }}>
+            {["GET", "POST", "PUT", "PATCH", "DELETE"].map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </ConfigField>
+        <div style={{ flex: 1 }}>
+          <ConfigField label="URL">
+            <input value={config.url} onChange={(e) => onChange({ ...config, url: e.target.value })} placeholder="https://api.example.com/v1/news" style={cfgInputStyle} />
+          </ConfigField>
+        </div>
+      </div>
+
+      <ConfigField label="Authentication">
+        <div style={{ display: "flex", gap: 8 }}>
+          <select value={config.authType ?? "none"} onChange={(e) => onChange({ ...config, authType: e.target.value as any })} style={{ ...cfgInputStyle, width: 130 }}>
+            <option value="none">None</option>
+            <option value="bearer">Bearer Token</option>
+            <option value="api-key">API Key</option>
+            <option value="basic">Basic Auth</option>
+          </select>
+          {config.authType && config.authType !== "none" && (
+            <input
+              type="password"
+              value={config.authValue ?? ""}
+              onChange={(e) => onChange({ ...config, authValue: e.target.value })}
+              placeholder={config.authType === "bearer" ? "Token..." : config.authType === "api-key" ? "API key..." : "user:pass"}
+              style={{ ...cfgInputStyle, flex: 1 }}
+            />
+          )}
+        </div>
+        {config.authType === "api-key" && (
+          <input value={config.authHeader ?? ""} onChange={(e) => onChange({ ...config, authHeader: e.target.value })} placeholder="Header name (default: X-API-Key)" style={{ ...cfgInputStyle, marginTop: 4 }} />
+        )}
+      </ConfigField>
+
+      <ConfigField label="Headers (KEY: VALUE, one per line)">
+        <textarea
+          value={Object.entries(config.headers ?? {}).map(([k, v]) => `${k}: ${v}`).join("\n")}
+          onChange={(e) => {
+            const headers: Record<string, string> = {};
+            e.target.value.split("\n").filter(Boolean).forEach((line) => {
+              const colon = line.indexOf(":");
+              if (colon > 0) headers[line.slice(0, colon).trim()] = line.slice(colon + 1).trim();
+            });
+            onChange({ ...config, headers });
+          }}
+          placeholder="Content-Type: application/json"
+          rows={2}
+          style={{ ...cfgInputStyle, resize: "vertical" }}
+        />
+      </ConfigField>
+
+      <ConfigField label="Body Template (JSON — use {{paramName}} for interpolation)">
+        <textarea
+          value={config.bodyTemplate ?? ""}
+          onChange={(e) => onChange({ ...config, bodyTemplate: e.target.value })}
+          placeholder={'{\n  "query": "{{query}}",\n  "limit": {{limit}}\n}'}
+          rows={4}
+          style={{ ...cfgInputStyle, resize: "vertical" }}
+        />
+      </ConfigField>
+    </ConfigSection>
+  );
+}
+
+function AgentConfigEditor({ config, onChange }: { config: NonNullable<import("../data/tools").AgentConfig>; onChange: (c: typeof config) => void }) {
+  const agents = getAllAgents();
+  const [agentSearch, setAgentSearch] = useState("");
+  const filteredAgents = agentSearch
+    ? agents.filter((a) => a.name.toLowerCase().includes(agentSearch.toLowerCase()) || a.id.includes(agentSearch.toLowerCase())).slice(0, 20)
+    : [];
+
+  const selectedAgent = agents.find((a) => a.id === config.agentId);
+
+  return (
+    <ConfigSection>
+      <ConfigField label="Target Agent">
+        {selectedAgent ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 5, background: "var(--celerex-bg-secondary)", border: "1px solid var(--celerex-border)" }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--celerex-text-primary)" }}>{selectedAgent.name}</span>
+            <span style={{ fontSize: 10, color: "var(--celerex-text-secondary)" }}>{selectedAgent.id}</span>
+            <button onClick={() => onChange({ ...config, agentId: "" })} style={{ marginLeft: "auto", background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 14 }}>{"×"}</button>
+          </div>
+        ) : (
+          <div>
+            <input value={agentSearch} onChange={(e) => setAgentSearch(e.target.value)} placeholder="Search agents..." style={cfgInputStyle} />
+            {filteredAgents.length > 0 && (
+              <div style={{ maxHeight: 150, overflow: "auto", border: "1px solid var(--celerex-border)", borderRadius: 5, marginTop: 4 }}>
+                {filteredAgents.map((a) => (
+                  <div key={a.id} onClick={() => { onChange({ ...config, agentId: a.id }); setAgentSearch(""); }} style={{ padding: "6px 8px", cursor: "pointer", fontSize: 12, borderBottom: "1px solid var(--celerex-border)" }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--celerex-bg-secondary)"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                  >
+                    <div style={{ fontWeight: 600, color: "var(--celerex-text-primary)" }}>{a.name}</div>
+                    <div style={{ fontSize: 10, color: "var(--celerex-text-secondary)" }}>{a.category} · {a.id}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </ConfigField>
+
+      <ConfigField label="Input Mapping (tool param → agent input, JSON)">
+        <textarea
+          value={config.inputMapping ? JSON.stringify(config.inputMapping, null, 2) : ""}
+          onChange={(e) => {
+            try {
+              const mapping = e.target.value.trim() ? JSON.parse(e.target.value) : undefined;
+              onChange({ ...config, inputMapping: mapping });
+            } catch { /* ignore parse errors while typing */ }
+          }}
+          placeholder={'{\n  "query": "input_text"\n}'}
+          rows={3}
+          style={{ ...cfgInputStyle, resize: "vertical" }}
+        />
+      </ConfigField>
+    </ConfigSection>
+  );
+}
+
+function ScriptConfigEditor({ config, onChange }: { config: NonNullable<import("../data/tools").ScriptConfig>; onChange: (c: typeof config) => void }) {
+  return (
+    <ConfigSection>
+      <ConfigField label="Command">
+        <input value={config.command} onChange={(e) => onChange({ ...config, command: e.target.value })} placeholder="e.g., python3 scripts/fetch_news.py" style={cfgInputStyle} />
+      </ConfigField>
+
+      <ConfigField label="Arguments (one per line)">
+        <textarea value={(config.args ?? []).join("\n")} onChange={(e) => onChange({ ...config, args: e.target.value.split("\n").filter(Boolean) })} placeholder="--format json" rows={2} style={{ ...cfgInputStyle, resize: "vertical" }} />
+      </ConfigField>
+
+      <ConfigField label="Working Directory">
+        <input value={config.cwd ?? ""} onChange={(e) => onChange({ ...config, cwd: e.target.value || undefined })} placeholder="/path/to/project" style={cfgInputStyle} />
+      </ConfigField>
+
+      <ConfigField label="Timeout (seconds)">
+        <input type="number" value={config.timeout ?? ""} onChange={(e) => onChange({ ...config, timeout: e.target.value ? Number(e.target.value) : undefined })} placeholder="30" style={{ ...cfgInputStyle, width: 120 }} />
+      </ConfigField>
+
+      <ConfigField label="Environment Variables (KEY=VALUE, one per line)">
+        <textarea
+          value={Object.entries(config.env ?? {}).map(([k, v]) => `${k}=${v}`).join("\n")}
+          onChange={(e) => {
+            const env: Record<string, string> = {};
+            e.target.value.split("\n").filter(Boolean).forEach((line) => {
+              const eq = line.indexOf("=");
+              if (eq > 0) env[line.slice(0, eq)] = line.slice(eq + 1);
+            });
+            onChange({ ...config, env: Object.keys(env).length > 0 ? env : undefined });
+          }}
+          placeholder="API_KEY=sk-..."
+          rows={2}
+          style={{ ...cfgInputStyle, resize: "vertical" }}
+        />
+      </ConfigField>
+    </ConfigSection>
+  );
+}
+
+function SandboxConfigEditor({ config, onChange }: { config: NonNullable<import("../data/tools").SandboxConfig>; onChange: (c: typeof config) => void }) {
+  return (
+    <ConfigSection>
+      <ConfigField label="Docker Image">
+        <input value={config.image} onChange={(e) => onChange({ ...config, image: e.target.value })} placeholder="e.g., python:3.12-slim" style={cfgInputStyle} />
+      </ConfigField>
+
+      <ConfigField label="Command">
+        <input value={config.command} onChange={(e) => onChange({ ...config, command: e.target.value })} placeholder="e.g., python /app/run.py" style={cfgInputStyle} />
+      </ConfigField>
+
+      <ConfigField label="Timeout (seconds)">
+        <input type="number" value={config.timeout ?? ""} onChange={(e) => onChange({ ...config, timeout: e.target.value ? Number(e.target.value) : undefined })} placeholder="60" style={{ ...cfgInputStyle, width: 120 }} />
+      </ConfigField>
+
+      <ConfigField label="Volume Mounts (one per line, host:container)">
+        <textarea
+          value={(config.mounts ?? []).join("\n")}
+          onChange={(e) => onChange({ ...config, mounts: e.target.value.split("\n").filter(Boolean) })}
+          placeholder="./data:/app/data"
+          rows={2}
+          style={{ ...cfgInputStyle, resize: "vertical" }}
+        />
+      </ConfigField>
+
+      <ConfigField label="Environment Variables (KEY=VALUE, one per line)">
+        <textarea
+          value={Object.entries(config.env ?? {}).map(([k, v]) => `${k}=${v}`).join("\n")}
+          onChange={(e) => {
+            const env: Record<string, string> = {};
+            e.target.value.split("\n").filter(Boolean).forEach((line) => {
+              const eq = line.indexOf("=");
+              if (eq > 0) env[line.slice(0, eq)] = line.slice(eq + 1);
+            });
+            onChange({ ...config, env: Object.keys(env).length > 0 ? env : undefined });
+          }}
+          placeholder="API_KEY=sk-..."
+          rows={2}
+          style={{ ...cfgInputStyle, resize: "vertical" }}
+        />
+      </ConfigField>
+    </ConfigSection>
+  );
+}
+
+function KV({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div style={{ display: "flex", gap: 8 }}>
+      <span style={{ color: "var(--celerex-text-secondary)", minWidth: 100, flexShrink: 0 }}>{label}:</span>
+      <span style={{
+        color: "var(--celerex-text-primary)",
+        fontFamily: mono ? "monospace" : "inherit",
+        fontSize: mono ? 11 : 12,
+        wordBreak: "break-all",
+      }}>{value}</span>
     </div>
   );
 }

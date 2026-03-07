@@ -10,12 +10,91 @@ export interface ToolParameter {
   enum?: string[];
 }
 
+/* ------------------------------------------------------------------ */
+/*  Execution Configuration                                           */
+/* ------------------------------------------------------------------ */
+
+export type ExecutionType = "mcp" | "http" | "agent" | "script" | "sandbox";
+
+export interface McpConfig {
+  /** Server URL for SSE/streamable-http transport, or display-only for stdio */
+  serverUrl: string;
+  transport: "stdio" | "sse" | "streamable-http";
+  /** Command to launch (stdio transport) */
+  command?: string;
+  /** Command arguments (stdio transport) */
+  args?: string[];
+  /** Environment variables to pass */
+  env?: Record<string, string>;
+  /** The tool name exposed by the MCP server (may differ from Celerex tool ID) */
+  toolName?: string;
+}
+
+export interface HttpConfig {
+  url: string;
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  /** Static headers to include */
+  headers?: Record<string, string>;
+  /** JSON body template — use {{paramName}} for parameter interpolation */
+  bodyTemplate?: string;
+  authType?: "none" | "bearer" | "api-key" | "basic";
+  /** Token, API key, or base64 credentials */
+  authValue?: string;
+  /** Header name for api-key auth (default: X-API-Key) */
+  authHeader?: string;
+}
+
+export interface AgentConfig {
+  /** Target agent ID for agent-to-agent invocation */
+  agentId: string;
+  /** Map tool parameter names to the agent's expected input fields */
+  inputMapping?: Record<string, string>;
+}
+
+export interface ScriptConfig {
+  command: string;
+  args?: string[];
+  cwd?: string;
+  env?: Record<string, string>;
+  /** Timeout in seconds */
+  timeout?: number;
+}
+
+export interface SandboxConfig {
+  image: string;
+  command: string;
+  env?: Record<string, string>;
+  /** Timeout in seconds */
+  timeout?: number;
+  /** Mount paths from host */
+  mounts?: string[];
+}
+
+export interface ExecutionConfig {
+  type: ExecutionType;
+  mcp?: McpConfig;
+  http?: HttpConfig;
+  agent?: AgentConfig;
+  script?: ScriptConfig;
+  sandbox?: SandboxConfig;
+}
+
+export const EXECUTION_TYPES: { id: ExecutionType; label: string; description: string; icon: string }[] = [
+  { id: "mcp", label: "MCP Server", description: "Connect to a Model Context Protocol server", icon: "🔌" },
+  { id: "http", label: "HTTP API", description: "Call a REST API endpoint", icon: "🌐" },
+  { id: "agent", label: "Agent (A2A)", description: "Invoke another Celerex agent", icon: "🤖" },
+  { id: "script", label: "Local Script", description: "Run a local command or script", icon: "⚙️" },
+  { id: "sandbox", label: "Sandbox (Docker)", description: "Run in an isolated container", icon: "📦" },
+];
+
 export interface ToolDef {
   id: string;
   name: string;
   description: string;
   category: "document" | "code" | "infrastructure" | "data" | "web" | "ai" | "communication" | "filesystem" | "search" | "media";
   parameters: ToolParameter[];
+  /** How this tool is executed at runtime */
+  execution?: ExecutionConfig;
   /** Whether this is a user-created custom tool */
   isCustom?: boolean;
 }
