@@ -7,6 +7,7 @@ import {
   genId,
   type Engagement,
 } from "../state/atoms";
+import { addToastAtom } from "../state/toastAtom";
 
 export function Sidebar({
   collapsed,
@@ -18,6 +19,7 @@ export function Sidebar({
   const [engagements, setEngagements] = useAtom(engagementsAtom);
   const [activeDocId, setActiveDocId] = useAtom(activeDocIdAtom);
   const openDoc = useSetAtom(openDocAtom);
+  const addToast = useSetAtom(addToastAtom);
   const [creatingEngagement, setCreatingEngagement] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -30,6 +32,7 @@ export function Sidebar({
     };
     setEngagements((prev) => [...prev, eng]);
     setCreatingEngagement(false);
+    addToast({ message: "Engagement created", type: "success" });
   }
 
   function handleCreateDoc(engagementId: string, title: string) {
@@ -86,6 +89,7 @@ export function Sidebar({
       const allDocs = engagements.flatMap((e) => e.docs).filter((d) => d.id !== docId);
       setActiveDocId(allDocs[0]?.id ?? "");
     }
+    addToast({ message: "Document deleted", type: "info" });
   }
 
   function handleDeleteEngagement(engId: string) {

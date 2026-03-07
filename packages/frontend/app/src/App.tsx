@@ -6,14 +6,18 @@ import { AIPanel } from "./layout/AIPanel";
 import { themeAtom, engagementsAtom, activeDocIdAtom, genId, editorStoreAtom, openDocAtom } from "./state/atoms";
 import { exportDocAsMarkdown } from "./utils/export";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
+import { CommandPalette } from "./layout/CommandPalette";
 import { useApiSync } from "./hooks/useApiSync";
 import { useDocRouter } from "./hooks/useDocRouter";
 import { usePersistence } from "./hooks/usePersistence";
+import { ToastContainer } from "./layout/ToastContainer";
 
 export function App() {
   const [mode, setMode] = useState<"page" | "edgeless">("page");
   const [aiPanelOpen, setAiPanelOpen] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const editorStore = useAtomValue(editorStoreAtom);
   const [theme, setTheme] = useAtom(themeAtom);
   const [engagements, setEngagements] = useAtom(engagementsAtom);
   const [, setActiveDocId] = useAtom(activeDocIdAtom);
@@ -66,6 +70,36 @@ export function App() {
     setSidebarCollapsed((prev) => !prev);
   }, []);
 
+  const handleCommandPalette = useCallback(() => {
+    setCommandPaletteOpen((prev) => !prev);
+  }, []);
+
+  const handlePaletteAction = useCallback(
+    (action: string, payload?: any) => {
+      switch (action) {
+        case "new-doc":
+          handleNewDoc();
+          break;
+        case "toggle-theme":
+          handleToggleTheme();
+          break;
+        case "toggle-ai":
+          handleToggleAI();
+          break;
+        case "toggle-sidebar":
+          handleToggleSidebar();
+          break;
+        case "export-markdown":
+          if (editorStore) exportDocAsMarkdown(editorStore);
+          break;
+        case "open-doc":
+          if (payload) openDoc(payload);
+          break;
+      }
+    },
+    [handleNewDoc, handleToggleTheme, handleToggleAI, handleToggleSidebar, editorStore, openDoc]
+  );
+
   useDocRouter();
 
   useKeyboardShortcuts({
@@ -73,6 +107,7 @@ export function App() {
     onToggleAI: handleToggleAI,
     onToggleTheme: handleToggleTheme,
     onToggleSidebar: handleToggleSidebar,
+    onCommandPalette: handleCommandPalette,
   });
 
   return (
@@ -101,6 +136,12 @@ export function App() {
           {aiPanelOpen && <AIPanel />}
         </div>
       </main>
+      <ToastContainer />
+      <CommandPalette
+        open={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        onAction={handlePaletteAction}
+      />
     </div>
   );
 }

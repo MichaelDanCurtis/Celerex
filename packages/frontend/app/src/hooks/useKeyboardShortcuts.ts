@@ -5,6 +5,7 @@ export interface KeyboardShortcutCallbacks {
   onToggleAI?: () => void;
   onToggleTheme?: () => void;
   onToggleSidebar?: () => void;
+  onCommandPalette?: () => void;
 }
 
 export function useKeyboardShortcuts(callbacks: KeyboardShortcutCallbacks) {
@@ -30,6 +31,13 @@ export function useKeyboardShortcuts(callbacks: KeyboardShortcutCallbacks) {
       if (mod && e.key === "b" && !e.shiftKey) {
         e.preventDefault();
         callbacks.onToggleSidebar?.();
+        return;
+      }
+
+      // Cmd/Ctrl+K — command palette
+      if (mod && e.key === "k" && !e.shiftKey) {
+        e.preventDefault();
+        callbacks.onCommandPalette?.();
         return;
       }
 

@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::env;
 use std::sync::{Arc, Mutex};
+use axum::http::{HeaderValue, Method};
 use tower_http::cors::CorsLayer;
 use uuid::Uuid;
 
@@ -107,7 +108,21 @@ async fn main() -> anyhow::Result<()> {
         // Chat proxy
         .route("/api/chat", post(chat_handler))
         .with_state(state)
-        .layer(CorsLayer::permissive());
+        .layer(
+            CorsLayer::new()
+                .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
+                .allow_methods([
+                    Method::GET,
+                    Method::POST,
+                    Method::PUT,
+                    Method::DELETE,
+                    Method::OPTIONS,
+                ])
+                .allow_headers([
+                    axum::http::header::CONTENT_TYPE,
+                    axum::http::header::AUTHORIZATION,
+                ]),
+        );
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3001").await?;
     tracing::info!("Celerex API listening on http://localhost:3001");
@@ -123,7 +138,6 @@ async fn main() -> anyhow::Result<()> {
 async fn health() -> Json<Value> {
     Json(json!({
         "status": "ok",
-        "service": "celerex-api",
         "version": "0.1.0"
     }))
 }
