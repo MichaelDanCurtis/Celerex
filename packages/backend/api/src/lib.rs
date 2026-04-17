@@ -20,5 +20,6 @@ pub fn build_app(pool: PgPool) -> Router {
         .route("/api/docs", post(docs::create))
         .route("/api/docs/{id}/blocks", post(docs::append_block))
         .route("/api/docs/{doc_id}/blocks/{block_id}", patch(docs::replace_block))
+        .route("/api/plugins", get(plugins::routes::list).post(plugins::routes::install))
         .with_state(AppState { pool })
 }

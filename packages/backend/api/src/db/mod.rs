@@ -93,3 +93,31 @@ pub async fn replace_block(
         .bind(block_id).bind(payload).execute(pool).await?;
     Ok(r.rows_affected())
 }
+
+pub async fn install_plugin(
+    pool: &PgPool,
+    eng: Uuid,
+    plugin_id: &str,
+    manifest: &serde_json::Value,
+) -> sqlx::Result<Uuid> {
+    let row: (Uuid,) = sqlx::query_as(
+        "INSERT INTO plugin_installs (engagement_id, plugin_id, manifest) VALUES ($1, $2, $3) RETURNING id"
+    ).bind(eng).bind(plugin_id).bind(manifest).fetch_one(pool).await?;
+    Ok(row.0)
+}
+
+#[derive(sqlx::FromRow, Serialize, Clone)]
+pub struct PluginInstall {
+    pub id: Uuid,
+    pub engagement_id: Uuid,
+    pub plugin_id: String,
+    pub manifest: serde_json::Value,
+    pub installed_at: DateTime<Utc>,
+}
+
+pub async fn list_plugins(pool: &PgPool, eng: Uuid) -> sqlx::Result<Vec<PluginInstall>> {
+    sqlx::query_as::<_, PluginInstall>(
+        "SELECT id, engagement_id, plugin_id, manifest, installed_at FROM plugin_installs
+         WHERE engagement_id = $1 ORDER BY installed_at DESC"
+    ).bind(eng).fetch_all(pool).await
+}
