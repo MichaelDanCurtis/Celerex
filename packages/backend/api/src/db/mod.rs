@@ -49,3 +49,24 @@ pub async fn list_projects(pool: &PgPool, eng: Uuid) -> sqlx::Result<Vec<Project
          WHERE engagement_id = $1 ORDER BY created_at DESC"
     ).bind(eng).fetch_all(pool).await
 }
+
+#[derive(sqlx::FromRow, Serialize, Clone)]
+pub struct Document {
+    pub id: Uuid,
+    pub engagement_id: Uuid,
+    pub project_id: Option<Uuid>,
+    pub title: String,
+    pub created_at: DateTime<Utc>,
+}
+
+pub async fn create_document(
+    pool: &PgPool,
+    eng: Uuid,
+    proj: Option<Uuid>,
+    title: &str,
+) -> sqlx::Result<Document> {
+    sqlx::query_as::<_, Document>(
+        "INSERT INTO documents (engagement_id, project_id, title) VALUES ($1, $2, $3)
+         RETURNING id, engagement_id, project_id, title, created_at"
+    ).bind(eng).bind(proj).bind(title).fetch_one(pool).await
+}
