@@ -30,3 +30,16 @@ pub async fn append_block(
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     }
 }
+
+pub async fn replace_block(
+    _auth: AuthClaims,
+    State(s): State<AppState>,
+    Path((_doc, block)): Path<(Uuid, Uuid)>,
+    Json(payload): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    match db::replace_block(&s.pool, block, &payload).await {
+        Ok(0) => (StatusCode::NOT_FOUND, "block not found").into_response(),
+        Ok(_) => StatusCode::OK.into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
+}

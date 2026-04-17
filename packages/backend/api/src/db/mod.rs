@@ -83,3 +83,13 @@ pub async fn append_block(
     ).bind(doc).bind(payload).fetch_one(pool).await?;
     Ok(row.0)
 }
+
+pub async fn replace_block(
+    pool: &PgPool,
+    block_id: Uuid,
+    payload: &serde_json::Value,
+) -> sqlx::Result<u64> {
+    let r = sqlx::query("UPDATE doc_blocks SET payload = $2 WHERE id = $1")
+        .bind(block_id).bind(payload).execute(pool).await?;
+    Ok(r.rows_affected())
+}

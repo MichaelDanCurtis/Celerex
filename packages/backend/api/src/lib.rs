@@ -4,7 +4,7 @@ pub mod auth;
 pub mod projects;
 pub mod docs;
 
-use axum::{Router, routing::{get, post}, Json};
+use axum::{Router, routing::{get, patch, post}, Json};
 use serde_json::json;
 use sqlx::PgPool;
 
@@ -18,5 +18,6 @@ pub fn build_app(pool: PgPool) -> Router {
         .route("/api/projects", get(projects::list).post(projects::create))
         .route("/api/docs", post(docs::create))
         .route("/api/docs/{id}/blocks", post(docs::append_block))
+        .route("/api/docs/{doc_id}/blocks/{block_id}", patch(docs::replace_block))
         .with_state(AppState { pool })
 }

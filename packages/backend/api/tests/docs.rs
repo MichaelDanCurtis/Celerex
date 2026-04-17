@@ -69,3 +69,34 @@ async fn append_block_to_doc() {
         .bind(&doc_id).fetch_one(&db.pool).await.unwrap();
     assert_eq!(count, 1);
 }
+
+#[tokio::test]
+async fn patch_block_replaces_payload() {
+    let db = common::start_test_db().await;
+    let app = celerex_api::build_app(db.pool.clone());
+    let server = axum_test::TestServer::new(app).unwrap();
+
+    let eng: Uuid = sqlx::query_scalar("INSERT INTO engagements (name) VALUES ('E') RETURNING id")
+        .fetch_one(&db.pool).await.unwrap();
+    let proj: Uuid = sqlx::query_scalar("INSERT INTO projects (engagement_id, name) VALUES ($1, 'P') RETURNING id")
+        .bind(eng).fetch_one(&db.pool).await.unwrap();
+    let t = token(eng, proj);
+
+    let doc = server.post("/api/docs").add_header("authorization", format!("Bearer {t}"))
+        .json(&json!({ "title": "T" })).await.json::<serde_json::Value>();
+    let doc_id = doc["id"].as_str().unwrap().to_string();
+    let block = server.post(&format!("/api/docs/{doc_id}/blocks"))
+        .add_header("authorization", format!("Bearer {t}"))
+        .json(&json!({ "text": "old" })).await.json::<serde_json::Value>();
+    let block_id = block["id"].as_str().unwrap().to_string();
+
+    let resp = server.patch(&format!("/api/docs/{doc_id}/blocks/{block_id}"))
+        .add_header("authorization", format!("Bearer {t}"))
+        .json(&json!({ "text": "new" })).await;
+    resp.assert_status_ok();
+
+    let payload: serde_json::Value = sqlx::query_scalar(
+        "SELECT payload FROM doc_blocks WHERE id = $1::uuid"
+    ).bind(&block_id).fetch_one(&db.pool).await.unwrap();
+    assert_eq!(payload["text"], "new");
+}
