@@ -3,6 +3,7 @@ pub mod engagements;
 pub mod auth;
 pub mod projects;
 pub mod docs;
+pub mod plugins;
 
 use axum::{Router, routing::{get, patch, post}, Json};
 use serde_json::json;
