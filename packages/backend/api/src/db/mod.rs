@@ -70,3 +70,16 @@ pub async fn create_document(
          RETURNING id, engagement_id, project_id, title, created_at"
     ).bind(eng).bind(proj).bind(title).fetch_one(pool).await
 }
+
+pub async fn append_block(
+    pool: &PgPool,
+    doc: Uuid,
+    payload: &serde_json::Value,
+) -> sqlx::Result<Uuid> {
+    let row: (Uuid,) = sqlx::query_as(
+        "INSERT INTO doc_blocks (document_id, position, payload)
+         VALUES ($1, COALESCE((SELECT MAX(position) + 1 FROM doc_blocks WHERE document_id = $1), 0), $2)
+         RETURNING id"
+    ).bind(doc).bind(payload).fetch_one(pool).await?;
+    Ok(row.0)
+}

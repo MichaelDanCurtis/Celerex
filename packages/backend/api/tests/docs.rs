@@ -41,3 +41,31 @@ async fn create_doc_persists_under_project() {
     assert_eq!(body["project_id"], proj.to_string());
     assert_eq!(body["engagement_id"], eng.to_string());
 }
+
+#[tokio::test]
+async fn append_block_to_doc() {
+    let db = common::start_test_db().await;
+    let app = celerex_api::build_app(db.pool.clone());
+    let server = axum_test::TestServer::new(app).unwrap();
+
+    let eng: Uuid = sqlx::query_scalar("INSERT INTO engagements (name) VALUES ('E') RETURNING id")
+        .fetch_one(&db.pool).await.unwrap();
+    let proj: Uuid = sqlx::query_scalar("INSERT INTO projects (engagement_id, name) VALUES ($1, 'P') RETURNING id")
+        .bind(eng).fetch_one(&db.pool).await.unwrap();
+    let t = token(eng, proj);
+
+    let create = server.post("/api/docs")
+        .add_header("authorization", format!("Bearer {t}"))
+        .json(&json!({ "title": "T" })).await;
+    let doc_id = create.json::<serde_json::Value>()["id"].as_str().unwrap().to_string();
+
+    let resp = server.post(&format!("/api/docs/{doc_id}/blocks"))
+        .add_header("authorization", format!("Bearer {t}"))
+        .json(&json!({ "type": "paragraph", "text": "hello" }))
+        .await;
+    resp.assert_status(axum::http::StatusCode::CREATED);
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM doc_blocks WHERE document_id = $1::uuid")
+        .bind(&doc_id).fetch_one(&db.pool).await.unwrap();
+    assert_eq!(count, 1);
+}

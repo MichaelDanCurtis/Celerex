@@ -17,5 +17,6 @@ pub fn build_app(pool: PgPool) -> Router {
         .route("/api/engagements", get(engagements::list).post(engagements::create))
         .route("/api/projects", get(projects::list).post(projects::create))
         .route("/api/docs", post(docs::create))
+        .route("/api/docs/{id}/blocks", post(docs::append_block))
         .with_state(AppState { pool })
 }
