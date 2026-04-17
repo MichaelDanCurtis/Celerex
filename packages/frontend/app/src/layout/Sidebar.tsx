@@ -9,6 +9,9 @@ import {
   toggleFavoriteAtom,
   recentDocIdsAtom,
   trackRecentDocAtom,
+  projectsAtom,
+  activeProjectIdAtom,
+  engagementsForActiveProjectAtom,
   genId,
   type Engagement,
 } from "../state/atoms";
@@ -23,6 +26,9 @@ export function Sidebar({
   onToggleCollapse: () => void;
 }) {
   const [engagements, setEngagements] = useAtom(engagementsAtom);
+  const projects = useAtomValue(projectsAtom);
+  const [activeProjectId, setActiveProjectId] = useAtom(activeProjectIdAtom);
+  const visibleEngagements = useAtomValue(engagementsForActiveProjectAtom);
   const [activeDocId, setActiveDocId] = useAtom(activeDocIdAtom);
   const openDoc = useSetAtom(openDocAtom);
   const [activeView, setActiveView] = useAtom(activeViewAtom);
@@ -273,8 +279,27 @@ export function Sidebar({
               ))}
             </SidebarSection>
           )}
+          <SidebarSection title="Projects">
+            <SidebarItem
+              label="All workspaces"
+              active={activeProjectId === null}
+              onClick={() => setActiveProjectId(null)}
+            />
+            {projects.map((p) => (
+              <SidebarItem
+                key={p.id}
+                label={p.name}
+                active={activeProjectId === p.id}
+                onClick={() => setActiveProjectId(p.id)}
+              />
+            ))}
+            {projects.length === 0 && (
+              <SidebarItem label="(no projects yet)" muted onClick={() => {}} />
+            )}
+          </SidebarSection>
+
           <SidebarSection title="Workspaces">
-            {engagements
+            {visibleEngagements
               .filter((eng) => {
                 if (!searchQuery.trim()) return true;
                 const q = searchQuery.trim().toLowerCase();
