@@ -8,6 +8,8 @@ pub struct TestDb {
 }
 
 pub async fn start_test_db() -> TestDb {
+    // SAFETY: tests run in a single process; set before any route handler reads env.
+    unsafe { std::env::set_var("CELEREX_CRED_KEY", "0123456789abcdef0123456789abcdef"); }
     let container = Postgres::default().start().await.expect("postgres");
     let port = container.get_host_port_ipv4(5432).await.expect("port");
     let url = format!("postgres://postgres:postgres@127.0.0.1:{port}/postgres");

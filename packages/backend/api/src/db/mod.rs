@@ -121,3 +121,21 @@ pub async fn list_plugins(pool: &PgPool, eng: Uuid) -> sqlx::Result<Vec<PluginIn
          WHERE engagement_id = $1 ORDER BY installed_at DESC"
     ).bind(eng).fetch_all(pool).await
 }
+
+pub async fn upsert_credentials(
+    pool: &PgPool,
+    install: Uuid,
+    direction: &str,
+    ct: &[u8],
+    nonce: &[u8],
+) -> sqlx::Result<()> {
+    sqlx::query(
+        "INSERT INTO plugin_credentials (install_id, direction, encrypted_payload, nonce)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (install_id) DO UPDATE SET
+            direction = EXCLUDED.direction,
+            encrypted_payload = EXCLUDED.encrypted_payload,
+            nonce = EXCLUDED.nonce"
+    ).bind(install).bind(direction).bind(ct).bind(nonce).execute(pool).await?;
+    Ok(())
+}
