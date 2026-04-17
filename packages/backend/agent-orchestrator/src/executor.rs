@@ -79,6 +79,34 @@ impl Executor {
         Ok(RunStatus::Succeeded)
     }
 
+    pub async fn retry(&self, req: JobRequest) -> Result<RunStatus, ExecError> {
+        let prior = self.store.records_for(req.run_id);
+        let succeeded: HashSet<String> = prior
+            .iter()
+            .filter(|r| r.status == RunStatus::Succeeded)
+            .map(|r| r.step_id.clone())
+            .collect();
+        let order = topological_order(&req.steps)?;
+        for step_id in order {
+            if succeeded.contains(&step_id) {
+                continue;
+            }
+            let step = req
+                .steps
+                .iter()
+                .find(|s| s.id == step_id)
+                .ok_or_else(|| ExecError::UnknownStep(step_id.clone()))?
+                .clone();
+            let rec = self.run_step(req.run_id, &step).await;
+            let failed = rec.status == RunStatus::Failed;
+            self.store.record(rec);
+            if failed {
+                return Ok(RunStatus::Failed);
+            }
+        }
+        Ok(RunStatus::Succeeded)
+    }
+
     async fn run_step(&self, run_id: Uuid, step: &Step) -> StepRecord {
         match &step.kind {
             StepKind::Tool {
