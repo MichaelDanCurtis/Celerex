@@ -103,15 +103,21 @@
 - Create: `packages/frontend/app/src/state/__tests__/atoms.test.ts`
 - Modify: `packages/frontend/app/package.json` (add test script + deps)
 
-- [ ] **Step 1: Add Vitest config**
+- [x] **Step 1: Add Vitest config**
 
 ```ts
 // packages/frontend/app/vitest.config.ts
 import { defineConfig } from "vitest/config";
-import react from "@vitejs/plugin-react";
+import reactSWC from "@vitejs/plugin-react-swc";
+import path from "path";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [reactSWC()],
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+  },
   test: {
     environment: "jsdom",
     globals: true,
@@ -120,7 +126,7 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 2: Add test deps + script to package.json**
+- [x] **Step 2: Add test deps + script to package.json**
 
 ```jsonc
 // packages/frontend/app/package.json — under "scripts"
@@ -128,9 +134,9 @@ export default defineConfig({
 "test:watch": "vitest"
 ```
 
-Run: `cd packages/frontend/app && bun add -d vitest jsdom @vitejs/plugin-react @testing-library/react @testing-library/jest-dom`
+Run: `cd packages/frontend/app && bun add -d vitest jsdom @vitejs/plugin-react-swc @testing-library/react @testing-library/jest-dom`
 
-- [ ] **Step 3: Write the failing canary test**
+- [x] **Step 3: Write the failing canary test**
 
 ```ts
 // packages/frontend/app/src/state/__tests__/atoms.test.ts
@@ -148,12 +154,13 @@ describe("engagementsAtom", () => {
 });
 ```
 
-- [ ] **Step 4: Run test — expect PASS (state is already initialized that way)**
+- [x] **Step 4: Run test — expect PASS (state is already initialized that way)**
 
 Run: `cd packages/frontend/app && bun run test`
 Expected: 1 passed.
+Result: ✅ PASSED
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/frontend/app/vitest.config.ts \
