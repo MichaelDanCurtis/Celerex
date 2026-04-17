@@ -27,3 +27,25 @@ pub async fn list_engagements(pool: &PgPool) -> sqlx::Result<Vec<Engagement>> {
         "SELECT id, name, created_at FROM engagements ORDER BY created_at DESC"
     ).fetch_all(pool).await
 }
+
+#[derive(sqlx::FromRow, serde::Serialize, Clone)]
+pub struct Project {
+    pub id: Uuid,
+    pub engagement_id: Uuid,
+    pub name: String,
+    pub created_at: DateTime<Utc>,
+}
+
+pub async fn create_project(pool: &PgPool, eng: Uuid, name: &str) -> sqlx::Result<Project> {
+    sqlx::query_as::<_, Project>(
+        "INSERT INTO projects (engagement_id, name) VALUES ($1, $2)
+         RETURNING id, engagement_id, name, created_at"
+    ).bind(eng).bind(name).fetch_one(pool).await
+}
+
+pub async fn list_projects(pool: &PgPool, eng: Uuid) -> sqlx::Result<Vec<Project>> {
+    sqlx::query_as::<_, Project>(
+        "SELECT id, engagement_id, name, created_at FROM projects
+         WHERE engagement_id = $1 ORDER BY created_at DESC"
+    ).bind(eng).fetch_all(pool).await
+}

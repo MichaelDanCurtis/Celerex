@@ -14,6 +14,6 @@ pub fn build_app(pool: PgPool) -> Router {
     Router::new()
         .route("/api/health", get(|| async { Json(json!({ "ok": true })) }))
         .route("/api/engagements", get(engagements::list).post(engagements::create))
-        .route("/api/projects", get(projects::list))
+        .route("/api/projects", get(projects::list).post(projects::create))
         .with_state(AppState { pool })
 }
