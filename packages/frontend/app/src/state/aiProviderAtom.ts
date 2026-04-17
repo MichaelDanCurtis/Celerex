@@ -17,13 +17,6 @@ export const AI_PROVIDERS: AIProvider[] = [
     models: ["claude-sonnet-4-20250514", "claude-haiku-4-5-20251001", "claude-opus-4-6"],
   },
   {
-    id: "github-copilot",
-    name: "GitHub Copilot",
-    description: "GitHub AI models",
-    defaultModel: "gpt-4o",
-    models: ["gpt-4o", "gpt-4o-mini", "o3-mini"],
-  },
-  {
     id: "openrouter",
     name: "OpenRouter",
     description: "Multi-model router",
@@ -77,6 +70,3 @@ export const selectedProviderAtom = atom((get) => {
   const id = get(selectedProviderIdAtom);
   return AI_PROVIDERS.find((p) => p.id === id) || AI_PROVIDERS[0];
 });
-
-// Whether GitHub Copilot is authenticated via device flow
-export const copilotAuthenticatedAtom = atom<boolean>(false);

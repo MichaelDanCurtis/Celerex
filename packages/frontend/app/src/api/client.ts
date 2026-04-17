@@ -127,36 +127,3 @@ export async function sendChatMessage(
   return data.reply;
 }
 
-// ---- Copilot auth endpoints -----------------------------------------------
-
-export async function startCopilotAuth(): Promise<{ user_code: string; verification_uri: string; device_code: string }> {
-  return request("/copilot/auth/start", { method: "POST" });
-}
-
-export async function pollCopilotAuth(deviceCode: string): Promise<{ status: "pending" | "complete" }> {
-  return request("/copilot/auth/poll", { method: "POST", body: JSON.stringify({ device_code: deviceCode }) });
-}
-
-export async function getCopilotAuthStatus(): Promise<{ authenticated: boolean }> {
-  return request("/copilot/auth/status");
-}
-
-export interface CopilotModel {
-  id: string;
-  name: string;
-  vendor: string;
-}
-
-export async function fetchCopilotModels(): Promise<CopilotModel[]> {
-  const data = await request<{ data: Array<{ id: string; name: string; vendor: string; capabilities?: { type?: string } }> }>("/copilot/models");
-  // Filter to chat models only, deduplicate by id
-  const seen = new Set<string>();
-  return data.data
-    .filter((m) => m.capabilities?.type === "chat")
-    .filter((m) => {
-      if (seen.has(m.id)) return false;
-      seen.add(m.id);
-      return true;
-    })
-    .map((m) => ({ id: m.id, name: m.name, vendor: m.vendor }));
-}
