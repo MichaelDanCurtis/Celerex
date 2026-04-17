@@ -127,3 +127,23 @@ export async function sendChatMessage(
   return data.reply;
 }
 
+// ---- Project endpoints (Sprint 0) -------------------------------------------
+
+export interface ApiProject { id: string; engagement_id: string; name: string; created_at: string }
+
+export async function listProjects(token: string): Promise<ApiProject[]> {
+  const r = await fetch(`${API_BASE}/projects`, { headers: { authorization: `Bearer ${token}` } });
+  if (!r.ok) throw new Error(`listProjects: ${r.status}`);
+  return r.json();
+}
+
+export async function createProject(token: string, name: string): Promise<ApiProject> {
+  const r = await fetch(`${API_BASE}/projects`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ name }),
+  });
+  if (!r.ok) throw new Error(`createProject: ${r.status}`);
+  return r.json();
+}
+

@@ -12,6 +12,7 @@ export interface Engagement {
   name: string;
   createdAt: number;
   docs: DocMeta[];
+  projectId?: string;
 }
 
 // Generate simple unique IDs
@@ -148,4 +149,16 @@ export const activeDocAtom = atom<DocMeta | undefined>((get) => {
     if (doc) return doc;
   }
   return undefined;
+});
+
+// Project layer (Sprint 0)
+export interface Project { id: string; name: string; engagementId: string }
+
+export const projectsAtom = atom<Project[]>([]);
+export const activeProjectIdAtom = atom<string | null>(null);
+
+export const engagementsForActiveProjectAtom = atom((get) => {
+  const pid = get(activeProjectIdAtom);
+  const all = get(engagementsAtom);
+  return pid ? all.filter((e) => e.projectId === pid) : all;
 });
