@@ -4,6 +4,7 @@ pub mod auth;
 pub mod projects;
 pub mod docs;
 pub mod plugins;
+pub mod webhooks;
 
 use std::sync::Arc;
 use axum::{Router, routing::{get, patch, post, put}, Json};
@@ -35,5 +36,6 @@ pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>)
         .route("/api/docs/{doc_id}/blocks/{block_id}", patch(docs::replace_block))
         .route("/api/plugins", get(plugins::routes::list).post(plugins::routes::install))
         .route("/api/plugins/{id}/credentials", put(plugins::routes::upsert_credentials))
+        .route("/api/webhooks/{plugin_id}/{event}", post(webhooks::ingest))
         .with_state(AppState { pool, credentials })
 }
