@@ -6,3 +6,5 @@ target/
 *.log
 .DS_Store
 _reference/
+.superpowers/
+.claude/
