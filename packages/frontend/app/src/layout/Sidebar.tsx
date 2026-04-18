@@ -9,6 +9,9 @@ import {
   toggleFavoriteAtom,
   recentDocIdsAtom,
   trackRecentDocAtom,
+  projectsAtom,
+  activeProjectIdAtom,
+  engagementsForActiveProjectAtom,
   genId,
   type Engagement,
 } from "../state/atoms";
@@ -23,6 +26,9 @@ export function Sidebar({
   onToggleCollapse: () => void;
 }) {
   const [engagements, setEngagements] = useAtom(engagementsAtom);
+  const projects = useAtomValue(projectsAtom);
+  const [activeProjectId, setActiveProjectId] = useAtom(activeProjectIdAtom);
+  const visibleEngagements = useAtomValue(engagementsForActiveProjectAtom);
   const [activeDocId, setActiveDocId] = useAtom(activeDocIdAtom);
   const openDoc = useSetAtom(openDocAtom);
   const [activeView, setActiveView] = useAtom(activeViewAtom);
@@ -61,7 +67,7 @@ export function Sidebar({
     };
     setEngagements((prev) => [...prev, eng]);
     setCreatingEngagement(false);
-    addToast({ message: "Engagement created", type: "success" });
+    addToast({ message: "Workspace created", type: "success" });
   }
 
   function handleCreateDoc(engagementId: string, title: string) {
@@ -273,8 +279,27 @@ export function Sidebar({
               ))}
             </SidebarSection>
           )}
-          <SidebarSection title="Engagements">
-            {engagements
+          <SidebarSection title="Projects">
+            <SidebarItem
+              label="All workspaces"
+              active={activeProjectId === null}
+              onClick={() => setActiveProjectId(null)}
+            />
+            {projects.map((p) => (
+              <SidebarItem
+                key={p.id}
+                label={p.name}
+                active={activeProjectId === p.id}
+                onClick={() => setActiveProjectId(p.id)}
+              />
+            ))}
+            {projects.length === 0 && (
+              <SidebarItem label="(no projects yet)" muted onClick={() => {}} />
+            )}
+          </SidebarSection>
+
+          <SidebarSection title="Workspaces">
+            {visibleEngagements
               .filter((eng) => {
                 if (!searchQuery.trim()) return true;
                 const q = searchQuery.trim().toLowerCase();
@@ -318,13 +343,13 @@ export function Sidebar({
               })}
             {creatingEngagement ? (
               <InlineInput
-                placeholder="Engagement name..."
+                placeholder="Workspace name..."
                 onSubmit={handleCreateEngagement}
                 onCancel={() => setCreatingEngagement(false)}
               />
             ) : (
               <SidebarItem
-                label="+ New Engagement"
+                label="+ New Workspace"
                 muted
                 onClick={() => setCreatingEngagement(true)}
               />
@@ -540,7 +565,7 @@ function EngagementGroup({
         </span>
         {editing ? (
           <InlineInput
-            placeholder="Engagement name..."
+            placeholder="Workspace name..."
             defaultValue={engagement.name}
             onSubmit={(val) => {
               onRename(val);

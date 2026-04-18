@@ -3,6 +3,10 @@ name = "celerex-api"
 version = "0.1.0"
 edition.workspace = true
 
+[lib]
+name = "celerex_api"
+path = "src/lib.rs"
+
 [dependencies]
 axum.workspace = true
 tokio.workspace = true
@@ -18,3 +22,19 @@ chrono.workspace = true
 reqwest = { version = "0.12", features = ["json"] }
 futures-util = "0.3"
 dirs = "5"
+sqlx = { workspace = true }
+jsonwebtoken = { workspace = true }
+ring = { workspace = true }
+async-trait = { workspace = true }
+celerex-orchestrator = { path = "../agent-orchestrator" }
+
+[dev-dependencies]
+testcontainers = { workspace = true }
+testcontainers-modules = { workspace = true }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+reqwest = { version = "0.12", features = ["json"] }
+serde_json = "1"
+axum-test = "17"
+async-trait = { workspace = true }
+wiremock = "0.6"
+celerex-orchestrator = { path = "../agent-orchestrator", features = ["test-support"] }

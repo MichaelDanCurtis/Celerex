@@ -1,10 +1,18 @@
 import { useAtomValue, useSetAtom } from "jotai";
-import { activeViewAtom, activeDocAtom, engagementsAtom } from "../state/atoms";
+import {
+  activeViewAtom,
+  activeDocAtom,
+  engagementsAtom,
+  projectsAtom,
+  activeProjectIdAtom,
+} from "../state/atoms";
 
 export function Breadcrumb() {
   const activeView = useAtomValue(activeViewAtom);
   const activeDoc = useAtomValue(activeDocAtom);
   const engagements = useAtomValue(engagementsAtom);
+  const projects = useAtomValue(projectsAtom);
+  const activeProjectId = useAtomValue(activeProjectIdAtom);
   const setActiveView = useSetAtom(activeViewAtom);
 
   const segments: { label: string; onClick?: () => void }[] = [
@@ -17,6 +25,10 @@ export function Breadcrumb() {
         const engagement = engagements.find((e) =>
           e.docs.some((d) => d.id === activeDoc.id)
         );
+        if (activeProjectId) {
+          const proj = projects.find((p) => p.id === activeProjectId);
+          if (proj) segments.push({ label: proj.name });
+        }
         if (engagement) {
           segments.push({ label: engagement.name });
         }

@@ -90,7 +90,7 @@ function StepWelcome() {
         Welcome to Celerex
       </h2>
       <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, color: "var(--celerex-text-secondary, #6b7280)" }}>
-        Your all-in-one workspace for managing engagements, collaborating on documents, and working
+        Your all-in-one workspace for managing projects, collaborating on documents, and working
         smarter with AI-powered tools. Let us show you around.
       </p>
     </div>
@@ -101,8 +101,8 @@ function StepWorkspace() {
   const features = [
     {
       icon: "\uD83D\uDCC1",
-      title: "Engagements",
-      desc: "Organize your work into engagements, each containing related documents and tasks.",
+      title: "Projects",
+      desc: "Organize your work into projects, each containing related documents and tasks.",
     },
     {
       icon: "\uD83D\uDCC4",
