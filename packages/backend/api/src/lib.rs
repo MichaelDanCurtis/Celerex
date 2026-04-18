@@ -7,6 +7,7 @@ pub mod plugins;
 pub mod webhooks;
 pub mod runs;
 pub mod llm;
+pub mod scheduler;
 
 use std::sync::Arc;
 use axum::{Router, routing::{get, patch, post, put}, Json};
