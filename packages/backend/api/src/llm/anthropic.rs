@@ -1,4 +1,11 @@
+use async_trait::async_trait;
 use serde_json::{json, Value};
+use std::sync::Arc;
+
+#[async_trait]
+pub trait ToolDispatch: Send + Sync {
+    async fn invoke(&self, name: &str, input: Value) -> Result<Value, String>;
+}
 
 pub struct AnthropicClient {
     base_url: String,
@@ -35,5 +42,58 @@ impl AnthropicClient {
             .send()
             .await?;
         Ok(resp.json::<Value>().await?)
+    }
+
+    pub async fn run_with_tools(
+        &self,
+        model: &str,
+        mut messages: Vec<Value>,
+        tools: Vec<Value>,
+        dispatch: Arc<dyn ToolDispatch>,
+    ) -> anyhow::Result<String> {
+        for _ in 0..16 {
+            let resp = self.create_message(model, messages.clone(), tools.clone()).await?;
+            let stop = resp["stop_reason"].as_str().unwrap_or("");
+            let content = resp["content"].as_array().cloned().unwrap_or_default();
+
+            if stop == "end_turn" {
+                let text = content.iter()
+                    .filter(|b| b.get("type").and_then(|t| t.as_str()) == Some("text"))
+                    .filter_map(|b| b.get("text").and_then(|t| t.as_str()))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                return Ok(text);
+            }
+
+            if stop == "tool_use" {
+                messages.push(json!({ "role": "assistant", "content": content }));
+                let mut results = Vec::new();
+                for block in resp["content"].as_array().cloned().unwrap_or_default() {
+                    if block["type"] == "tool_use" {
+                        let id = block["id"].as_str().unwrap_or("").to_string();
+                        let name = block["name"].as_str().unwrap_or("").to_string();
+                        let input = block["input"].clone();
+                        match dispatch.invoke(&name, input).await {
+                            Ok(out) => results.push(json!({
+                                "type": "tool_result",
+                                "tool_use_id": id,
+                                "content": out.to_string()
+                            })),
+                            Err(e) => results.push(json!({
+                                "type": "tool_result",
+                                "tool_use_id": id,
+                                "is_error": true,
+                                "content": e
+                            })),
+                        }
+                    }
+                }
+                messages.push(json!({ "role": "user", "content": results }));
+                continue;
+            }
+
+            anyhow::bail!("unexpected stop_reason: {stop}");
+        }
+        anyhow::bail!("tool loop exceeded 16 iterations")
     }
 }
