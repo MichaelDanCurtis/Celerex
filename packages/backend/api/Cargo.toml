@@ -37,3 +37,4 @@ serde_json = "1"
 axum-test = "17"
 async-trait = { workspace = true }
 wiremock = "0.6"
+celerex-orchestrator = { path = "../agent-orchestrator", features = ["test-support"] }

@@ -1,0 +1,13 @@
+{
+  "id": "galvo",
+  "name": "Galvo Research",
+  "version": "0.1",
+  "inbound": [],
+  "outbound": [
+    {
+      "id": "galvo.research.weekly",
+      "kind": "agent",
+      "input_schema": { "type": "object", "properties": {} }
+    }
+  ]
+}
