@@ -26,6 +26,7 @@ sqlx = { workspace = true }
 jsonwebtoken = { workspace = true }
 ring = { workspace = true }
 async-trait = { workspace = true }
+celerex-orchestrator = { path = "../agent-orchestrator" }
 
 [dev-dependencies]
 testcontainers = { workspace = true }

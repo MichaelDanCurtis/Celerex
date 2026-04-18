@@ -1,7 +1,9 @@
 pub mod signature;
 
 use axum::{extract::{Path, State}, http::{HeaderMap, StatusCode}, response::IntoResponse, body::Bytes, Json};
+use celerex_orchestrator::job::{JobRequest, Step};
 use serde_json::json;
+use uuid::Uuid;
 use crate::AppState;
 
 pub async fn ingest(
@@ -27,9 +29,29 @@ pub async fn ingest(
         "event": event,
         "payload": serde_json::from_slice::<serde_json::Value>(&body).unwrap_or(json!(null)),
     });
-    let _ = sqlx::query(
-        "INSERT INTO runs (engagement_id, trigger)
-         VALUES ((SELECT engagement_id FROM plugin_installs WHERE plugin_id = $1 LIMIT 1), $2)"
-    ).bind(&plugin_id).bind(&trigger).execute(&s.pool).await;
+
+    let install: Option<(Uuid, Uuid, serde_json::Value)> = sqlx::query_as(
+        "SELECT id, engagement_id, manifest FROM plugin_installs WHERE plugin_id = $1 LIMIT 1"
+    ).bind(&plugin_id).fetch_optional(&s.pool).await.unwrap_or(None);
+
+    let Some((_install_id, engagement_id, manifest)) = install else {
+        return (StatusCode::ACCEPTED, Json(json!({ "received": true }))).into_response();
+    };
+
+    let run_id = Uuid::new_v4();
+    let _ = sqlx::query("INSERT INTO runs (id, engagement_id, trigger) VALUES ($1, $2, $3)")
+        .bind(run_id).bind(engagement_id).bind(&trigger).execute(&s.pool).await;
+
+    if let Some(pipeline) = manifest.get("on_event_pipeline").and_then(|p| p.get(&event)) {
+        let steps_json = pipeline.get("steps").cloned().unwrap_or(json!([]));
+        if let Ok(steps) = serde_json::from_value::<Vec<Step>>(steps_json) {
+            let req = JobRequest { run_id, engagement_id, project_id: None, steps };
+            let exec = s.executor.clone();
+            tokio::spawn(async move {
+                let _ = exec.run(req).await;
+            });
+        }
+    }
+
     (StatusCode::ACCEPTED, Json(json!({ "received": true }))).into_response()
 }

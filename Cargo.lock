@@ -299,6 +299,7 @@ dependencies = [
  "async-trait",
  "axum",
  "axum-test",
+ "celerex-orchestrator",
  "chrono",
  "dirs",
  "futures-util",
