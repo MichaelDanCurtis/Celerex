@@ -17,6 +17,7 @@ use sqlx::PgPool;
 
 use crate::plugins::credentials::{CredentialStore, LocalAeadStore};
 use crate::project_members::store::{MembersStore, PgMembersStore};
+use crate::runs::bus::RunBus;
 use celerex_orchestrator::{executor::Executor, tool_dispatch::Dispatcher};
 
 #[derive(Clone)]
@@ -25,6 +26,7 @@ pub struct AppState {
     pub credentials: Arc<dyn CredentialStore>,
     pub executor: Arc<Executor>,
     pub members: Arc<dyn MembersStore>,
+    pub run_bus: Arc<RunBus>,
 }
 
 pub fn build_app(pool: PgPool) -> Router {
@@ -36,7 +38,8 @@ pub fn build_app(pool: PgPool) -> Router {
 
 pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>) -> Router {
     let dispatcher = Arc::new(Dispatcher::new());
-    let run_store = Arc::new(runs::PgRunStore::new(pool.clone()));
+    let run_bus = Arc::new(RunBus::new());
+    let run_store = Arc::new(runs::PgRunStore::with_bus(pool.clone(), run_bus.clone()));
     let executor = Arc::new(Executor::new(dispatcher, run_store));
     let members: Arc<dyn MembersStore> = Arc::new(PgMembersStore::new(pool.clone()));
 
@@ -77,5 +80,6 @@ pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>)
         )
         .route("/api/projects/{project_id}/members", get(project_members::routes::list))
         .route("/api/project_members/{id}/run", post(project_members::routes::run_manual))
-        .with_state(AppState { pool, credentials, executor, members })
+        .route("/api/runs/{run_id}/events", get(runs::sse::stream))
+        .with_state(AppState { pool, credentials, executor, members, run_bus })
 }
