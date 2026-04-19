@@ -97,3 +97,23 @@ impl AnthropicClient {
         anyhow::bail!("tool loop exceeded 16 iterations")
     }
 }
+
+use celerex_orchestrator::llm::provider::{Completion, Provider};
+
+#[async_trait]
+impl Provider for AnthropicClient {
+    async fn complete(
+        &self,
+        model: &str,
+        messages: Value,
+        tools: Value,
+    ) -> Result<Completion, String> {
+        let msgs = messages.as_array().cloned().unwrap_or_default();
+        let tools = tools.as_array().cloned().unwrap_or_default();
+        let raw = self
+            .create_message(model, msgs, tools)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(Completion { raw })
+    }
+}

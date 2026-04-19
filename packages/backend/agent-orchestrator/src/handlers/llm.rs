@@ -1,15 +1,11 @@
+use crate::llm::provider::Provider;
 use crate::tool_dispatch::{DispatchError, Handler};
 use async_trait::async_trait;
 use serde_json::Value;
 use std::sync::Arc;
 
-#[async_trait]
-pub trait LlmClient: Send + Sync {
-    async fn complete(&self, model: &str, messages: Value, tools: Value) -> Result<Value, String>;
-}
-
 pub struct LlmHandler {
-    pub client: Arc<dyn LlmClient>,
+    pub provider: Arc<dyn Provider>,
 }
 
 #[async_trait]
@@ -24,9 +20,11 @@ impl Handler for LlmHandler {
             .get("messages")
             .cloned()
             .unwrap_or(Value::Array(vec![]));
-        self.client
+        let c = self
+            .provider
             .complete(model, messages, tools)
             .await
-            .map_err(DispatchError::Handler)
+            .map_err(DispatchError::Handler)?;
+        Ok(c.raw)
     }
 }
