@@ -58,15 +58,60 @@ impl FileConnector for DocxConnector {
     }
 
     async fn tool_definitions(&self, _file: &Path) -> Result<Vec<ToolDef>, ConnectorError> {
-        Ok(vec![])
+        Ok(vec![ToolDef {
+            name: "find_heading".into(),
+            description: "Return the paragraph text under a given H1/H2 heading.".into(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": { "heading": { "type": "string" } },
+                "required": ["heading"]
+            }),
+        }])
     }
 
     async fn invoke_tool(
         &self,
-        _file: &Path,
+        file: &Path,
         name: &str,
-        _args: Value,
+        args: Value,
     ) -> Result<Value, ConnectorError> {
-        Err(ConnectorError::UnknownTool(name.into()))
+        let bytes = tokio::fs::read(file)
+            .await
+            .map_err(|e| ConnectorError::Io(e.to_string()))?;
+        let doc = read_docx(&bytes).map_err(|e| ConnectorError::Parse(e.to_string()))?;
+        match name {
+            "find_heading" => {
+                let target = args["heading"]
+                    .as_str()
+                    .ok_or(ConnectorError::Parse("heading".into()))?
+                    .to_string();
+                let mut collecting = false;
+                let mut out = Vec::new();
+                for ch in doc.document.children {
+                    if let DocumentChild::Paragraph(p) = ch {
+                        let txt = para_text(&p);
+                        let is_heading = p
+                            .property
+                            .style
+                            .as_ref()
+                            .map(|s| s.val.starts_with("Heading"))
+                            .unwrap_or(false);
+                        if is_heading {
+                            if txt == target {
+                                collecting = true;
+                                continue;
+                            }
+                            if collecting {
+                                break;
+                            }
+                        } else if collecting && !txt.is_empty() {
+                            out.push(txt);
+                        }
+                    }
+                }
+                Ok(Value::String(out.join("\n")))
+            }
+            other => Err(ConnectorError::UnknownTool(other.into())),
+        }
     }
 }
