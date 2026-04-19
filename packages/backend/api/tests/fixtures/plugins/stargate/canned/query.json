@@ -1,0 +1,8 @@
+{
+  "columns": ["account", "mrr", "status"],
+  "rows": [
+    ["Acme Co", 12500, "green"],
+    ["Globex", 8400, "yellow"],
+    ["Initech", 4200, "red"]
+  ]
+}

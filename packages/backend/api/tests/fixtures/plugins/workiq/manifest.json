@@ -1,0 +1,16 @@
+{
+  "id": "workiq",
+  "name": "workIQ",
+  "version": "0.1.0-fixture",
+  "inbound": [],
+  "outbound": [
+    {
+      "id": "workiq.pull_metrics",
+      "kind": "http",
+      "input_schema": {
+        "type": "object",
+        "properties": { "window_days": { "type": "integer" } }
+      }
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "window_days": 7,
+  "metrics": {
+    "emails_sent": 1284,
+    "meetings_hosted": 32,
+    "avg_response_minutes": 47,
+    "teams_messages": 812
+  },
+  "top_collaborators": [
+    {"name": "Alex Kim", "interactions": 44},
+    {"name": "Priya Shah", "interactions": 39}
+  ]
+}
