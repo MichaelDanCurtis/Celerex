@@ -29,6 +29,7 @@ async-trait = { workspace = true }
 celerex-orchestrator = { path = "../agent-orchestrator" }
 cron = "0.12"
 chrono-tz = "0.9"
+jsonschema = "0.18"
 
 [dev-dependencies]
 testcontainers = { workspace = true }
