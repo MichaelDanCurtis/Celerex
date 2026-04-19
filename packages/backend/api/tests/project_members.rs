@@ -98,7 +98,6 @@ async fn edit_creates_new_snapshot_and_bumps_version() {
 }
 
 #[tokio::test]
-#[ignore = "depends on runs.snapshot_id + triggered_by columns added in Jean Task 7"]
 async fn post_run_creates_run_row_with_snapshot_and_manual_trigger() {
     let db = common::start_test_db().await;
     let app = celerex_api::build_app(db.pool.clone());
