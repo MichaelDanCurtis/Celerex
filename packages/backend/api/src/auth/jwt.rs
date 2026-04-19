@@ -18,3 +18,15 @@ pub fn verify(token: &str, secret: &str) -> Result<Claims, jsonwebtoken::errors:
     )?;
     Ok(data.claims)
 }
+
+#[doc(hidden)]
+pub fn mint_for_tests(engagement_id: Uuid) -> String {
+    use jsonwebtoken::{encode, EncodingKey, Header};
+    let claims = serde_json::json!({
+        "sub": "test-user",
+        "engagement_id": engagement_id,
+        "exp": (chrono::Utc::now().timestamp() + 3600)
+    });
+    let key = std::env::var("CELEREX_JWT_SECRET").unwrap_or_else(|_| "test-secret".into());
+    encode(&Header::default(), &claims, &EncodingKey::from_secret(key.as_bytes())).unwrap()
+}
