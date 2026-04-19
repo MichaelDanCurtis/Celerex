@@ -9,6 +9,7 @@ pub mod runs;
 pub mod llm;
 pub mod scheduler;
 pub mod project_members;
+pub mod notifiers;
 
 use std::sync::Arc;
 use axum::{Router, routing::{get, patch, post, put}, Json};
@@ -27,6 +28,7 @@ pub struct AppState {
     pub executor: Arc<Executor>,
     pub members: Arc<dyn MembersStore>,
     pub run_bus: Arc<RunBus>,
+    pub notifiers: Arc<Vec<Arc<dyn notifiers::Notifier>>>,
 }
 
 pub fn build_app(pool: PgPool) -> Router {
@@ -81,5 +83,15 @@ pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>)
         .route("/api/projects/{project_id}/members", get(project_members::routes::list))
         .route("/api/project_members/{id}/run", post(project_members::routes::run_manual))
         .route("/api/runs/{run_id}/events", get(runs::sse::stream))
-        .with_state(AppState { pool, credentials, executor, members, run_bus })
+        .with_state(AppState {
+            pool,
+            credentials,
+            executor,
+            members,
+            run_bus,
+            notifiers: Arc::new(vec![
+                Arc::new(notifiers::console::ConsoleNotifier),
+                Arc::new(notifiers::teams_stub::StubTeamsNotifier::default()),
+            ]),
+        })
 }

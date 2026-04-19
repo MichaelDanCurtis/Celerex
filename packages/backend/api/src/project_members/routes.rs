@@ -185,8 +185,52 @@ pub async fn run_manual(
         steps,
     };
     let exec = s.executor.clone();
+    let notifiers = s.notifiers.clone();
+    let pool = s.pool.clone();
+    let member_id = id;
     tokio::spawn(async move {
-        let _ = exec.run(req).await;
+        let status = exec.run(req.clone()).await;
+        let event = match status {
+            Ok(celerex_orchestrator::job::RunStatus::Failed) => Some(
+                crate::notifiers::NotificationEvent::RunFailed {
+                    run_id: req.run_id,
+                    project_member_id: member_id,
+                    step_id: "unknown".into(),
+                    error: "run failed; see run_steps for details".into(),
+                },
+            ),
+            Ok(celerex_orchestrator::job::RunStatus::Succeeded) => Some(
+                crate::notifiers::NotificationEvent::RunSucceeded {
+                    run_id: req.run_id,
+                    project_member_id: member_id,
+                },
+            ),
+            _ => None,
+        };
+        if let Some(ev) = event {
+            for n in notifiers.iter() {
+                let _ = n.dispatch(&ev).await;
+            }
+            let _ = sqlx::query(
+                "INSERT INTO notifications (project_member_id, run_id, event, payload_json)
+                 VALUES ($1, $2, $3, $4)",
+            )
+            .bind(ev.project_member_id())
+            .bind(ev.run_id())
+            .bind(ev.tag())
+            .bind(ev.payload())
+            .execute(&pool)
+            .await;
+            let status_str = match ev {
+                crate::notifiers::NotificationEvent::RunFailed { .. } => "failed",
+                crate::notifiers::NotificationEvent::RunSucceeded { .. } => "succeeded",
+            };
+            let _ = sqlx::query("UPDATE runs SET status = $2 WHERE id = $1")
+                .bind(req.run_id)
+                .bind(status_str)
+                .execute(&pool)
+                .await;
+        }
     });
 
     (StatusCode::ACCEPTED, Json(json!({"run_id": run_id}))).into_response()
