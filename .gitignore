@@ -8,3 +8,4 @@ target/
 _reference/
 .superpowers/
 .claude/
+.worktrees/
