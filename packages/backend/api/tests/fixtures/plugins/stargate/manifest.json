@@ -1,0 +1,16 @@
+{
+  "id": "stargate",
+  "name": "Stargate",
+  "version": "0.1.0-fixture",
+  "inbound": [],
+  "outbound": [
+    {
+      "id": "stargate.query",
+      "kind": "http",
+      "input_schema": {
+        "type": "object",
+        "properties": { "sql": { "type": "string" } }
+      }
+    }
+  ]
+}
