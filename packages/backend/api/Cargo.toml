@@ -30,6 +30,9 @@ celerex-orchestrator = { path = "../agent-orchestrator" }
 cron = "0.12"
 chrono-tz = "0.9"
 jsonschema = "0.18"
+thiserror = "1"
+calamine = "0.25"
+docx-rs = "0.4"
 
 [dev-dependencies]
 testcontainers = { workspace = true }
