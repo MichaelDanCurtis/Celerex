@@ -4,7 +4,7 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
@@ -234,4 +234,60 @@ pub async fn run_manual(
     });
 
     (StatusCode::ACCEPTED, Json(json!({"run_id": run_id}))).into_response()
+}
+
+#[derive(Serialize)]
+pub struct FleetRow {
+    pub id: Uuid,
+    pub name: String,
+    pub project_id: Uuid,
+    pub last_status: Option<String>,
+    pub next_fire_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub running: bool,
+}
+
+pub async fn fleet(a: AuthClaims, State(s): State<AppState>) -> impl IntoResponse {
+    let rows: Result<
+        Vec<(
+            Uuid,
+            String,
+            Uuid,
+            Option<String>,
+            Option<chrono::DateTime<chrono::Utc>>,
+            Option<String>,
+        )>,
+        _,
+    > = sqlx::query_as(
+        "SELECT m.id, m.name, m.project_id,
+                (SELECT status FROM runs WHERE runs.project_id = m.project_id ORDER BY created_at DESC LIMIT 1) AS last_status,
+                (SELECT next_fire_at FROM schedules WHERE schedules.project_member_id = m.id ORDER BY next_fire_at LIMIT 1) AS next_fire_at,
+                (SELECT status FROM runs WHERE runs.project_id = m.project_id ORDER BY created_at DESC LIMIT 1) AS running_marker
+         FROM project_members m
+         JOIN projects p ON p.id = m.project_id
+         WHERE p.engagement_id = $1",
+    )
+    .bind(a.0.engagement_id)
+    .fetch_all(&s.pool)
+    .await;
+    match rows {
+        Ok(rows) => {
+            let out: Vec<FleetRow> = rows
+                .into_iter()
+                .map(|r| FleetRow {
+                    id: r.0,
+                    name: r.1,
+                    project_id: r.2,
+                    last_status: r.3,
+                    next_fire_at: r.4,
+                    running: matches!(r.5.as_deref(), Some("running")),
+                })
+                .collect();
+            (StatusCode::OK, Json(out)).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
 }
