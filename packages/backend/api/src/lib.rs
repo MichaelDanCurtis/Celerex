@@ -38,33 +38,7 @@ pub fn build_app(pool: PgPool) -> Router {
     build_app_with_store(pool, store)
 }
 
-pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>) -> Router {
-    let dispatcher = Arc::new(Dispatcher::new());
-    let run_bus = Arc::new(RunBus::new());
-    let run_store = Arc::new(runs::PgRunStore::with_bus(pool.clone(), run_bus.clone()));
-    let executor = Arc::new(Executor::new(dispatcher, run_store));
-    let members: Arc<dyn MembersStore> = Arc::new(PgMembersStore::new(pool.clone()));
-
-    let schedules: Arc<dyn scheduler::store::SchedulesStore> =
-        Arc::new(scheduler::store::PgSchedulesStore::new(pool.clone()));
-    let exec_for_sched = executor.clone();
-    let pool_for_sched = pool.clone();
-    let dispatch = Arc::new(move |s: scheduler::store::Schedule| {
-        let exec = exec_for_sched.clone();
-        let pool = pool_for_sched.clone();
-        tokio::spawn(async move {
-            // project_members integration lands in Task 2; for now, log only.
-            tracing::info!(member=%s.project_member_id, "scheduler tick (dispatch stub until Task 2)");
-            let _ = (exec, pool);
-        })
-    });
-    scheduler::r#loop::SchedulerLoop {
-        store: schedules,
-        tick: std::time::Duration::from_secs(30),
-        dispatch,
-    }
-    .spawn();
-
+fn route_chain() -> Router<AppState> {
     Router::new()
         .route("/api/health", get(|| async { Json(json!({ "ok": true })) }))
         .route("/api/engagements", get(engagements::list).post(engagements::create))
@@ -87,15 +61,64 @@ pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>)
         .route("/api/projects/{project_id}/members", get(project_members::routes::list))
         .route("/api/project_members/{id}/run", post(project_members::routes::run_manual))
         .route("/api/runs/{run_id}/events", get(runs::sse::stream))
-        .with_state(AppState {
-            pool,
-            credentials,
-            executor,
-            members,
-            run_bus,
-            notifiers: Arc::new(vec![
-                Arc::new(notifiers::console::ConsoleNotifier),
-                Arc::new(notifiers::teams_stub::StubTeamsNotifier::default()),
-            ]),
-        })
+}
+
+pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>) -> Router {
+    let dispatcher = Arc::new(Dispatcher::new());
+    build_app_with_dispatcher_inner(pool, credentials, dispatcher, true)
+}
+
+/// Build a router with a preconfigured dispatcher (for E2E tests that register
+/// fixture handlers). Skips the scheduler spawn — tests drive runs manually.
+pub fn build_app_with_dispatcher(
+    pool: PgPool,
+    credentials: Arc<dyn CredentialStore>,
+    dispatcher: Arc<Dispatcher>,
+) -> Router {
+    build_app_with_dispatcher_inner(pool, credentials, dispatcher, false)
+}
+
+fn build_app_with_dispatcher_inner(
+    pool: PgPool,
+    credentials: Arc<dyn CredentialStore>,
+    dispatcher: Arc<Dispatcher>,
+    spawn_scheduler: bool,
+) -> Router {
+    let run_bus = Arc::new(RunBus::new());
+    let run_store = Arc::new(runs::PgRunStore::with_bus(pool.clone(), run_bus.clone()));
+    let executor = Arc::new(Executor::new(dispatcher, run_store));
+    let members: Arc<dyn MembersStore> = Arc::new(PgMembersStore::new(pool.clone()));
+
+    if spawn_scheduler {
+        let schedules: Arc<dyn scheduler::store::SchedulesStore> =
+            Arc::new(scheduler::store::PgSchedulesStore::new(pool.clone()));
+        let exec_for_sched = executor.clone();
+        let pool_for_sched = pool.clone();
+        let dispatch = Arc::new(move |s: scheduler::store::Schedule| {
+            let exec = exec_for_sched.clone();
+            let pool = pool_for_sched.clone();
+            tokio::spawn(async move {
+                tracing::info!(member=%s.project_member_id, "scheduler tick (dispatch stub until Task 2)");
+                let _ = (exec, pool);
+            })
+        });
+        scheduler::r#loop::SchedulerLoop {
+            store: schedules,
+            tick: std::time::Duration::from_secs(30),
+            dispatch,
+        }
+        .spawn();
+    }
+
+    route_chain().with_state(AppState {
+        pool,
+        credentials,
+        executor,
+        members,
+        run_bus,
+        notifiers: Arc::new(vec![
+            Arc::new(notifiers::console::ConsoleNotifier),
+            Arc::new(notifiers::teams_stub::StubTeamsNotifier::default()),
+        ]),
+    })
 }
