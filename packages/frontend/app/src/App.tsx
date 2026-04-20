@@ -3,7 +3,8 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { Sidebar } from "./layout/Sidebar";
 import { EditorArea } from "./layout/EditorArea";
 import { AIPanel } from "./layout/AIPanel";
-import { themeAtom, engagementsAtom, activeDocIdAtom, genId, editorStoreAtom, openDocAtom, activeViewAtom } from "./state/atoms";
+import { themeAtom, engagementsAtom, activeDocIdAtom, genId, editorStoreAtom, openDocAtom, activeViewAtom, activeProjectIdAtom, tokenAtom } from "./state/atoms";
+import { BuilderPage } from "./pages/BuilderPage";
 import { exportDocAsMarkdown, printDocument } from "./utils/export";
 import { importMarkdownFile } from "./utils/import";
 import { addToastAtom } from "./state/toastAtom";
@@ -66,6 +67,8 @@ export function App() {
   const openDoc = useSetAtom(openDocAtom);
   const addToast = useSetAtom(addToastAtom);
   const activeView = useAtomValue(activeViewAtom);
+  const activeProjectId = useAtomValue(activeProjectIdAtom);
+  const token = useAtomValue(tokenAtom);
 
   usePersistence();
   const { synced, error } = useApiSync();
@@ -303,6 +306,8 @@ export function App() {
             <TimelineView />
           ) : activeView === "plugin-manager" ? (
             <PluginManager />
+          ) : activeView === "builder" ? (
+            <BuilderPage projectId={activeProjectId ?? ""} token={token} />
           ) : (
             <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
               <EditorArea mode={mode} activeView={activeView} />
