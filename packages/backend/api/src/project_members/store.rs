@@ -35,6 +35,7 @@ pub trait MembersStore: Send + Sync {
         provider_config: &Value,
     ) -> Result<Member, String>;
     async fn snapshot_id_for_current(&self, id: Uuid) -> Result<Uuid, String>;
+    async fn engagement_id_for(&self, id: Uuid) -> Result<Uuid, String>;
 }
 
 pub struct PgMembersStore {
@@ -189,6 +190,19 @@ impl MembersStore for PgMembersStore {
             "SELECT s.id FROM project_member_snapshots s
              JOIN project_members m
                ON m.id = s.project_member_id AND m.version = s.version
+             WHERE m.id = $1",
+        )
+        .bind(id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| e.to_string())
+    }
+
+    async fn engagement_id_for(&self, id: Uuid) -> Result<Uuid, String> {
+        sqlx::query_scalar::<_, Uuid>(
+            "SELECT p.engagement_id
+             FROM project_members m
+             JOIN projects p ON p.id = m.project_id
              WHERE m.id = $1",
         )
         .bind(id)
