@@ -1,4 +1,5 @@
 use crate::job::{JobRequest, RunStatus, Step, StepKind, StepRecord};
+use crate::templating::{self, StepContext, TemplateError};
 use crate::tool_dispatch::{DispatchError, Dispatcher};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
@@ -62,6 +63,7 @@ impl Executor {
 
     pub async fn run(&self, req: JobRequest) -> Result<RunStatus, ExecError> {
         let order = topological_order(&req.steps)?;
+        let mut ctx = StepContext::new();
         for step_id in order {
             let step = req
                 .steps
@@ -69,8 +71,11 @@ impl Executor {
                 .find(|s| s.id == step_id)
                 .ok_or_else(|| ExecError::UnknownStep(step_id.clone()))?
                 .clone();
-            let rec = self.run_step(req.run_id, &step).await;
+            let rec = self.run_step(req.run_id, &step, &ctx).await;
             let failed = rec.status == RunStatus::Failed;
+            if let Some(out) = rec.outputs.clone() {
+                ctx.set(&step.id, out);
+            }
             self.store.record(rec);
             if failed {
                 return Ok(RunStatus::Failed);
@@ -86,6 +91,16 @@ impl Executor {
             .filter(|r| r.status == RunStatus::Succeeded)
             .map(|r| r.step_id.clone())
             .collect();
+        // Seed the templating context with outputs from already-succeeded steps
+        // so resumed steps see the same upstream values they would on a fresh run.
+        let mut ctx = StepContext::new();
+        for rec in &prior {
+            if rec.status == RunStatus::Succeeded {
+                if let Some(out) = &rec.outputs {
+                    ctx.set(&rec.step_id, out.clone());
+                }
+            }
+        }
         let order = topological_order(&req.steps)?;
         for step_id in order {
             if succeeded.contains(&step_id) {
@@ -97,8 +112,11 @@ impl Executor {
                 .find(|s| s.id == step_id)
                 .ok_or_else(|| ExecError::UnknownStep(step_id.clone()))?
                 .clone();
-            let rec = self.run_step(req.run_id, &step).await;
+            let rec = self.run_step(req.run_id, &step, &ctx).await;
             let failed = rec.status == RunStatus::Failed;
+            if let Some(out) = rec.outputs.clone() {
+                ctx.set(&step.id, out);
+            }
             self.store.record(rec);
             if failed {
                 return Ok(RunStatus::Failed);
@@ -107,7 +125,7 @@ impl Executor {
         Ok(RunStatus::Succeeded)
     }
 
-    async fn run_step(&self, run_id: Uuid, step: &Step) -> StepRecord {
+    async fn run_step(&self, run_id: Uuid, step: &Step, ctx: &StepContext) -> StepRecord {
         match &step.kind {
             StepKind::Tool {
                 execution,
@@ -118,28 +136,38 @@ impl Executor {
                 execution,
                 config,
                 inputs,
-            } => match self
-                .dispatcher
-                .invoke(*execution, config.clone(), inputs.clone())
-                .await
-            {
-                Ok(out) => StepRecord {
-                    run_id,
-                    step_id: step.id.clone(),
-                    status: RunStatus::Succeeded,
-                    inputs: inputs.clone(),
-                    outputs: Some(out),
-                    error: None,
-                },
-                Err(e) => StepRecord {
-                    run_id,
-                    step_id: step.id.clone(),
-                    status: RunStatus::Failed,
-                    inputs: inputs.clone(),
-                    outputs: None,
-                    error: Some(e.to_string()),
-                },
-            },
+            } => {
+                let resolved_config = match templating::resolve(config, ctx) {
+                    Ok(v) => v,
+                    Err(e) => return template_fail(run_id, step, inputs.clone(), e),
+                };
+                let resolved_inputs = match templating::resolve(inputs, ctx) {
+                    Ok(v) => v,
+                    Err(e) => return template_fail(run_id, step, inputs.clone(), e),
+                };
+                match self
+                    .dispatcher
+                    .invoke(*execution, resolved_config, resolved_inputs.clone())
+                    .await
+                {
+                    Ok(out) => StepRecord {
+                        run_id,
+                        step_id: step.id.clone(),
+                        status: RunStatus::Succeeded,
+                        inputs: resolved_inputs,
+                        outputs: Some(out),
+                        error: None,
+                    },
+                    Err(e) => StepRecord {
+                        run_id,
+                        step_id: step.id.clone(),
+                        status: RunStatus::Failed,
+                        inputs: resolved_inputs,
+                        outputs: None,
+                        error: Some(e.to_string()),
+                    },
+                }
+            }
             StepKind::Filter { .. } => StepRecord {
                 run_id,
                 step_id: step.id.clone(),
@@ -149,6 +177,22 @@ impl Executor {
                 error: None,
             },
         }
+    }
+}
+
+fn template_fail(
+    run_id: Uuid,
+    step: &Step,
+    raw_inputs: serde_json::Value,
+    err: TemplateError,
+) -> StepRecord {
+    StepRecord {
+        run_id,
+        step_id: step.id.clone(),
+        status: RunStatus::Failed,
+        inputs: raw_inputs,
+        outputs: None,
+        error: Some(format!("template resolve: {err}")),
     }
 }
 

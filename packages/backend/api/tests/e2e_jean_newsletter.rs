@@ -133,7 +133,7 @@ fn jean_graph() -> Value {
                 "config": {
                     "execution": "doc",
                     "title": "Weekly Newsletter",
-                    "inputs": { "markdown": "# Weekly Newsletter\n\n- Emails sent: 1284\n- Meetings: 32\n" }
+                    "inputs": { "markdown": "{{steps.synth.outputs.content.0.text}}" }
                 }
             }
         ],
