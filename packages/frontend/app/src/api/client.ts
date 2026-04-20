@@ -221,3 +221,14 @@ export async function listMembers(
   return r.json();
 }
 
+export async function getMember(
+  token: string,
+  id: string,
+): Promise<ApiProjectMember> {
+  const r = await fetch(`${API_BASE}/project_members/${id}`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!r.ok) throw new Error(`getMember: ${r.status}`);
+  return r.json();
+}
+
