@@ -32,9 +32,16 @@ export interface AgentBuilderCanvasProps {
   mode: "edit" | "monitor";
   onEdit?: (graph: Graph) => void;
   runState?: RunState;
+  onNodeClick?: (nodeId: string) => void;
 }
 
-export function AgentBuilderCanvas({ graph, mode, onEdit, runState }: AgentBuilderCanvasProps) {
+export function AgentBuilderCanvas({
+  graph,
+  mode,
+  onEdit,
+  runState,
+  onNodeClick,
+}: AgentBuilderCanvasProps) {
   const [nodes, setNodes] = useState<Node[]>(() => toReactFlowNodes(graph, runState));
   const [edges, setEdges] = useState<Edge[]>(() => toReactFlowEdges(graph, runState));
 
@@ -113,6 +120,7 @@ export function AgentBuilderCanvas({ graph, mode, onEdit, runState }: AgentBuild
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onNodeClick={(_, n) => onNodeClick?.(n.id)}
           fitView
         >
           <Background />

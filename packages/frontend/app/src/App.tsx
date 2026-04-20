@@ -5,6 +5,7 @@ import { EditorArea } from "./layout/EditorArea";
 import { AIPanel } from "./layout/AIPanel";
 import { themeAtom, engagementsAtom, activeDocIdAtom, genId, editorStoreAtom, openDocAtom, activeViewAtom, activeProjectIdAtom, tokenAtom } from "./state/atoms";
 import { BuilderPage } from "./pages/BuilderPage";
+import { MonitorPage } from "./pages/MonitorPage";
 import { exportDocAsMarkdown, printDocument } from "./utils/export";
 import { importMarkdownFile } from "./utils/import";
 import { addToastAtom } from "./state/toastAtom";
@@ -308,6 +309,8 @@ export function App() {
             <PluginManager />
           ) : activeView === "builder" ? (
             <BuilderPage projectId={activeProjectId ?? ""} token={token} />
+          ) : activeView === "monitor" ? (
+            <MonitorPage />
           ) : (
             <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
               <EditorArea mode={mode} activeView={activeView} />
