@@ -13,5 +13,6 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     include: ["src/**/__tests__/**/*.test.{ts,tsx}"],
+    setupFiles: ["src/canvas/__tests__/reactflow-setup.ts"],
   },
 });
