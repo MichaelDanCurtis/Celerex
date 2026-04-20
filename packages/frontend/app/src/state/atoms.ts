@@ -42,7 +42,14 @@ export const themeAtom = atom<"light" | "dark">("light");
 export const accentColorAtom = atom<string>("#3b82f6");
 export const fontSizeAtom = atom<"small" | "medium" | "large">("medium");
 
-export const activeViewAtom = atom<"editor" | "agent-dashboard" | "pipeline-editor" | "task-queue" | "agent-triggers" | "plugin-manager" | "tools-manager" | "settings" | "timeline">("editor");
+export const activeViewAtom = atom<"editor" | "agent-dashboard" | "pipeline-editor" | "task-queue" | "agent-triggers" | "plugin-manager" | "tools-manager" | "settings" | "timeline" | "builder" | "monitor" | "fleet">("editor");
+
+export const activeMemberIdAtom = atom<string | null>(null);
+export const activeRunIdAtom = atom<string | null>(null);
+
+export const tokenAtom = atom<string>(
+  typeof localStorage !== "undefined" ? (localStorage.getItem("celerex_jwt") ?? "") : "",
+);
 
 export const editorStoreAtom = atom<any>(null);
 

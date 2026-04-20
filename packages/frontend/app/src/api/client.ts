@@ -147,3 +147,77 @@ export async function createProject(token: string, name: string): Promise<ApiPro
   return r.json();
 }
 
+// ---- Project member endpoints (Sprint 1) ------------------------------------
+
+export interface ApiProjectMember {
+  id: string;
+  project_id: string;
+  name: string;
+  description: string;
+  graph_json: {
+    nodes: { id: string; type: string; config: Record<string, unknown> }[];
+    edges: { from: string; to: string }[];
+  };
+  provider_config_json: Record<string, unknown>;
+  version: number;
+}
+
+export async function createMember(
+  token: string,
+  body: {
+    project_id: string;
+    name: string;
+    graph_json: ApiProjectMember["graph_json"];
+    provider_config_json?: Record<string, unknown>;
+  },
+): Promise<ApiProjectMember> {
+  const r = await fetch(`${API_BASE}/project_members`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ provider_config_json: {}, ...body }),
+  });
+  if (!r.ok) throw new Error(`createMember: ${r.status}`);
+  return r.json();
+}
+
+export async function updateMember(
+  token: string,
+  id: string,
+  body: {
+    name: string;
+    graph_json: ApiProjectMember["graph_json"];
+    provider_config_json?: Record<string, unknown>;
+  },
+): Promise<ApiProjectMember> {
+  const r = await fetch(`${API_BASE}/project_members/${id}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ provider_config_json: {}, ...body }),
+  });
+  if (!r.ok) throw new Error(`updateMember: ${r.status}`);
+  return r.json();
+}
+
+export async function runMemberNow(
+  token: string,
+  id: string,
+): Promise<{ run_id: string }> {
+  const r = await fetch(`${API_BASE}/project_members/${id}/run`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!r.ok) throw new Error(`runMemberNow: ${r.status}`);
+  return r.json();
+}
+
+export async function listMembers(
+  token: string,
+  projectId: string,
+): Promise<ApiProjectMember[]> {
+  const r = await fetch(`${API_BASE}/projects/${projectId}/members`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!r.ok) throw new Error(`listMembers: ${r.status}`);
+  return r.json();
+}
+
