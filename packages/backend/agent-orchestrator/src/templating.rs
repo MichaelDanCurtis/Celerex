@@ -1,6 +1,5 @@
 //! Minimal template resolver for graph step inputs. Supports a single syntax:
-//!
-//!     {{steps.<step_id>.outputs.<dotted.path>}}
+//! `{{steps.<step_id>.outputs.<dotted.path>}}`.
 //!
 //! Recurses through JSON structure. A string whose entire content is one
 //! template is replaced with the typed value the path resolves to (string,

@@ -108,7 +108,7 @@ fn bob_graph() -> Value {
                 "config": {
                     "execution": "doc",
                     "title": "Weekly Research Digest",
-                    "inputs": { "markdown": GALVO_FIXTURE_MD }
+                    "inputs": { "markdown": "{{steps.galvo.outputs.result}}" }
                 }
             }
         ],
