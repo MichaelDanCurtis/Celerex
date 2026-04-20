@@ -88,18 +88,52 @@ fn build_app_with_dispatcher_inner(
     let run_store = Arc::new(runs::PgRunStore::with_bus(pool.clone(), run_bus.clone()));
     let executor = Arc::new(Executor::new(dispatcher, run_store));
     let members: Arc<dyn MembersStore> = Arc::new(PgMembersStore::new(pool.clone()));
+    let notifiers: Arc<Vec<Arc<dyn notifiers::Notifier>>> = Arc::new(vec![
+        Arc::new(notifiers::console::ConsoleNotifier),
+        Arc::new(notifiers::teams_stub::StubTeamsNotifier::default()),
+    ]);
 
     if spawn_scheduler {
         let schedules: Arc<dyn scheduler::store::SchedulesStore> =
             Arc::new(scheduler::store::PgSchedulesStore::new(pool.clone()));
-        let exec_for_sched = executor.clone();
         let pool_for_sched = pool.clone();
+        let members_for_sched = members.clone();
+        let executor_for_sched = executor.clone();
+        let notifiers_for_sched = notifiers.clone();
         let dispatch = Arc::new(move |s: scheduler::store::Schedule| {
-            let exec = exec_for_sched.clone();
             let pool = pool_for_sched.clone();
+            let members = members_for_sched.clone();
+            let executor = executor_for_sched.clone();
+            let notifiers = notifiers_for_sched.clone();
             tokio::spawn(async move {
-                tracing::info!(member=%s.project_member_id, "scheduler tick (dispatch stub until Task 2)");
-                let _ = (exec, pool);
+                let engagement_id = match members.engagement_id_for(s.project_member_id).await {
+                    Ok(v) => v,
+                    Err(e) => {
+                        tracing::error!(
+                            member=%s.project_member_id,
+                            error=%e,
+                            "scheduler: failed to resolve engagement_id"
+                        );
+                        return;
+                    }
+                };
+                if let Err(e) = project_members::run_job::enqueue_run(
+                    pool,
+                    members,
+                    executor,
+                    notifiers,
+                    s.project_member_id,
+                    engagement_id,
+                    project_members::run_job::TRIGGERED_BY_SCHEDULED,
+                )
+                .await
+                {
+                    tracing::error!(
+                        member=%s.project_member_id,
+                        error=%e,
+                        "scheduler: enqueue_run failed"
+                    );
+                }
             })
         });
         scheduler::r#loop::SchedulerLoop {
@@ -116,9 +150,6 @@ fn build_app_with_dispatcher_inner(
         executor,
         members,
         run_bus,
-        notifiers: Arc::new(vec![
-            Arc::new(notifiers::console::ConsoleNotifier),
-            Arc::new(notifiers::teams_stub::StubTeamsNotifier::default()),
-        ]),
+        notifiers,
     })
 }
