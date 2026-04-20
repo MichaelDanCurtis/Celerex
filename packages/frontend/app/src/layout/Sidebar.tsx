@@ -286,12 +286,37 @@ export function Sidebar({
               onClick={() => setActiveProjectId(null)}
             />
             {projects.map((p) => (
-              <SidebarItem
+              <div
                 key={p.id}
-                label={p.name}
-                active={activeProjectId === p.id}
-                onClick={() => setActiveProjectId(p.id)}
-              />
+                style={{ display: "flex", alignItems: "center", gap: 4 }}
+              >
+                <div style={{ flex: 1 }}>
+                  <SidebarItem
+                    label={p.name}
+                    active={activeProjectId === p.id}
+                    onClick={() => setActiveProjectId(p.id)}
+                  />
+                </div>
+                <button
+                  data-testid={`add-agent-${p.id}`}
+                  title="Add agent to project"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveProjectId(p.id);
+                    setActiveView("builder");
+                  }}
+                  style={{
+                    fontSize: 11,
+                    opacity: 0.7,
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: "0 6px",
+                  }}
+                >
+                  + Add agent
+                </button>
+              </div>
             ))}
             {projects.length === 0 && (
               <SidebarItem label="(no projects yet)" muted onClick={() => {}} />
