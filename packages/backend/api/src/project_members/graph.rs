@@ -93,6 +93,7 @@ fn execution_from(config: &Value) -> Result<ExecutionType, String> {
         "agent" => Ok(ExecutionType::Agent),
         "script" => Ok(ExecutionType::Script),
         "llm" => Ok(ExecutionType::Llm),
+        "doc" => Ok(ExecutionType::Doc),
         other => Err(format!("unknown execution type: {other}")),
     }
 }

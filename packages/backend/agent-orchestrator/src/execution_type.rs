@@ -8,4 +8,5 @@ pub enum ExecutionType {
     Agent,
     Script,
     Llm,
+    Doc,
 }
