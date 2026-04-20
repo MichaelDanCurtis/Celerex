@@ -69,7 +69,7 @@ fn jean_graph() -> Value {
             {"id":"tick",   "type":"inbound",  "config":{"execution":"script"}},
             {"id":"workiq", "type":"action",   "config":{"execution":"http"}},
             {"id":"synth",  "type":"action",   "config":{"execution":"llm","model":"claude-sonnet-4-6"}},
-            {"id":"doc",    "type":"outbound", "config":{"execution":"agent","title":"Scheduled Newsletter"}}
+            {"id":"doc",    "type":"outbound", "config":{"execution":"doc","title":"Scheduled Newsletter"}}
         ],
         "edges": [
             {"from":"tick","to":"workiq"},
@@ -113,7 +113,7 @@ async fn enqueue_run_with_scheduled_trigger_runs_graph_and_marks_run_scheduled()
         }),
     );
     dispatcher.register(
-        ExecutionType::Agent,
+        ExecutionType::Doc,
         Arc::new(DocCreateHandler {
             pool: db.pool.clone(),
             engagement_id: eng,
