@@ -77,6 +77,10 @@ pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>)
         .route("/api/webhooks/{plugin_id}/{event}", post(webhooks::ingest))
         .route("/api/project_members", post(project_members::routes::create))
         .route(
+            "/api/project_members/fleet",
+            get(project_members::routes::fleet),
+        )
+        .route(
             "/api/project_members/{id}",
             get(project_members::routes::get).put(project_members::routes::update),
         )

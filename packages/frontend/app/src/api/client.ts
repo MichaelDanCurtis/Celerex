@@ -232,3 +232,22 @@ export async function getMember(
   return r.json();
 }
 
+// ---- Fleet (Sprint 1 Task 12) ---------------------------------------------
+
+export interface FleetRow {
+  id: string;
+  name: string;
+  project_id: string;
+  last_status: string | null;
+  next_fire_at: string | null;
+  running: boolean;
+}
+
+export async function fetchFleet(token: string): Promise<FleetRow[]> {
+  const r = await fetch(`${API_BASE}/project_members/fleet`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!r.ok) throw new Error(`fetchFleet: ${r.status}`);
+  return r.json();
+}
+

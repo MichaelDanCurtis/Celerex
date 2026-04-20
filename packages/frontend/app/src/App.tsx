@@ -6,6 +6,7 @@ import { AIPanel } from "./layout/AIPanel";
 import { themeAtom, engagementsAtom, activeDocIdAtom, genId, editorStoreAtom, openDocAtom, activeViewAtom, activeProjectIdAtom, tokenAtom } from "./state/atoms";
 import { BuilderPage } from "./pages/BuilderPage";
 import { MonitorPage } from "./pages/MonitorPage";
+import { FleetDashboard } from "./pages/FleetDashboard";
 import { exportDocAsMarkdown, printDocument } from "./utils/export";
 import { importMarkdownFile } from "./utils/import";
 import { addToastAtom } from "./state/toastAtom";
@@ -311,6 +312,8 @@ export function App() {
             <BuilderPage projectId={activeProjectId ?? ""} token={token} />
           ) : activeView === "monitor" ? (
             <MonitorPage />
+          ) : activeView === "fleet" ? (
+            <FleetDashboard token={token} />
           ) : (
             <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
               <EditorArea mode={mode} activeView={activeView} />
