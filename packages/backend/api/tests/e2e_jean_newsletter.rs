@@ -100,7 +100,7 @@ fn build_dispatcher(pool: PgPool, engagement_id: uuid::Uuid) -> Arc<Dispatcher> 
         }),
     );
     dispatcher.register(
-        ExecutionType::Agent,
+        ExecutionType::Doc,
         Arc::new(DocCreateHandler { pool, engagement_id }),
     );
     Arc::new(dispatcher)
@@ -131,7 +131,7 @@ fn jean_graph() -> Value {
                 "id": "doc",
                 "type": "outbound",
                 "config": {
-                    "execution": "agent",
+                    "execution": "doc",
                     "title": "Weekly Newsletter",
                     "inputs": { "markdown": "# Weekly Newsletter\n\n- Emails sent: 1284\n- Meetings: 32\n" }
                 }
