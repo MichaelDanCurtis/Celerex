@@ -43,3 +43,74 @@ pub async fn replace_block(
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     }
 }
+
+pub async fn list_for_engagement(
+    auth: AuthClaims,
+    State(s): State<AppState>,
+    Path(engagement_id): Path<Uuid>,
+) -> impl IntoResponse {
+    if auth.0.engagement_id != engagement_id {
+        return (StatusCode::FORBIDDEN, "engagement mismatch").into_response();
+    }
+    match db::list_documents_for_engagement(&s.pool, engagement_id).await {
+        Ok(rows) => (StatusCode::OK, Json(rows)).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
+}
+
+pub async fn get(
+    auth: AuthClaims,
+    State(s): State<AppState>,
+    Path(doc_id): Path<Uuid>,
+) -> impl IntoResponse {
+    match db::get_document(&s.pool, doc_id).await {
+        Ok(Some(d)) => {
+            if d.engagement_id != auth.0.engagement_id {
+                return (StatusCode::FORBIDDEN, "engagement mismatch").into_response();
+            }
+            (StatusCode::OK, Json(d)).into_response()
+        }
+        Ok(None) => (StatusCode::NOT_FOUND, "document not found").into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
+}
+
+pub async fn list_blocks(
+    auth: AuthClaims,
+    State(s): State<AppState>,
+    Path(doc_id): Path<Uuid>,
+) -> impl IntoResponse {
+    match db::get_document(&s.pool, doc_id).await {
+        Ok(Some(d)) => {
+            if d.engagement_id != auth.0.engagement_id {
+                return (StatusCode::FORBIDDEN, "engagement mismatch").into_response();
+            }
+            match db::list_blocks(&s.pool, doc_id).await {
+                Ok(rows) => (StatusCode::OK, Json(rows)).into_response(),
+                Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+            }
+        }
+        Ok(None) => (StatusCode::NOT_FOUND, "document not found").into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
+}
+
+pub async fn delete(
+    auth: AuthClaims,
+    State(s): State<AppState>,
+    Path(doc_id): Path<Uuid>,
+) -> impl IntoResponse {
+    match db::get_document(&s.pool, doc_id).await {
+        Ok(Some(d)) => {
+            if d.engagement_id != auth.0.engagement_id {
+                return (StatusCode::FORBIDDEN, "engagement mismatch").into_response();
+            }
+            match db::delete_document(&s.pool, doc_id).await {
+                Ok(_) => StatusCode::NO_CONTENT.into_response(),
+                Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+            }
+        }
+        Ok(None) => (StatusCode::NOT_FOUND, "document not found").into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    }
+}

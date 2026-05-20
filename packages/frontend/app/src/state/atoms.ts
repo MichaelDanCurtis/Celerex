@@ -42,10 +42,14 @@ export const themeAtom = atom<"light" | "dark">("light");
 export const accentColorAtom = atom<string>("#3b82f6");
 export const fontSizeAtom = atom<"small" | "medium" | "large">("medium");
 
-export const activeViewAtom = atom<"editor" | "agent-dashboard" | "pipeline-editor" | "task-queue" | "agent-triggers" | "plugin-manager" | "tools-manager" | "settings" | "timeline" | "builder" | "monitor" | "fleet">("editor");
+export const activeViewAtom = atom<"editor" | "agent-dashboard" | "pipeline-editor" | "task-queue" | "agent-triggers" | "plugin-manager" | "tools-manager" | "settings" | "timeline" | "builder" | "monitor" | "fleet" | "docs">("editor");
 
 export const activeMemberIdAtom = atom<string | null>(null);
 export const activeRunIdAtom = atom<string | null>(null);
+
+// Active engagement + doc for the Docs page (separate from the editor's activeDocIdAtom).
+export const activeEngagementIdAtom = atom<string | null>(null);
+export const activeViewerDocIdAtom = atom<string | null>(null);
 
 export const tokenAtom = atom<string>(
   typeof localStorage !== "undefined" ? (localStorage.getItem("celerex_jwt") ?? "") : "",

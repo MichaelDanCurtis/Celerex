@@ -7,6 +7,7 @@ import { themeAtom, engagementsAtom, activeDocIdAtom, genId, editorStoreAtom, op
 import { BuilderPage } from "./pages/BuilderPage";
 import { MonitorPage } from "./pages/MonitorPage";
 import { FleetDashboard } from "./pages/FleetDashboard";
+import { DocsPage } from "./pages/DocsPage";
 import { exportDocAsMarkdown, printDocument } from "./utils/export";
 import { importMarkdownFile } from "./utils/import";
 import { addToastAtom } from "./state/toastAtom";
@@ -314,6 +315,8 @@ export function App() {
             <MonitorPage />
           ) : activeView === "fleet" ? (
             <FleetDashboard token={token} />
+          ) : activeView === "docs" ? (
+            <DocsPage />
           ) : (
             <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
               <EditorArea mode={mode} activeView={activeView} />

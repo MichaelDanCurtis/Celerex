@@ -105,6 +105,51 @@ export async function deleteDoc(
   });
 }
 
+// ---- Doc viewer endpoints (Sprint 1) -------------------------------------
+
+export interface ApiDocBlock {
+  id: string;
+  document_id: string;
+  position: number;
+  payload: unknown; // JSON — e.g. { type: "markdown", text: "..." }
+  created_at: string;
+}
+
+export interface ApiDocWithCount extends ApiDoc {
+  block_count: number;
+}
+
+export async function listEngagementDocs(
+  token: string,
+  engagementId: string,
+): Promise<ApiDocWithCount[]> {
+  const r = await fetch(
+    `${API_BASE}/engagements/${engagementId}/docs`,
+    { headers: { authorization: `Bearer ${token}` } },
+  );
+  if (!r.ok) throw new Error(`listEngagementDocs: ${r.status}`);
+  return r.json();
+}
+
+export async function getDoc(token: string, id: string): Promise<ApiDoc> {
+  const r = await fetch(`${API_BASE}/docs/${id}`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!r.ok) throw new Error(`getDoc: ${r.status}`);
+  return r.json();
+}
+
+export async function listDocBlocks(
+  token: string,
+  docId: string,
+): Promise<ApiDocBlock[]> {
+  const r = await fetch(`${API_BASE}/docs/${docId}/blocks`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!r.ok) throw new Error(`listDocBlocks: ${r.status}`);
+  return r.json();
+}
+
 // ---- Chat endpoint -------------------------------------------------------
 
 export async function sendChatMessage(

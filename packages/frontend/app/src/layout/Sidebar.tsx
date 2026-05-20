@@ -401,6 +401,11 @@ export function Sidebar({
               active={activeView === "timeline"}
               onClick={() => setActiveView("timeline")}
             />
+            <SidebarItem
+              label="Docs"
+              active={activeView === "docs"}
+              onClick={() => setActiveView("docs")}
+            />
           </SidebarSection>
 
           <SidebarSection title="Agents">

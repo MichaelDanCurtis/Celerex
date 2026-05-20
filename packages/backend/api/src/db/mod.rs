@@ -71,6 +71,59 @@ pub async fn create_document(
     ).bind(eng).bind(proj).bind(title).fetch_one(pool).await
 }
 
+#[derive(sqlx::FromRow, Serialize, Clone)]
+pub struct DocumentSummary {
+    pub id: Uuid,
+    pub engagement_id: Uuid,
+    pub project_id: Option<Uuid>,
+    pub title: String,
+    pub created_at: DateTime<Utc>,
+    pub block_count: i64,
+}
+
+pub async fn list_documents_for_engagement(
+    pool: &PgPool,
+    eng: Uuid,
+) -> sqlx::Result<Vec<DocumentSummary>> {
+    sqlx::query_as::<_, DocumentSummary>(
+        "SELECT d.id, d.engagement_id, d.project_id, d.title, d.created_at,
+                COALESCE((SELECT COUNT(*) FROM doc_blocks b WHERE b.document_id = d.id), 0) AS block_count
+         FROM documents d
+         WHERE d.engagement_id = $1
+         ORDER BY d.created_at DESC"
+    ).bind(eng).fetch_all(pool).await
+}
+
+pub async fn get_document(pool: &PgPool, doc: Uuid) -> sqlx::Result<Option<Document>> {
+    sqlx::query_as::<_, Document>(
+        "SELECT id, engagement_id, project_id, title, created_at FROM documents WHERE id = $1"
+    ).bind(doc).fetch_optional(pool).await
+}
+
+pub async fn delete_document(pool: &PgPool, doc: Uuid) -> sqlx::Result<u64> {
+    let r = sqlx::query("DELETE FROM documents WHERE id = $1")
+        .bind(doc).execute(pool).await?;
+    Ok(r.rows_affected())
+}
+
+#[derive(sqlx::FromRow, Serialize, Clone)]
+pub struct DocBlock {
+    pub id: Uuid,
+    pub document_id: Uuid,
+    pub position: i32,
+    pub payload: serde_json::Value,
+    pub created_at: DateTime<Utc>,
+}
+
+pub async fn list_blocks(pool: &PgPool, doc: Uuid) -> sqlx::Result<Vec<DocBlock>> {
+    sqlx::query_as::<_, DocBlock>(
+        "SELECT id, document_id, position, payload, created_at
+         FROM doc_blocks
+         WHERE document_id = $1
+         ORDER BY position ASC"
+    ).bind(doc).fetch_all(pool).await
+}
+
 pub async fn append_block(
     pool: &PgPool,
     doc: Uuid,
