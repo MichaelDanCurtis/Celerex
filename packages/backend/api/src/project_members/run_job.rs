@@ -99,13 +99,14 @@ pub async fn enqueue_run(
 
     let run_id = Uuid::new_v4();
     sqlx::query(
-        "INSERT INTO runs (id, engagement_id, project_id, trigger, status, snapshot_id, triggered_by)
-         VALUES ($1, $2, $3, $4::jsonb, 'running', $5, $6)",
+        "INSERT INTO runs (id, engagement_id, project_id, project_member_id, trigger, status, snapshot_id, triggered_by)
+         VALUES ($1, $2, $3, $4, $5::jsonb, 'running', $6, $7)",
     )
     .bind(run_id)
     .bind(engagement_id)
     .bind(Some(member.project_id))
-    .bind(json!({"source": triggered_by}).to_string())
+    .bind(member_id)
+    .bind(json!({"source": triggered_by, "project_member_id": member_id}).to_string())
     .bind(snap_id)
     .bind(triggered_by)
     .execute(&pool)

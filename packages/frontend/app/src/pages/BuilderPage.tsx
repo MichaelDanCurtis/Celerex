@@ -17,8 +17,9 @@ import {
 } from "../state/atoms";
 import { addToastAtom } from "../state/toastAtom";
 import { SchedulesPanel } from "../components/SchedulesPanel";
+import { RunHistoryPanel } from "../components/RunHistoryPanel";
 
-type RightTab = "config" | "schedules";
+type RightTab = "config" | "schedules" | "runs";
 
 export function BuilderPage({
   projectId,
@@ -235,6 +236,13 @@ export function BuilderPage({
             >
               Schedules
             </button>
+            <button
+              data-testid="tab-runs"
+              onClick={() => setTab("runs")}
+              style={toolbarButtonStyle(tab === "runs")}
+            >
+              Runs
+            </button>
           </div>
         )}
       </div>
@@ -260,8 +268,10 @@ export function BuilderPage({
                 setSelected(n);
               }}
             />
-          ) : (
+          ) : tab === "schedules" ? (
             <SchedulesPanel token={token} projectMemberId={activeMemberId} />
+          ) : (
+            <RunHistoryPanel token={token} projectMemberId={activeMemberId} />
           )}
         </div>
       </div>

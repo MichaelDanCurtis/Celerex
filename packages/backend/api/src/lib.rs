@@ -78,6 +78,7 @@ fn route_chain() -> Router<AppState> {
         )
         .route("/api/projects/{project_id}/members", get(project_members::routes::list))
         .route("/api/project_members/{id}/run", post(project_members::routes::run_manual))
+        .route("/api/runs", get(runs::routes::list))
         .route("/api/runs/{run_id}/events", get(runs::sse::stream))
         .route(
             "/api/schedules",

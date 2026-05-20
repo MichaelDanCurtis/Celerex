@@ -1,5 +1,6 @@
 use celerex_api::llm::openai::OpenAiProvider;
 use celerex_orchestrator::llm::provider::Provider;
+use futures_util::StreamExt;
 use serde_json::json;
 use wiremock::{
     matchers::{body_partial_json, header, method, path},
@@ -87,6 +88,47 @@ async fn openai_provider_sends_model_and_messages_in_body() {
         .await
         .unwrap();
     assert_eq!(c.raw["choices"][0]["message"]["content"], "ok");
+}
+
+#[tokio::test]
+async fn openai_provider_streams_text_deltas() {
+    let server = MockServer::start().await;
+
+    // OpenAI-compatible SSE: two `data:` JSON lines carrying delta.content,
+    // then a literal `data: [DONE]` terminator.
+    let sse_body = concat!(
+        "data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n",
+        "\n",
+        "data: {\"choices\":[{\"delta\":{\"content\":\" world\"}}]}\n",
+        "\n",
+        "data: [DONE]\n",
+        "\n",
+    );
+
+    Mock::given(method("POST"))
+        .and(path("/v1/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(sse_body)
+                .insert_header("content-type", "text/event-stream"),
+        )
+        .mount(&server)
+        .await;
+
+    let provider = OpenAiProvider::with_base_url(server.uri(), "test-key".into());
+    let mut stream = provider.complete_stream(
+        "gpt-4o",
+        json!([{"role":"user","content":"hi"}]),
+        json!([]),
+    );
+
+    let mut collected = Vec::new();
+    while let Some(item) = stream.next().await {
+        collected.push(item.expect("stream chunk should be Ok"));
+    }
+
+    assert_eq!(collected, vec!["Hello", " world"]);
+    assert_eq!(collected.concat(), "Hello world");
 }
 
 #[tokio::test]

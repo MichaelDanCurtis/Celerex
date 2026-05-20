@@ -1,14 +1,30 @@
 pub mod bus;
+pub mod routes;
 pub mod sse;
 
 use std::sync::Arc;
 
 use celerex_orchestrator::executor::RunStore;
 use celerex_orchestrator::job::{RunStatus, StepRecord};
+use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::runs::bus::{RunBus, RunEvent};
+
+/// One row in the `/api/runs` list response.
+///
+/// Shape kept narrow on purpose — the monitor view fetches the full per-run
+/// detail via SSE; this struct only carries enough to render the history table.
+#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize)]
+pub struct RunSummary {
+    pub id: Uuid,
+    pub project_member_id: Option<Uuid>,
+    pub engagement_id: Uuid,
+    pub status: String,
+    pub triggered_by: String,
+    pub created_at: DateTime<Utc>,
+}
 
 pub struct PgRunStore {
     pool: PgPool,
@@ -26,6 +42,26 @@ impl PgRunStore {
 
     pub fn bus(&self) -> Arc<RunBus> {
         self.bus.clone()
+    }
+
+    /// Return the most recent `limit` runs for a given project member, newest
+    /// first. Uses the `idx_runs_project_member` index defined in migration
+    /// 0012.
+    pub async fn list_for_member(
+        &self,
+        project_member_id: Uuid,
+        limit: i64,
+    ) -> Result<Vec<RunSummary>, String> {
+        sqlx::query_as::<_, RunSummary>(
+            "SELECT id, project_member_id, engagement_id, status, triggered_by, created_at
+             FROM runs WHERE project_member_id = $1
+             ORDER BY created_at DESC LIMIT $2",
+        )
+        .bind(project_member_id)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| e.to_string())
     }
 }
 

@@ -1,5 +1,6 @@
 use celerex_api::llm::kimi::KimiProvider;
 use celerex_orchestrator::llm::provider::Provider;
+use futures_util::StreamExt;
 use serde_json::json;
 use wiremock::{
     matchers::{header, method, path},
@@ -63,4 +64,45 @@ async fn kimi_provider_sends_bearer_header() {
     assert_eq!(completion.raw["ok"], true);
     // Drop server to trigger wiremock's expect(1) verification.
     drop(server);
+}
+
+#[tokio::test]
+async fn kimi_provider_streams_text_deltas() {
+    let server = MockServer::start().await;
+
+    // Kimi uses the OpenAI-compatible SSE shape: data lines with
+    // choices[0].delta.content, terminated by a literal `data: [DONE]`.
+    let sse_body = concat!(
+        "data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n",
+        "\n",
+        "data: {\"choices\":[{\"delta\":{\"content\":\" world\"}}]}\n",
+        "\n",
+        "data: [DONE]\n",
+        "\n",
+    );
+
+    Mock::given(method("POST"))
+        .and(path("/v1/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(sse_body)
+                .insert_header("content-type", "text/event-stream"),
+        )
+        .mount(&server)
+        .await;
+
+    let provider = KimiProvider::with_base_url(server.uri(), "test-key".into());
+    let mut stream = provider.complete_stream(
+        "moonshot-v1-8k",
+        json!([{ "role": "user", "content": "hi" }]),
+        json!([]),
+    );
+
+    let mut collected = Vec::new();
+    while let Some(item) = stream.next().await {
+        collected.push(item.expect("stream chunk should be Ok"));
+    }
+
+    assert_eq!(collected, vec!["Hello", " world"]);
+    assert_eq!(collected.concat(), "Hello world");
 }

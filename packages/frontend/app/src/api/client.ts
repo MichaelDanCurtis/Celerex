@@ -362,6 +362,31 @@ export async function deleteSchedule(token: string, id: string): Promise<void> {
   if (!r.ok) throw new Error(`deleteSchedule: ${r.status}`);
 }
 
+// ---- Run history (Sprint 2) ----------------------------------------------
+
+export interface ApiRunSummary {
+  id: string;
+  project_member_id: string | null;
+  engagement_id: string;
+  status: string;
+  triggered_by: string;
+  created_at: string;
+}
+
+export async function listRuns(
+  token: string,
+  projectMemberId: string,
+  limit?: number,
+): Promise<ApiRunSummary[]> {
+  const params = new URLSearchParams({ project_member_id: projectMemberId });
+  if (limit !== undefined) params.set("limit", String(limit));
+  const r = await fetch(`${API_BASE}/runs?${params.toString()}`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!r.ok) throw new Error(`listRuns: ${r.status}`);
+  return r.json();
+}
+
 // ---- Workspace assistant + provider introspection -------------------------
 
 export interface AssistantChatResponse {
