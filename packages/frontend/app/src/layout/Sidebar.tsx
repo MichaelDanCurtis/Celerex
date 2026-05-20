@@ -17,6 +17,8 @@ import {
 } from "../state/atoms";
 import { addToastAtom } from "../state/toastAtom";
 import { SearchPanel } from "./SearchPanel";
+import { EngagementManager } from "./EngagementManager";
+import { useProjectsSync } from "../hooks/useProjectsSync";
 
 export function Sidebar({
   collapsed,
@@ -40,6 +42,9 @@ export function Sidebar({
   const [creatingEngagement, setCreatingEngagement] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearchPanel, setShowSearchPanel] = useState(false);
+  const [engagementManagerOpen, setEngagementManagerOpen] = useState(false);
+  // Sync the projects atom with the backend on mount (and exposes refresh()).
+  useProjectsSync();
 
   const favoriteDocs = useMemo(() => {
     const allDocs = engagements.flatMap((e) => e.docs);
@@ -319,8 +324,17 @@ export function Sidebar({
               </div>
             ))}
             {projects.length === 0 && (
-              <SidebarItem label="(no projects yet)" muted onClick={() => {}} />
+              <SidebarItem
+                label="+ Create your first project"
+                muted
+                onClick={() => setEngagementManagerOpen(true)}
+              />
             )}
+            <SidebarItem
+              label="Manage engagements & projects…"
+              muted
+              onClick={() => setEngagementManagerOpen(true)}
+            />
           </SidebarSection>
 
           <SidebarSection title="Workspaces">
@@ -480,6 +494,10 @@ export function Sidebar({
           {"\u2699"}
         </button>
       </div>
+      <EngagementManager
+        open={engagementManagerOpen}
+        onClose={() => setEngagementManagerOpen(false)}
+      />
     </aside>
   );
 }
