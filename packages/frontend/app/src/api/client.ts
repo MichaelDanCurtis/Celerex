@@ -317,3 +317,45 @@ export async function deleteSchedule(token: string, id: string): Promise<void> {
   if (!r.ok) throw new Error(`deleteSchedule: ${r.status}`);
 }
 
+// ---- Workspace assistant + provider introspection -------------------------
+
+export interface AssistantChatResponse {
+  provider_id: string;
+  model: string;
+  raw: unknown;
+}
+
+export async function assistantChat(
+  token: string,
+  messages: Array<{ role: string; content: string }>,
+  providerId?: string,
+  model?: string,
+): Promise<AssistantChatResponse> {
+  const r = await fetch(`${API_BASE}/assistant/chat`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      messages,
+      provider_id: providerId,
+      model,
+    }),
+  });
+  if (!r.ok) {
+    const body = await r.text().catch(() => "");
+    throw new Error(`assistantChat: ${r.status}${body ? ` ${body}` : ""}`);
+  }
+  return r.json();
+}
+
+export async function listProviders(token: string): Promise<string[]> {
+  const r = await fetch(`${API_BASE}/providers`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!r.ok) throw new Error(`listProviders: ${r.status}`);
+  const body = await r.json();
+  return body.providers ?? [];
+}
+
