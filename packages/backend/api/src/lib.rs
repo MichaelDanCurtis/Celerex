@@ -1,3 +1,4 @@
+pub mod assistant;
 pub mod db;
 pub mod engagements;
 pub mod auth;
@@ -39,6 +40,7 @@ pub struct AppState {
     pub run_bus: Arc<RunBus>,
     pub notifiers: Arc<Vec<Arc<dyn notifiers::Notifier>>>,
     pub providers: Arc<Vec<String>>,
+    pub providers_registry: Arc<ProviderRegistry>,
 }
 
 async fn list_providers(State(state): State<AppState>) -> Json<serde_json::Value> {
@@ -84,6 +86,7 @@ fn route_chain() -> Router<AppState> {
             put(scheduler::routes::update).delete(scheduler::routes::delete),
         )
         .route("/api/providers", get(list_providers))
+        .route("/api/assistant/chat", post(assistant::chat))
 }
 
 pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>) -> Router {
@@ -109,11 +112,19 @@ pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>)
         registry.register("gemini", Arc::new(provider));
         provider_ids.push("gemini".to_string());
     }
+    let registry_arc = Arc::new(registry);
     dispatcher.register(
         ExecutionType::Llm,
-        Arc::new(LlmHandler { registry: Arc::new(registry) }),
+        Arc::new(LlmHandler { registry: registry_arc.clone() }),
     );
-    build_app_with_dispatcher_inner(pool, credentials, Arc::new(dispatcher), true, provider_ids)
+    build_app_with_dispatcher_inner(
+        pool,
+        credentials,
+        Arc::new(dispatcher),
+        true,
+        provider_ids,
+        registry_arc,
+    )
 }
 
 /// Build a router with a preconfigured dispatcher (for E2E tests that register
@@ -123,7 +134,14 @@ pub fn build_app_with_dispatcher(
     credentials: Arc<dyn CredentialStore>,
     dispatcher: Arc<Dispatcher>,
 ) -> Router {
-    build_app_with_dispatcher_inner(pool, credentials, dispatcher, false, Vec::new())
+    build_app_with_dispatcher_inner(
+        pool,
+        credentials,
+        dispatcher,
+        false,
+        Vec::new(),
+        Arc::new(ProviderRegistry::new()),
+    )
 }
 
 fn build_app_with_dispatcher_inner(
@@ -132,6 +150,7 @@ fn build_app_with_dispatcher_inner(
     dispatcher: Arc<Dispatcher>,
     spawn_scheduler: bool,
     provider_ids: Vec<String>,
+    providers_registry: Arc<ProviderRegistry>,
 ) -> Router {
     let run_bus = Arc::new(RunBus::new());
     let run_store = Arc::new(runs::PgRunStore::with_bus(pool.clone(), run_bus.clone()));
@@ -201,5 +220,6 @@ fn build_app_with_dispatcher_inner(
         run_bus,
         notifiers,
         providers: Arc::new(provider_ids),
+        providers_registry,
     })
 }

@@ -44,6 +44,7 @@ fn build_router(pool: PgPool) -> Router {
         run_bus,
         notifiers: notifiers_vec,
         providers: Arc::new(Vec::new()),
+        providers_registry: Arc::new(celerex_orchestrator::llm::ProviderRegistry::new()),
     };
     Router::new()
         .route(
