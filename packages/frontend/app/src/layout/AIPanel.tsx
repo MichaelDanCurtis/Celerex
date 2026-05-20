@@ -8,9 +8,8 @@ import {
   type ChatMessage,
 } from "../state/atoms";
 import {
-  assistantChat,
+  assistantChatStream,
   listProviders,
-  type AssistantChatResponse,
 } from "../api/client";
 import {
   selectedModelAtom,
@@ -18,21 +17,9 @@ import {
 import { AIProviderSelector } from "./AIProviderSelector";
 import { insertContentIntoDoc, extractDocText } from "../editor/insertContent";
 
-// Extract reply text from the provider's raw response body.
-// /api/assistant/chat returns the provider's raw response untouched, so we
-// have to handle each shape (Anthropic, OpenAI, Gemini) we expect to see.
-function extractReply(resp: AssistantChatResponse): string {
-  const raw = resp.raw as any;
-  // Anthropic: { content: [{ type: "text", text: "..." }], stop_reason: ... }
-  if (raw?.content?.[0]?.text) return raw.content[0].text;
-  // OpenAI: { choices: [{ message: { content: "..." } }] }
-  if (raw?.choices?.[0]?.message?.content) return raw.choices[0].message.content;
-  // Gemini: { candidates: [{ content: { parts: [{ text: "..." }] } }] }
-  if (raw?.candidates?.[0]?.content?.parts?.[0]?.text) {
-    return raw.candidates[0].content.parts[0].text;
-  }
-  return "(no reply)";
-}
+// Note: the non-streaming `assistantChat` and its `AssistantChatResponse`
+// shape remain exported from `../api/client` for any other caller that still
+// needs a single-shot reply. AIPanel itself only uses the streaming variant.
 
 function formatTime(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString([], {
@@ -191,6 +178,10 @@ export function AIPanel() {
   const token = useAtomValue(tokenAtom);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // AbortController for the in-flight streaming request. Stored in a ref so
+  // the Stop button can reach it without re-rendering, and so that swapping
+  // streams (rare) tears down the old fetch.
+  const abortRef = useRef<AbortController | null>(null);
 
   // Backend-configured providers (from /api/providers). Empty = backend
   // hasn't been queried yet (or has no configured providers); falling back
@@ -250,7 +241,16 @@ export function AIPanel() {
       timestamp: Date.now(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    // Pre-allocate the assistant bubble that will accumulate streamed deltas.
+    const assistantId = genId("msg");
+    const assistantMessage: ChatMessage = {
+      id: assistantId,
+      role: "assistant",
+      content: "",
+      timestamp: Date.now(),
+    };
+
+    setMessages((prev) => [...prev, userMessage, assistantMessage]);
     setInput("");
     setLoading(true);
     textareaRef.current?.focus();
@@ -258,43 +258,70 @@ export function AIPanel() {
     // Build context for non-quick-action messages
     const docContext = systemPrompt ? undefined : getDocContext();
 
-    try {
-      // Fold doc context (when not a quick action) into the user message so
-      // the backend assistant sees it.
-      const promptWithContext = docContext
-        ? `${actualMessage}\n\n--- Document context ---\n${docContext}`
-        : actualMessage;
+    // Fold doc context (when not a quick action) into the user message so
+    // the backend assistant sees it.
+    const promptWithContext = docContext
+      ? `${actualMessage}\n\n--- Document context ---\n${docContext}`
+      : actualMessage;
 
-      // Build a single-turn message array. The backend assistant treats this
-      // as the full conversation, so we don't replay history for now — the
-      // existing UX is one-shot per send.
-      const apiMessages = [{ role: "user", content: promptWithContext }];
+    // Build a single-turn message array. The backend assistant treats this
+    // as the full conversation, so we don't replay history for now — the
+    // existing UX is one-shot per send.
+    const apiMessages = [{ role: "user", content: promptWithContext }];
 
-      const providerArg = backendProviderId || undefined;
-      const modelArg = modelOverride.trim() ? modelOverride.trim() : (selectedModel || undefined);
+    const providerArg = backendProviderId || undefined;
+    const modelArg = modelOverride.trim() ? modelOverride.trim() : (selectedModel || undefined);
 
-      const resp = await assistantChat(token, apiMessages, providerArg, modelArg);
-      const reply = extractReply(resp);
-      const assistantMessage: ChatMessage = {
-        id: genId("msg"),
-        role: "assistant",
-        content: reply,
-        timestamp: Date.now(),
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err);
-      const errorMessage: ChatMessage = {
-        id: genId("msg"),
-        role: "assistant",
-        content: `Error: ${detail}`,
-        timestamp: Date.now(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setLoading(false);
-    }
+    // Tear down any prior in-flight stream and arm a new abort controller for
+    // the Stop button.
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    let appended = "";
+    const appendDelta = (chunk: string) => {
+      appended += chunk;
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId ? { ...m, content: appended } : m,
+        ),
+      );
+    };
+
+    await assistantChatStream(
+      token,
+      apiMessages,
+      providerArg,
+      modelArg,
+      {
+        signal: controller.signal,
+        onDelta: appendDelta,
+        onDone: () => {
+          // Finalize: nothing extra to do — bubble already holds full text.
+        },
+        onError: (msg) => {
+          // Replace the streaming bubble with an error placeholder so the
+          // user sees what went wrong instead of an empty assistant message.
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId
+                ? { ...m, content: `Error: ${msg}` }
+                : m,
+            ),
+          );
+        },
+      },
+    );
+
+    if (abortRef.current === controller) abortRef.current = null;
+    setLoading(false);
   }, [loading, getDocContext, setMessages, token, backendProviderId, modelOverride, selectedModel]);
+
+  const handleStop = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setLoading(false);
+  }, []);
 
   const handleSend = useCallback(() => {
     const trimmed = input.trim();
@@ -537,25 +564,45 @@ export function AIPanel() {
               color: "var(--celerex-text-primary)",
             }}
           />
-          <button
-            disabled={isDisabled}
-            onClick={handleSend}
-            style={{
-              padding: "8px 16px",
-              borderRadius: 8,
-              border: "none",
-              background: isDisabled ? "var(--celerex-border)" : "var(--celerex-accent)",
-              color: "#fff",
-              cursor: isDisabled ? "not-allowed" : "pointer",
-              fontSize: 13,
-              fontWeight: 500,
-              whiteSpace: "nowrap",
-              opacity: isDisabled ? 0.6 : 1,
-              transition: "background 0.15s, opacity 0.15s",
-            }}
-          >
-            Send
-          </button>
+          {loading ? (
+            <button
+              onClick={handleStop}
+              style={{
+                padding: "8px 16px",
+                borderRadius: 8,
+                border: "1px solid var(--celerex-border)",
+                background: "var(--celerex-bg-secondary)",
+                color: "var(--celerex-text-primary)",
+                cursor: "pointer",
+                fontSize: 13,
+                fontWeight: 500,
+                whiteSpace: "nowrap",
+                transition: "background 0.15s, opacity 0.15s",
+              }}
+            >
+              Stop
+            </button>
+          ) : (
+            <button
+              disabled={isDisabled}
+              onClick={handleSend}
+              style={{
+                padding: "8px 16px",
+                borderRadius: 8,
+                border: "none",
+                background: isDisabled ? "var(--celerex-border)" : "var(--celerex-accent)",
+                color: "#fff",
+                cursor: isDisabled ? "not-allowed" : "pointer",
+                fontSize: 13,
+                fontWeight: 500,
+                whiteSpace: "nowrap",
+                opacity: isDisabled ? 0.6 : 1,
+                transition: "background 0.15s, opacity 0.15s",
+              }}
+            >
+              Send
+            </button>
+          )}
         </div>
       </div>
     </aside>

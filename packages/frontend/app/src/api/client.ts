@@ -395,6 +395,104 @@ export async function assistantChat(
   return r.json();
 }
 
+// ---- Streaming assistant chat (SSE over POST) ----------------------------
+//
+// `POST /api/assistant/chat/stream` emits Server-Sent Events:
+//   event: delta\ndata: <chunk>\n\n   — per-token text
+//   event: error\ndata: <message>\n\n — terminal
+//   event: done\ndata: \n\n           — clean completion
+//
+// Browser `EventSource` doesn't support custom request headers (so it can't
+// send a Bearer token) nor request bodies. We therefore drive the stream
+// manually with `fetch` + a TextDecoder over `response.body`.
+
+export interface ChatStreamHandlers {
+  onDelta: (text: string) => void;
+  onDone?: () => void;
+  onError?: (msg: string) => void;
+  signal?: AbortSignal;
+}
+
+export async function assistantChatStream(
+  token: string,
+  messages: Array<{ role: string; content: string }>,
+  providerId: string | undefined,
+  model: string | undefined,
+  handlers: ChatStreamHandlers,
+): Promise<void> {
+  let r: Response;
+  try {
+    r = await fetch(`${API_BASE}/assistant/chat/stream`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        messages,
+        provider_id: providerId,
+        model,
+      }),
+      signal: handlers.signal,
+    });
+  } catch (err) {
+    // Includes AbortError when the caller cancels before headers arrive.
+    handlers.onError?.(err instanceof Error ? err.message : String(err));
+    return;
+  }
+  if (!r.ok) {
+    const body = await r.text().catch(() => "");
+    handlers.onError?.(`HTTP ${r.status}: ${body}`);
+    return;
+  }
+  const reader = r.body?.getReader();
+  if (!reader) {
+    handlers.onError?.("no response body");
+    return;
+  }
+  const decoder = new TextDecoder();
+  let buf = "";
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      // SSE frames are separated by a blank line ("\n\n").
+      let sepIdx: number;
+      while ((sepIdx = buf.indexOf("\n\n")) >= 0) {
+        const frame = buf.slice(0, sepIdx);
+        buf = buf.slice(sepIdx + 2);
+        let eventName = "delta";
+        let data = "";
+        for (const line of frame.split("\n")) {
+          if (line.startsWith("event:")) {
+            eventName = line.slice(6).trim();
+          } else if (line.startsWith("data:")) {
+            // SSE allows multi-line data: join with "\n", strip the one
+            // leading space that "data: <text>" typically carries.
+            data += (data ? "\n" : "") + line.slice(5).replace(/^ /, "");
+          }
+        }
+        if (eventName === "delta") {
+          handlers.onDelta(data);
+        } else if (eventName === "error") {
+          handlers.onError?.(data);
+          return;
+        } else if (eventName === "done") {
+          handlers.onDone?.();
+          return;
+        }
+      }
+    }
+  } catch (err) {
+    if ((err as { name?: string })?.name === "AbortError") {
+      // Caller-initiated cancel; treat as quiet termination.
+      return;
+    }
+    handlers.onError?.(err instanceof Error ? err.message : String(err));
+  }
+}
+
 export async function listProviders(token: string): Promise<string[]> {
   const r = await fetch(`${API_BASE}/providers`, {
     headers: { authorization: `Bearer ${token}` },

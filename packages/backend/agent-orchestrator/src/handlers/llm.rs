@@ -22,14 +22,24 @@ impl LlmHandler {
 #[async_trait]
 impl Handler for LlmHandler {
     async fn invoke(&self, config: Value, inputs: Value) -> Result<Value, DispatchError> {
-        let provider_id = config
+        let primary_id = config
             .get("provider_id")
             .and_then(|v| v.as_str())
-            .unwrap_or("default");
-        let provider = self
-            .registry
-            .get(provider_id)
-            .ok_or_else(|| DispatchError::Handler(format!("no provider '{provider_id}'")))?;
+            .unwrap_or("default")
+            .to_string();
+        let fallback_ids: Vec<String> = config
+            .get("provider_fallback_ids")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let mut chain = vec![primary_id];
+        chain.extend(fallback_ids);
+
         let model = config
             .get("model")
             .and_then(|v| v.as_str())
@@ -39,10 +49,26 @@ impl Handler for LlmHandler {
             .get("messages")
             .cloned()
             .unwrap_or(Value::Array(vec![]));
-        let c = provider
-            .complete(model, messages, tools)
-            .await
-            .map_err(DispatchError::Handler)?;
-        Ok(c.raw)
+
+        let mut last_err: Option<String> = None;
+        for id in &chain {
+            let Some(provider) = self.registry.get(id) else {
+                last_err = Some(format!("no provider '{id}'"));
+                continue;
+            };
+            match provider
+                .complete(model, messages.clone(), tools.clone())
+                .await
+            {
+                Ok(c) => return Ok(c.raw),
+                Err(e) => {
+                    last_err = Some(format!("provider '{id}' failed: {e}"));
+                    continue;
+                }
+            }
+        }
+        Err(DispatchError::Handler(
+            last_err.unwrap_or_else(|| "no providers attempted".into()),
+        ))
     }
 }
