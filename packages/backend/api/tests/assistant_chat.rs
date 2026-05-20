@@ -52,6 +52,10 @@ fn build_state(pool: PgPool, registry: Arc<ProviderRegistry>, provider_ids: Vec<
 fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/api/assistant/chat", post(celerex_api::assistant::chat))
+        .route(
+            "/api/assistant/chat/stream",
+            post(celerex_api::assistant::chat_stream),
+        )
         .with_state(state)
 }
 
@@ -289,4 +293,97 @@ async fn assistant_chat_propagates_provider_error() {
         .unwrap();
 
     assert_eq!(res.status(), StatusCode::BAD_GATEWAY);
+}
+
+#[tokio::test]
+async fn chat_stream_yields_delta_then_done() {
+    let db = common::start_test_db().await;
+
+    // Anthropic-style SSE body with two text deltas + message_stop.
+    let sse_body = concat!(
+        "event: message_start\n",
+        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_x\"}}\n",
+        "\n",
+        "event: content_block_delta\n",
+        "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello\"}}\n",
+        "\n",
+        "event: content_block_delta\n",
+        "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\" world\"}}\n",
+        "\n",
+        "event: message_stop\n",
+        "data: {\"type\":\"message_stop\"}\n",
+        "\n",
+    );
+
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(sse_body)
+                .insert_header("content-type", "text/event-stream"),
+        )
+        .mount(&server)
+        .await;
+
+    let client = AnthropicClient::with_base_url(server.uri(), "test-key".into());
+    let provider: Arc<dyn Provider> = Arc::new(client);
+    let mut registry = ProviderRegistry::new();
+    registry.register("default", provider);
+    let state = build_state(
+        db.pool.clone(),
+        Arc::new(registry),
+        vec!["default".to_string()],
+    );
+    let app = build_router(state);
+
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/assistant/chat/stream")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "messages": [{"role": "user", "content": "hi"}]
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.status(), StatusCode::OK);
+    // SSE content-type sanity check.
+    let ct = res
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+    assert!(
+        ct.starts_with("text/event-stream"),
+        "expected SSE content-type, got {ct:?}"
+    );
+
+    let body = body_text(res).await;
+    // Each named event lands as `event: <name>\ndata: <payload>\n\n`.
+    assert!(
+        body.contains("event: delta"),
+        "expected at least one `delta` event in SSE body, got:\n{body}"
+    );
+    assert!(
+        body.contains("data: Hello"),
+        "expected first delta text fragment, got:\n{body}"
+    );
+    assert!(
+        body.contains("data:  world") || body.contains("data: world"),
+        "expected second delta text fragment, got:\n{body}"
+    );
+    assert!(
+        body.contains("event: done"),
+        "expected terminal `done` event, got:\n{body}"
+    );
 }

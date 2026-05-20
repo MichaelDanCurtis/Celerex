@@ -90,6 +90,7 @@ fn route_chain() -> Router<AppState> {
         .route("/api/schedules/{id}/fire", post(scheduler::routes::fire))
         .route("/api/providers", get(list_providers))
         .route("/api/assistant/chat", post(assistant::chat))
+        .route("/api/assistant/chat/stream", post(assistant::chat_stream))
 }
 
 pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>) -> Router {
