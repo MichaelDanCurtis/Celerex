@@ -4,6 +4,7 @@ pub mod engagements;
 pub mod auth;
 pub mod projects;
 pub mod docs;
+pub mod metrics;
 pub mod plugins;
 pub mod providers;
 pub mod webhooks;
@@ -114,6 +115,7 @@ fn route_chain() -> Router<AppState> {
         )
         .route("/api/assistant/chat", post(assistant::chat))
         .route("/api/assistant/chat/stream", post(assistant::chat_stream))
+        .route("/api/metrics/summary", get(metrics::summary))
 }
 
 pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>) -> Router {

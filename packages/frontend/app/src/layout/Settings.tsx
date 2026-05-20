@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import { useAtom } from "jotai";
 import { themeAtom, accentColorAtom, fontSizeAtom, tokenAtom } from "../state/atoms";
 import {
+  type ApiMetricsSummary,
   type ApiProviderKey,
+  fetchMetricsSummary,
   listProviderKeys,
   setProviderKey,
   deleteProviderKey,
@@ -70,6 +72,204 @@ function ToggleSwitch({
         }}
       />
     </button>
+  );
+}
+
+function WorkspaceStatsSection() {
+  const [token] = useAtom(tokenAtom);
+  const [summary, setSummary] = useState<ApiMetricsSummary | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!token) {
+      setLoaded(true);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const s = await fetchMetricsSummary(token);
+        if (!cancelled) {
+          setSummary(s);
+          setError(null);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : String(e));
+        }
+      } finally {
+        if (!cancelled) setLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  const sectionTitleStyle: React.CSSProperties = {
+    fontSize: 14,
+    fontWeight: 600,
+    color: "var(--celerex-text-primary)",
+    marginBottom: 16,
+    paddingBottom: 8,
+    borderBottom: "1px solid var(--celerex-border)",
+  };
+
+  const cardStyle: React.CSSProperties = {
+    padding: "12px 14px",
+    border: "1px solid var(--celerex-border)",
+    borderRadius: 8,
+    background: "var(--celerex-bg-sidebar)",
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    minWidth: 0,
+  };
+
+  const valueStyle: React.CSSProperties = {
+    fontSize: 22,
+    fontWeight: 700,
+    color: "var(--celerex-text-primary)",
+    lineHeight: 1.1,
+  };
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: 11,
+    color: "var(--celerex-text-secondary)",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  };
+
+  if (!token) {
+    return (
+      <div style={{ marginBottom: 32 }}>
+        <div style={sectionTitleStyle}>Workspace Stats</div>
+        <div style={{ fontSize: 13, color: "var(--celerex-text-secondary)" }}>
+          Sign in to view workspace metrics.
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ marginBottom: 32 }}>
+        <div style={sectionTitleStyle}>Workspace Stats</div>
+        <div
+          style={{
+            padding: "8px 10px",
+            border: "1px solid #ef4444",
+            borderRadius: 6,
+            background: "rgba(239, 68, 68, 0.08)",
+            color: "#ef4444",
+            fontSize: 12,
+          }}
+        >
+          {error}
+        </div>
+      </div>
+    );
+  }
+
+  if (!loaded || !summary) {
+    return (
+      <div style={{ marginBottom: 32 }}>
+        <div style={sectionTitleStyle}>Workspace Stats</div>
+        <div style={{ fontSize: 13, color: "var(--celerex-text-secondary)" }}>
+          Loading…
+        </div>
+      </div>
+    );
+  }
+
+  const reasoning = summary.members_by_agent_type["reasoning"] ?? 0;
+  const writer = summary.members_by_agent_type["writer"] ?? 0;
+
+  const cards: { label: string; value: React.ReactNode }[] = [
+    { label: "Engagements", value: summary.engagements_total },
+    { label: "Projects", value: summary.projects_total },
+    {
+      label: "Members",
+      value: (
+        <span>
+          {summary.members_total}
+          <span
+            style={{
+              fontSize: 11,
+              color: "var(--celerex-text-secondary)",
+              marginLeft: 6,
+              fontWeight: 500,
+            }}
+          >
+            {reasoning}R / {writer}W
+          </span>
+        </span>
+      ),
+    },
+    {
+      label: "Schedules",
+      value: (
+        <span>
+          {summary.schedules_total}
+          <span
+            style={{
+              fontSize: 11,
+              color: "var(--celerex-text-secondary)",
+              marginLeft: 6,
+              fontWeight: 500,
+            }}
+          >
+            {summary.schedules_enabled} on
+          </span>
+        </span>
+      ),
+    },
+    { label: "Runs (24h)", value: summary.runs_24h },
+    {
+      label: "Succeeded (24h)",
+      value: (
+        <span style={{ color: "#22c55e" }}>{summary.runs_succeeded_24h}</span>
+      ),
+    },
+    {
+      label: "Failed (24h)",
+      value: (
+        <span style={{ color: "#ef4444" }}>{summary.runs_failed_24h}</span>
+      ),
+    },
+    { label: "Documents", value: summary.docs_total },
+    { label: "Plugins", value: summary.plugins_installed },
+    {
+      label: "Providers",
+      value: (
+        <span style={{ fontSize: 14, fontWeight: 600 }}>
+          {summary.providers_configured.length === 0
+            ? "none"
+            : summary.providers_configured.join(", ")}
+        </span>
+      ),
+    },
+  ];
+
+  return (
+    <div style={{ marginBottom: 32 }}>
+      <div style={sectionTitleStyle}>Workspace Stats</div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+          gap: 10,
+        }}
+      >
+        {cards.map((c) => (
+          <div key={c.label} style={cardStyle}>
+            <span style={labelStyle}>{c.label}</span>
+            <span style={valueStyle}>{c.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -385,6 +585,9 @@ export function Settings() {
             Configure your workspace
           </p>
         </div>
+
+        {/* Workspace Stats (engagement-scoped point-in-time counts) */}
+        <WorkspaceStatsSection />
 
         {/* Appearance */}
         <div style={sectionStyle}>

@@ -596,6 +596,40 @@ export async function deleteProviderKey(
   }
 }
 
+// ---- Workspace metrics summary -------------------------------------------
+//
+// `GET /api/metrics/summary` returns a point-in-time aggregation of
+// engagement-scoped counts. Shape mirrors `MetricsSummary` on the backend.
+// Used by the Settings page's "Workspace Stats" card grid.
+
+export interface ApiMetricsSummary {
+  engagements_total: number;
+  projects_total: number;
+  members_total: number;
+  members_by_agent_type: Record<string, number>;
+  schedules_total: number;
+  schedules_enabled: number;
+  runs_24h: number;
+  runs_succeeded_24h: number;
+  runs_failed_24h: number;
+  docs_total: number;
+  plugins_installed: number;
+  providers_configured: string[];
+}
+
+export async function fetchMetricsSummary(
+  token: string,
+): Promise<ApiMetricsSummary> {
+  const r = await fetch(`${API_BASE}/metrics/summary`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!r.ok) {
+    const body = await r.text().catch(() => "");
+    throw new Error(`fetchMetricsSummary: ${r.status}${body ? ` ${body}` : ""}`);
+  }
+  return r.json();
+}
+
 // ---- Plugin endpoints ----------------------------------------------------
 //
 // The backend stores a plugin "install" as a row in plugin_installs joined to
