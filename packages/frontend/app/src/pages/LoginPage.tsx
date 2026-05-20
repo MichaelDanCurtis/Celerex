@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useSetAtom } from "jotai";
 import { login } from "../api/client";
-import { tokenAtom, authEngagementAtom } from "../state/atoms";
+import { tokenAtom, authEngagementAtom, activeViewAtom } from "../state/atoms";
 
 /**
  * Dev-mode signin page. The user types an engagement name and the backend
@@ -16,6 +16,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const setToken = useSetAtom(tokenAtom);
   const setAuthEngagement = useSetAtom(authEngagementAtom);
+  const setActiveView = useSetAtom(activeViewAtom);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -32,6 +33,9 @@ export function LoginPage() {
       // so a reload picks up the same session.
       setToken(resp.token);
       setAuthEngagement(resp.engagement);
+      // Land on the Workspace Dashboard so the user sees live workspace
+      // metrics first, not whatever view they last had open.
+      setActiveView("dashboard");
       // Don't navigate manually — App.tsx will re-render the workspace
       // layout as soon as tokenAtom is non-empty.
     } catch (err) {

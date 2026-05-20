@@ -450,6 +450,11 @@ export function Sidebar({
 
           <SidebarSection title="Views">
             <SidebarItem
+              label="Dashboard"
+              active={activeView === "dashboard"}
+              onClick={() => setActiveView("dashboard")}
+            />
+            <SidebarItem
               label="Timeline"
               active={activeView === "timeline"}
               onClick={() => setActiveView("timeline")}

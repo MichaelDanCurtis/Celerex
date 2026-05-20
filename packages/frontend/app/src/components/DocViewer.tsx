@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { getDoc, listDocBlocks, type ApiDoc, type ApiDocBlock } from "../api/client";
+import { Markdown } from "../utils/renderMarkdown";
 
 export function DocViewer({ token, docId }: { token: string; docId: string }) {
   const [doc, setDoc] = useState<ApiDoc | null>(null);
   const [blocks, setBlocks] = useState<ApiDocBlock[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [rawMarkdown, setRawMarkdown] = useState(false);
 
   useEffect(() => {
     if (!token || !docId) return;
@@ -87,14 +89,42 @@ export function DocViewer({ token, docId }: { token: string; docId: string }) {
           marginBottom: 16,
           paddingBottom: 12,
           borderBottom: "1px solid var(--celerex-border)",
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 12,
         }}
       >
-        <h2 data-testid="doc-viewer-title" style={{ margin: "0 0 4px 0" }}>
-          {doc.title || "Untitled"}
-        </h2>
-        <div style={{ fontSize: 12, color: "var(--celerex-text-secondary)" }}>
-          Created: {formatDate(doc.created_at)}
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <h2 data-testid="doc-viewer-title" style={{ margin: "0 0 4px 0" }}>
+            {doc.title || "Untitled"}
+          </h2>
+          <div style={{ fontSize: 12, color: "var(--celerex-text-secondary)" }}>
+            Created: {formatDate(doc.created_at)}
+          </div>
         </div>
+        <button
+          type="button"
+          data-testid="doc-viewer-raw-toggle"
+          aria-pressed={rawMarkdown}
+          onClick={() => setRawMarkdown((v) => !v)}
+          style={{
+            flexShrink: 0,
+            fontSize: 12,
+            padding: "4px 10px",
+            borderRadius: 4,
+            border: "1px solid var(--celerex-border)",
+            background: rawMarkdown
+              ? "var(--celerex-bg-secondary, rgba(127, 127, 127, 0.12))"
+              : "transparent",
+            color: "var(--celerex-text-secondary)",
+            cursor: "pointer",
+            fontFamily: "inherit",
+          }}
+          title="Toggle between rendered markdown and raw text"
+        >
+          {rawMarkdown ? "Rendered" : "Raw"}
+        </button>
       </header>
 
       <div data-testid="doc-viewer-blocks">
@@ -111,7 +141,7 @@ export function DocViewer({ token, docId }: { token: string; docId: string }) {
           </div>
         ) : (
           blocks.map((block) => (
-            <BlockRenderer key={block.id} block={block} />
+            <BlockRenderer key={block.id} block={block} raw={rawMarkdown} />
           ))
         )}
       </div>
@@ -119,7 +149,7 @@ export function DocViewer({ token, docId }: { token: string; docId: string }) {
   );
 }
 
-function BlockRenderer({ block }: { block: ApiDocBlock }) {
+function BlockRenderer({ block, raw }: { block: ApiDocBlock; raw: boolean }) {
   const payload = block.payload as { type?: string; text?: string } | null;
   const type = payload && typeof payload === "object" ? payload.type : undefined;
 
@@ -136,20 +166,37 @@ function BlockRenderer({ block }: { block: ApiDocBlock }) {
       }}
     >
       {type === "markdown" ? (
-        <div
-          className="whitespace-pre-wrap"
-          style={{
-            whiteSpace: "pre-wrap",
-            fontSize: 14,
-            lineHeight: 1.5,
-            fontFamily: "inherit",
-            margin: 0,
-          }}
-        >
-          {typeof payload?.text === "string"
-            ? payload.text
-            : JSON.stringify(payload)}
-        </div>
+        typeof payload?.text === "string" ? (
+          raw ? (
+            <div
+              data-testid="markdown-raw"
+              className="whitespace-pre-wrap"
+              style={{
+                whiteSpace: "pre-wrap",
+                fontSize: 14,
+                lineHeight: 1.5,
+                fontFamily:
+                  "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                margin: 0,
+              }}
+            >
+              {payload.text}
+            </div>
+          ) : (
+            <Markdown source={payload.text} />
+          )
+        ) : (
+          <div
+            style={{
+              whiteSpace: "pre-wrap",
+              fontSize: 14,
+              lineHeight: 1.5,
+              margin: 0,
+            }}
+          >
+            {JSON.stringify(payload)}
+          </div>
+        )
       ) : type === "json" ? (
         <pre
           style={{

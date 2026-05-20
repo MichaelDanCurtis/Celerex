@@ -10,6 +10,7 @@ import { FleetDashboard } from "./pages/FleetDashboard";
 import { DocsPage } from "./pages/DocsPage";
 import { PluginsPage } from "./pages/PluginsPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { DashboardPage } from "./pages/DashboardPage";
 import { LoginPage } from "./pages/LoginPage";
 import { exportDocAsMarkdown, printDocument } from "./utils/export";
 import { importMarkdownFile } from "./utils/import";
@@ -301,7 +302,9 @@ export function App() {
         )}
         <FindReplace open={findReplaceOpen} onClose={() => setFindReplaceOpen(false)} />
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-          {activeView === "settings" ? (
+          {activeView === "dashboard" ? (
+            <DashboardPage />
+          ) : activeView === "settings" ? (
             <SettingsPage />
           ) : activeView === "agent-dashboard" ? (
             <AgentDashboard />
