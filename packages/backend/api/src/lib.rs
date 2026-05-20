@@ -26,7 +26,9 @@ use celerex_orchestrator::{
     llm::{Provider, ProviderRegistry},
     tool_dispatch::Dispatcher,
 };
-use crate::llm::{anthropic::AnthropicClient, openai::OpenAiProvider};
+use crate::llm::{
+    anthropic::AnthropicClient, gemini::GeminiProvider, kimi::KimiProvider, openai::OpenAiProvider,
+};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -68,6 +70,14 @@ fn route_chain() -> Router<AppState> {
         .route("/api/projects/{project_id}/members", get(project_members::routes::list))
         .route("/api/project_members/{id}/run", post(project_members::routes::run_manual))
         .route("/api/runs/{run_id}/events", get(runs::sse::stream))
+        .route(
+            "/api/schedules",
+            post(scheduler::routes::create).get(scheduler::routes::list),
+        )
+        .route(
+            "/api/schedules/{id}",
+            put(scheduler::routes::update).delete(scheduler::routes::delete),
+        )
 }
 
 pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>) -> Router {
@@ -80,6 +90,12 @@ pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>)
     }
     if let Ok(provider) = OpenAiProvider::from_env() {
         registry.register("openai", Arc::new(provider));
+    }
+    if let Ok(provider) = KimiProvider::from_env() {
+        registry.register("kimi", Arc::new(provider));
+    }
+    if let Ok(provider) = GeminiProvider::from_env() {
+        registry.register("gemini", Arc::new(provider));
     }
     dispatcher.register(
         ExecutionType::Llm,

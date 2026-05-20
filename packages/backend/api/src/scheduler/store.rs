@@ -1,9 +1,10 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use serde::Serialize;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Schedule {
     pub id: Uuid,
     pub project_member_id: Uuid,
@@ -24,6 +25,20 @@ pub trait SchedulesStore: Send + Sync {
         fired_at: DateTime<Utc>,
         next_fire_at: DateTime<Utc>,
     ) -> Result<(), String>;
+    async fn list_for_project_member(
+        &self,
+        project_member_id: Uuid,
+    ) -> Result<Vec<Schedule>, String>;
+    async fn get(&self, id: Uuid) -> Result<Option<Schedule>, String>;
+    async fn update(
+        &self,
+        id: Uuid,
+        cron_expr: &str,
+        timezone: &str,
+        enabled: bool,
+        next_fire_at: DateTime<Utc>,
+    ) -> Result<(), String>;
+    async fn delete(&self, id: Uuid) -> Result<(), String>;
 }
 
 pub struct PgSchedulesStore {
@@ -90,6 +105,90 @@ impl SchedulesStore for PgSchedulesStore {
             .bind(id)
             .bind(fired_at)
             .bind(next_fire_at)
+            .execute(&self.pool)
+            .await
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+
+    async fn list_for_project_member(
+        &self,
+        project_member_id: Uuid,
+    ) -> Result<Vec<Schedule>, String> {
+        let rows = sqlx::query_as::<
+            _,
+            (Uuid, Uuid, String, String, DateTime<Utc>, Option<DateTime<Utc>>, bool),
+        >(
+            "SELECT id, project_member_id, cron_expr, timezone, next_fire_at, last_fired_at, enabled
+             FROM schedules WHERE project_member_id = $1 ORDER BY next_fire_at",
+        )
+        .bind(project_member_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+        Ok(rows
+            .into_iter()
+            .map(|r| Schedule {
+                id: r.0,
+                project_member_id: r.1,
+                cron_expr: r.2,
+                timezone: r.3,
+                next_fire_at: r.4,
+                last_fired_at: r.5,
+                enabled: r.6,
+            })
+            .collect())
+    }
+
+    async fn get(&self, id: Uuid) -> Result<Option<Schedule>, String> {
+        let row = sqlx::query_as::<
+            _,
+            (Uuid, Uuid, String, String, DateTime<Utc>, Option<DateTime<Utc>>, bool),
+        >(
+            "SELECT id, project_member_id, cron_expr, timezone, next_fire_at, last_fired_at, enabled
+             FROM schedules WHERE id = $1",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+        Ok(row.map(|r| Schedule {
+            id: r.0,
+            project_member_id: r.1,
+            cron_expr: r.2,
+            timezone: r.3,
+            next_fire_at: r.4,
+            last_fired_at: r.5,
+            enabled: r.6,
+        }))
+    }
+
+    async fn update(
+        &self,
+        id: Uuid,
+        cron_expr: &str,
+        timezone: &str,
+        enabled: bool,
+        next_fire_at: DateTime<Utc>,
+    ) -> Result<(), String> {
+        sqlx::query(
+            "UPDATE schedules SET cron_expr = $2, timezone = $3, enabled = $4, next_fire_at = $5
+             WHERE id = $1",
+        )
+        .bind(id)
+        .bind(cron_expr)
+        .bind(timezone)
+        .bind(enabled)
+        .bind(next_fire_at)
+        .execute(&self.pool)
+        .await
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+    }
+
+    async fn delete(&self, id: Uuid) -> Result<(), String> {
+        sqlx::query("DELETE FROM schedules WHERE id = $1")
+            .bind(id)
             .execute(&self.pool)
             .await
             .map(|_| ())
