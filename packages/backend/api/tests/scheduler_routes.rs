@@ -43,6 +43,7 @@ fn build_router(pool: PgPool) -> Router {
         members,
         run_bus,
         notifiers: notifiers_vec,
+        providers: Arc::new(Vec::new()),
     };
     Router::new()
         .route(

@@ -12,7 +12,7 @@ pub mod project_members;
 pub mod notifiers;
 
 use std::sync::Arc;
-use axum::{Router, routing::{get, patch, post, put}, Json};
+use axum::{Router, routing::{get, patch, post, put}, Json, extract::State};
 use serde_json::json;
 use sqlx::PgPool;
 
@@ -38,6 +38,11 @@ pub struct AppState {
     pub members: Arc<dyn MembersStore>,
     pub run_bus: Arc<RunBus>,
     pub notifiers: Arc<Vec<Arc<dyn notifiers::Notifier>>>,
+    pub providers: Arc<Vec<String>>,
+}
+
+async fn list_providers(State(state): State<AppState>) -> Json<serde_json::Value> {
+    Json(json!({ "providers": &*state.providers }))
 }
 
 pub fn build_app(pool: PgPool) -> Router {
@@ -78,30 +83,37 @@ fn route_chain() -> Router<AppState> {
             "/api/schedules/{id}",
             put(scheduler::routes::update).delete(scheduler::routes::delete),
         )
+        .route("/api/providers", get(list_providers))
 }
 
 pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>) -> Router {
     let mut dispatcher = Dispatcher::new();
     let mut registry = ProviderRegistry::new();
+    let mut provider_ids: Vec<String> = Vec::new();
     if let Ok(client) = AnthropicClient::from_env() {
         let provider: Arc<dyn Provider> = Arc::new(client);
         registry.register("anthropic", provider.clone());
         registry.register("default", provider);
+        provider_ids.push("anthropic".to_string());
+        provider_ids.push("default".to_string());
     }
     if let Ok(provider) = OpenAiProvider::from_env() {
         registry.register("openai", Arc::new(provider));
+        provider_ids.push("openai".to_string());
     }
     if let Ok(provider) = KimiProvider::from_env() {
         registry.register("kimi", Arc::new(provider));
+        provider_ids.push("kimi".to_string());
     }
     if let Ok(provider) = GeminiProvider::from_env() {
         registry.register("gemini", Arc::new(provider));
+        provider_ids.push("gemini".to_string());
     }
     dispatcher.register(
         ExecutionType::Llm,
         Arc::new(LlmHandler { registry: Arc::new(registry) }),
     );
-    build_app_with_dispatcher_inner(pool, credentials, Arc::new(dispatcher), true)
+    build_app_with_dispatcher_inner(pool, credentials, Arc::new(dispatcher), true, provider_ids)
 }
 
 /// Build a router with a preconfigured dispatcher (for E2E tests that register
@@ -111,7 +123,7 @@ pub fn build_app_with_dispatcher(
     credentials: Arc<dyn CredentialStore>,
     dispatcher: Arc<Dispatcher>,
 ) -> Router {
-    build_app_with_dispatcher_inner(pool, credentials, dispatcher, false)
+    build_app_with_dispatcher_inner(pool, credentials, dispatcher, false, Vec::new())
 }
 
 fn build_app_with_dispatcher_inner(
@@ -119,6 +131,7 @@ fn build_app_with_dispatcher_inner(
     credentials: Arc<dyn CredentialStore>,
     dispatcher: Arc<Dispatcher>,
     spawn_scheduler: bool,
+    provider_ids: Vec<String>,
 ) -> Router {
     let run_bus = Arc::new(RunBus::new());
     let run_store = Arc::new(runs::PgRunStore::with_bus(pool.clone(), run_bus.clone()));
@@ -187,5 +200,6 @@ fn build_app_with_dispatcher_inner(
         members,
         run_bus,
         notifiers,
+        providers: Arc::new(provider_ids),
     })
 }
