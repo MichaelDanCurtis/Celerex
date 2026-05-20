@@ -57,6 +57,10 @@ fn build_router(pool: PgPool) -> Router {
             put(celerex_api::scheduler::routes::update)
                 .delete(celerex_api::scheduler::routes::delete),
         )
+        .route(
+            "/api/schedules/{id}/fire",
+            post(celerex_api::scheduler::routes::fire),
+        )
         .with_state(state)
 }
 
@@ -373,6 +377,171 @@ async fn cross_engagement_access_returns_403() {
                     })
                     .to_string(),
                 ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn fire_schedule_runs_member_and_marks_fired() {
+    let db = common::start_test_db().await;
+    let app = build_router(db.pool.clone());
+    let (eng, _project, member) = seed_engagement_project_member(&db.pool).await;
+    let token = auth(eng);
+
+    // Create a schedule whose natural cron tick is far in the future
+    // (yearly on Jan 1 at 09:00 UTC) so the firing must come from /fire.
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/schedules")
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::from(
+                    json!({
+                        "project_member_id": member,
+                        "cron_expr": "0 0 9 1 1 * *",
+                        "timezone": "UTC"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::CREATED);
+    let body = body_json(res).await;
+    let sched_id: Uuid = body["id"].as_str().unwrap().parse().unwrap();
+
+    let before_fire = chrono::Utc::now();
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/schedules/{sched_id}/fire"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body_json(res).await;
+
+    // Response carries a run_id and the updated schedule.
+    let run_id: Uuid = body["run_id"].as_str().unwrap().parse().unwrap();
+    assert_eq!(
+        body["schedule"]["id"].as_str().unwrap(),
+        sched_id.to_string()
+    );
+    let last_fired: chrono::DateTime<chrono::Utc> = body["schedule"]["last_fired_at"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    let after_fire = chrono::Utc::now();
+    assert!(
+        last_fired >= before_fire - chrono::Duration::seconds(1),
+        "last_fired_at should be ~now (>= before_fire), got {last_fired}"
+    );
+    assert!(
+        last_fired <= after_fire + chrono::Duration::seconds(1),
+        "last_fired_at should be ~now (<= after_fire), got {last_fired}"
+    );
+
+    // DB row reflects the same.
+    let (db_last_fired, db_next_fire): (
+        Option<chrono::DateTime<chrono::Utc>>,
+        chrono::DateTime<chrono::Utc>,
+    ) = sqlx::query_as("SELECT last_fired_at, next_fire_at FROM schedules WHERE id = $1")
+        .bind(sched_id)
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    assert!(db_last_fired.is_some(), "last_fired_at written to DB");
+    assert!(
+        db_next_fire > chrono::Utc::now(),
+        "next_fire_at recomputed to a future occurrence"
+    );
+
+    // A `runs` row was enqueued with triggered_by = scheduled.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let mut triggered_by: Option<String> = None;
+    while std::time::Instant::now() < deadline {
+        triggered_by = sqlx::query_scalar("SELECT triggered_by FROM runs WHERE id = $1")
+            .bind(run_id)
+            .fetch_optional(&db.pool)
+            .await
+            .unwrap();
+        if triggered_by.is_some() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert_eq!(triggered_by.as_deref(), Some("scheduled"));
+}
+
+#[tokio::test]
+async fn fire_unknown_schedule_returns_404() {
+    let db = common::start_test_db().await;
+    let app = build_router(db.pool.clone());
+    let (eng, _project, _member) = seed_engagement_project_member(&db.pool).await;
+    let token = auth(eng);
+
+    let missing_id = Uuid::new_v4();
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/schedules/{missing_id}/fire"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn fire_cross_engagement_returns_403() {
+    let db = common::start_test_db().await;
+    let app = build_router(db.pool.clone());
+    let (_eng_a, _project_a, member_a) = seed_engagement_project_member(&db.pool).await;
+    let (eng_b, _project_b, _member_b) = seed_engagement_project_member(&db.pool).await;
+
+    // Seed a schedule owned by engagement A directly via the store.
+    let store = PgSchedulesStore::new(db.pool.clone());
+    let sched_id = Uuid::new_v4();
+    store
+        .create(Schedule {
+            id: sched_id,
+            project_member_id: member_a,
+            cron_expr: "0 0 9 * * MON *".into(),
+            timezone: "UTC".into(),
+            next_fire_at: chrono::Utc::now() + chrono::Duration::days(1),
+            last_fired_at: None,
+            enabled: true,
+        })
+        .await
+        .unwrap();
+
+    // Engagement B tries to fire it.
+    let token_b = auth(eng_b);
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/schedules/{sched_id}/fire"))
+                .header("authorization", format!("Bearer {token_b}"))
+                .body(Body::empty())
                 .unwrap(),
         )
         .await

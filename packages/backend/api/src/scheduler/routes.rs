@@ -9,10 +9,11 @@ use axum::{
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use cron::Schedule as CronSchedule;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use uuid::Uuid;
 
+use crate::project_members::run_job::{self, TRIGGERED_BY_SCHEDULED};
 use crate::scheduler::store::Schedule;
 use crate::{AppState, auth::extractors::AuthClaims};
 
@@ -219,4 +220,81 @@ pub async fn delete(
         )
             .into_response(),
     }
+}
+
+#[derive(Serialize)]
+pub struct ScheduleFireResponse {
+    pub schedule: Schedule,
+    pub run_id: Uuid,
+}
+
+/// `POST /api/schedules/{id}/fire` — convenience endpoint that fires a schedule
+/// immediately, updates `last_fired_at` + `next_fire_at` as if the cron tick had
+/// triggered it, and enqueues a run with `triggered_by = "scheduled"`.
+pub async fn fire(
+    a: AuthClaims,
+    State(s): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> impl IntoResponse {
+    let existing = match load_schedule_pg(&s, id).await {
+        Ok(v) => v,
+        Err((status, body)) => return (status, body).into_response(),
+    };
+    let engagement_id = match engagement_for_member(&s, existing.project_member_id).await {
+        Ok(v) => v,
+        Err((status, body)) => return (status, body).into_response(),
+    };
+    if engagement_id != a.0.engagement_id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"}))).into_response();
+    }
+    // Defensive: cron_expr/timezone should already be valid (validated on
+    // create/update), but corrupted rows would otherwise surface as a 500.
+    let next_fire_at = match compute_next_fire_at(&existing.cron_expr, &existing.timezone) {
+        Ok(v) => v,
+        Err(e) => return (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response(),
+    };
+    let fired_at = Utc::now();
+    let store = crate::scheduler::store::PgSchedulesStore::new(s.pool.clone());
+    use crate::scheduler::store::SchedulesStore;
+    if let Err(e) = store.mark_fired(id, fired_at, next_fire_at).await {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e})),
+        )
+            .into_response();
+    }
+    let run_id = match run_job::enqueue_run(
+        s.pool.clone(),
+        s.members.clone(),
+        s.executor.clone(),
+        s.notifiers.clone(),
+        existing.project_member_id,
+        engagement_id,
+        TRIGGERED_BY_SCHEDULED,
+    )
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e})),
+            )
+                .into_response();
+        }
+    };
+    let schedule = Schedule {
+        id: existing.id,
+        project_member_id: existing.project_member_id,
+        cron_expr: existing.cron_expr,
+        timezone: existing.timezone,
+        next_fire_at,
+        last_fired_at: Some(fired_at),
+        enabled: existing.enabled,
+    };
+    (
+        StatusCode::OK,
+        Json(ScheduleFireResponse { schedule, run_id }),
+    )
+        .into_response()
 }

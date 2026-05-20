@@ -85,6 +85,7 @@ fn route_chain() -> Router<AppState> {
             "/api/schedules/{id}",
             put(scheduler::routes::update).delete(scheduler::routes::delete),
         )
+        .route("/api/schedules/{id}/fire", post(scheduler::routes::fire))
         .route("/api/providers", get(list_providers))
         .route("/api/assistant/chat", post(assistant::chat))
 }
