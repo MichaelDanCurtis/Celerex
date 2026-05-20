@@ -404,3 +404,75 @@ export async function listProviders(token: string): Promise<string[]> {
   return body.providers ?? [];
 }
 
+// ---- Plugin endpoints ----------------------------------------------------
+//
+// The backend stores a plugin "install" as a row in plugin_installs joined to
+// the caller's engagement. The full manifest is persisted as JSON; capability
+// arrays live inside `manifest.inbound` / `manifest.outbound`.
+
+export interface PluginCapability {
+  id: string;
+  kind: string;
+  input_schema?: unknown;
+}
+
+export interface PluginManifest {
+  id: string;
+  name: string;
+  version: string;
+  inbound?: PluginCapability[];
+  outbound?: PluginCapability[];
+}
+
+/** Row returned by `GET /api/plugins`. */
+export interface ApiPluginInstall {
+  id: string;            // install uuid
+  engagement_id: string;
+  plugin_id: string;     // manifest.id
+  manifest: PluginManifest;
+  installed_at: string;
+}
+
+export async function listInstalledPlugins(
+  token: string,
+): Promise<ApiPluginInstall[]> {
+  const r = await fetch(`${API_BASE}/plugins`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!r.ok) throw new Error(`listInstalledPlugins: ${r.status}`);
+  return r.json();
+}
+
+export async function installPlugin(
+  token: string,
+  manifest: PluginManifest,
+): Promise<{ id: string }> {
+  const r = await fetch(`${API_BASE}/plugins`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ manifest }),
+  });
+  if (!r.ok) {
+    const body = await r.text().catch(() => "");
+    throw new Error(`installPlugin: ${r.status}${body ? ` ${body}` : ""}`);
+  }
+  return r.json();
+}
+
+export async function setPluginCredentials(
+  token: string,
+  installId: string,
+  direction: "inbound" | "outbound",
+  payload: Record<string, string>,
+): Promise<void> {
+  const r = await fetch(`${API_BASE}/plugins/${installId}/credentials`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ direction, payload }),
+  });
+  if (!r.ok) {
+    const body = await r.text().catch(() => "");
+    throw new Error(`setPluginCredentials: ${r.status}${body ? ` ${body}` : ""}`);
+  }
+}
+

@@ -442,6 +442,11 @@ export function Sidebar({
               active={activeView === "plugin-manager"}
               onClick={() => setActiveView("plugin-manager")}
             />
+            <SidebarItem
+              label="Plugins"
+              active={activeView === "plugins"}
+              onClick={() => setActiveView("plugins")}
+            />
           </SidebarSection>
         </div>
       )}

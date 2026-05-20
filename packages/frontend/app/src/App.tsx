@@ -8,6 +8,7 @@ import { BuilderPage } from "./pages/BuilderPage";
 import { MonitorPage } from "./pages/MonitorPage";
 import { FleetDashboard } from "./pages/FleetDashboard";
 import { DocsPage } from "./pages/DocsPage";
+import { PluginsPage } from "./pages/PluginsPage";
 import { exportDocAsMarkdown, printDocument } from "./utils/export";
 import { importMarkdownFile } from "./utils/import";
 import { addToastAtom } from "./state/toastAtom";
@@ -317,6 +318,8 @@ export function App() {
             <FleetDashboard token={token} />
           ) : activeView === "docs" ? (
             <DocsPage />
+          ) : activeView === "plugins" ? (
+            <PluginsPage />
           ) : (
             <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
               <EditorArea mode={mode} activeView={activeView} />
