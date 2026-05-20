@@ -15,6 +15,66 @@ use celerex_orchestrator::job::{JobRequest, RunStatus};
 pub const TRIGGERED_BY_MANUAL: &str = "manual";
 pub const TRIGGERED_BY_SCHEDULED: &str = "scheduled";
 
+/// Default model for reasoning members (Project Members — Sonnet-class).
+pub const DEFAULT_REASONING_MODEL: &str = "claude-sonnet-4-6";
+/// Default model for writer members (Document Servicers — Haiku-class).
+pub const DEFAULT_WRITER_MODEL: &str = "claude-haiku-4-5";
+/// Default provider id (resolved by the registry — Anthropic in production
+/// when ANTHROPIC_API_KEY is set).
+pub const DEFAULT_PROVIDER_ID: &str = "default";
+
+/// Walk a member graph and fill in agent-type-aware defaults on LLM nodes.
+///
+/// For every node where `config.execution == "llm"`:
+///   * if `config.model` is missing or null, set it to the Haiku-class default
+///     for writers and the Sonnet-class default for reasoning members;
+///   * if `config.provider_id` is missing or null, set it to `"default"` so
+///     the registry resolves to the configured house provider.
+///
+/// Values the user explicitly set in the graph are NEVER overwritten.
+/// Malformed graphs (missing `nodes`, non-object configs) are silently skipped
+/// — the executor will reject them later with a clearer error.
+pub fn apply_agent_type_defaults(graph: &mut serde_json::Value, agent_type: &str) {
+    let default_model = match agent_type {
+        "writer" => DEFAULT_WRITER_MODEL,
+        _ => DEFAULT_REASONING_MODEL,
+    };
+    let Some(nodes) = graph.get_mut("nodes").and_then(|n| n.as_array_mut()) else {
+        return;
+    };
+    for node in nodes {
+        let is_llm = node
+            .get("config")
+            .and_then(|c| c.get("execution"))
+            .and_then(|e| e.as_str())
+            .map(|s| s == "llm")
+            .unwrap_or(false);
+        if !is_llm {
+            continue;
+        }
+        let Some(cfg) = node.get_mut("config").and_then(|c| c.as_object_mut()) else {
+            continue;
+        };
+        let needs_model = cfg
+            .get("model")
+            .map(|v| v.is_null())
+            .unwrap_or(true);
+        if needs_model {
+            cfg.insert("model".to_string(), serde_json::json!(default_model));
+        }
+        let needs_provider = cfg
+            .get("provider_id")
+            .map(|v| v.is_null())
+            .unwrap_or(true);
+        if needs_provider {
+            cfg.insert(
+                "provider_id".to_string(),
+                serde_json::json!(DEFAULT_PROVIDER_ID),
+            );
+        }
+    }
+}
+
 /// Shared pipeline for starting a run: lookup member, snapshot, compile graph,
 /// INSERT `runs` row, spawn the executor + notifier task.
 ///
@@ -33,7 +93,9 @@ pub async fn enqueue_run(
         .await?
         .ok_or_else(|| format!("member {member_id} not found"))?;
     let snap_id = members.snapshot_id_for_current(member_id).await?;
-    let steps = graph::compile(&member.graph_json)?;
+    let mut graph = member.graph_json.clone();
+    apply_agent_type_defaults(&mut graph, &member.agent_type);
+    let steps = graph::compile(&graph)?;
 
     let run_id = Uuid::new_v4();
     sqlx::query(
@@ -101,4 +163,154 @@ pub async fn enqueue_run(
     });
 
     Ok(run_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn writer_gets_haiku_default_for_llm_nodes() {
+        let mut g = json!({
+            "nodes": [
+                {"id": "a", "type": "action", "config": {"execution": "llm"}}
+            ],
+            "edges": []
+        });
+        apply_agent_type_defaults(&mut g, "writer");
+        assert_eq!(g["nodes"][0]["config"]["model"], "claude-haiku-4-5");
+        assert_eq!(g["nodes"][0]["config"]["provider_id"], "default");
+    }
+
+    #[test]
+    fn reasoning_gets_sonnet_default_for_llm_nodes() {
+        let mut g = json!({
+            "nodes": [
+                {"id": "a", "type": "action", "config": {"execution": "llm"}}
+            ],
+            "edges": []
+        });
+        apply_agent_type_defaults(&mut g, "reasoning");
+        assert_eq!(g["nodes"][0]["config"]["model"], "claude-sonnet-4-6");
+        assert_eq!(g["nodes"][0]["config"]["provider_id"], "default");
+    }
+
+    #[test]
+    fn existing_model_is_not_overwritten() {
+        let mut g = json!({
+            "nodes": [
+                {
+                    "id": "a",
+                    "type": "action",
+                    "config": {
+                        "execution": "llm",
+                        "model": "claude-opus-4-7",
+                        "provider_id": "openrouter"
+                    }
+                }
+            ],
+            "edges": []
+        });
+        apply_agent_type_defaults(&mut g, "writer");
+        // Writer default would be claude-haiku-4-5, but user-supplied value wins.
+        assert_eq!(g["nodes"][0]["config"]["model"], "claude-opus-4-7");
+        assert_eq!(g["nodes"][0]["config"]["provider_id"], "openrouter");
+    }
+
+    #[test]
+    fn non_llm_nodes_are_left_alone() {
+        let mut g = json!({
+            "nodes": [
+                {"id": "a", "type": "inbound", "config": {"execution": "http"}},
+                {"id": "b", "type": "action", "config": {"execution": "script"}},
+                {"id": "c", "type": "outbound", "config": {"execution": "doc"}}
+            ],
+            "edges": []
+        });
+        let before = g.clone();
+        apply_agent_type_defaults(&mut g, "writer");
+        assert_eq!(g, before, "non-llm nodes must not be modified");
+    }
+
+    #[test]
+    fn missing_provider_id_filled_with_default() {
+        let mut g = json!({
+            "nodes": [
+                {
+                    "id": "a",
+                    "type": "action",
+                    "config": {
+                        "execution": "llm",
+                        "model": "claude-sonnet-4-6"
+                    }
+                }
+            ],
+            "edges": []
+        });
+        apply_agent_type_defaults(&mut g, "reasoning");
+        // Model stays as the user-supplied value.
+        assert_eq!(g["nodes"][0]["config"]["model"], "claude-sonnet-4-6");
+        // provider_id is filled in.
+        assert_eq!(g["nodes"][0]["config"]["provider_id"], "default");
+    }
+
+    #[test]
+    fn null_model_is_treated_as_missing() {
+        let mut g = json!({
+            "nodes": [
+                {
+                    "id": "a",
+                    "type": "action",
+                    "config": {
+                        "execution": "llm",
+                        "model": null,
+                        "provider_id": null
+                    }
+                }
+            ],
+            "edges": []
+        });
+        apply_agent_type_defaults(&mut g, "writer");
+        assert_eq!(g["nodes"][0]["config"]["model"], "claude-haiku-4-5");
+        assert_eq!(g["nodes"][0]["config"]["provider_id"], "default");
+    }
+
+    #[test]
+    fn unknown_agent_type_falls_back_to_sonnet() {
+        let mut g = json!({
+            "nodes": [
+                {"id": "a", "type": "action", "config": {"execution": "llm"}}
+            ],
+            "edges": []
+        });
+        apply_agent_type_defaults(&mut g, "alien");
+        // Match arm `_ => DEFAULT_REASONING_MODEL` covers unexpected values.
+        assert_eq!(g["nodes"][0]["config"]["model"], "claude-sonnet-4-6");
+    }
+
+    #[test]
+    fn malformed_graph_does_not_panic() {
+        // No "nodes" key.
+        let mut g = json!({});
+        apply_agent_type_defaults(&mut g, "writer");
+        assert_eq!(g, json!({}));
+
+        // Nodes is not an array.
+        let mut g = json!({"nodes": "oops"});
+        apply_agent_type_defaults(&mut g, "writer");
+        assert_eq!(g, json!({"nodes": "oops"}));
+
+        // Node without a config field.
+        let mut g = json!({"nodes": [{"id": "a", "type": "action"}], "edges": []});
+        let before = g.clone();
+        apply_agent_type_defaults(&mut g, "writer");
+        assert_eq!(g, before);
+
+        // Node whose config is not an object.
+        let mut g = json!({"nodes": [{"id": "a", "type": "action", "config": "no"}], "edges": []});
+        let before = g.clone();
+        apply_agent_type_defaults(&mut g, "writer");
+        assert_eq!(g, before);
+    }
 }
