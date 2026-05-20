@@ -108,9 +108,7 @@ async fn enqueue_run_with_scheduled_trigger_runs_graph_and_marks_run_scheduled()
     );
     dispatcher.register(
         ExecutionType::Llm,
-        Arc::new(LlmHandler {
-            provider: Arc::new(MockLlm::new().finish("# Scheduled Newsletter")),
-        }),
+        Arc::new(LlmHandler::new(Arc::new(MockLlm::new().finish("# Scheduled Newsletter")))),
     );
     dispatcher.register(
         ExecutionType::Doc,

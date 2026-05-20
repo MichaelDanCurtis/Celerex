@@ -92,12 +92,10 @@ fn build_dispatcher(pool: PgPool, engagement_id: uuid::Uuid) -> Arc<Dispatcher> 
     );
     dispatcher.register(
         ExecutionType::Llm,
-        Arc::new(LlmHandler {
-            provider: Arc::new(
-                MockLlm::new()
-                    .finish("# Weekly Newsletter\n\n- Emails sent: 1284\n- Meetings: 32\n"),
-            ),
-        }),
+        Arc::new(LlmHandler::new(Arc::new(
+            MockLlm::new()
+                .finish("# Weekly Newsletter\n\n- Emails sent: 1284\n- Meetings: 32\n"),
+        ))),
     );
     dispatcher.register(
         ExecutionType::Doc,

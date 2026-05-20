@@ -19,7 +19,14 @@ use sqlx::PgPool;
 use crate::plugins::credentials::{CredentialStore, LocalAeadStore};
 use crate::project_members::store::{MembersStore, PgMembersStore};
 use crate::runs::bus::RunBus;
-use celerex_orchestrator::{executor::Executor, tool_dispatch::Dispatcher};
+use celerex_orchestrator::{
+    execution_type::ExecutionType,
+    executor::Executor,
+    handlers::llm::LlmHandler,
+    llm::{Provider, ProviderRegistry},
+    tool_dispatch::Dispatcher,
+};
+use crate::llm::{anthropic::AnthropicClient, openai::OpenAiProvider};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -64,8 +71,21 @@ fn route_chain() -> Router<AppState> {
 }
 
 pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>) -> Router {
-    let dispatcher = Arc::new(Dispatcher::new());
-    build_app_with_dispatcher_inner(pool, credentials, dispatcher, true)
+    let mut dispatcher = Dispatcher::new();
+    let mut registry = ProviderRegistry::new();
+    if let Ok(client) = AnthropicClient::from_env() {
+        let provider: Arc<dyn Provider> = Arc::new(client);
+        registry.register("anthropic", provider.clone());
+        registry.register("default", provider);
+    }
+    if let Ok(provider) = OpenAiProvider::from_env() {
+        registry.register("openai", Arc::new(provider));
+    }
+    dispatcher.register(
+        ExecutionType::Llm,
+        Arc::new(LlmHandler { registry: Arc::new(registry) }),
+    );
+    build_app_with_dispatcher_inner(pool, credentials, Arc::new(dispatcher), true)
 }
 
 /// Build a router with a preconfigured dispatcher (for E2E tests that register
