@@ -3,6 +3,26 @@ use serde_json::Value;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+/// Default agent kind for newly created project members.
+///
+/// Project Members are reasoning co-workers (Sonnet/Opus-class) by default.
+/// The `writer` variant is reserved for Document Servicers (format-bound
+/// writers, Haiku-class). Phase 1 only persists the distinction — no LLM
+/// routing changes yet.
+pub const DEFAULT_AGENT_TYPE: &str = "reasoning";
+
+/// Validate an agent_type string against the DB CHECK constraint.
+/// Returns the validated string (still as `&str`) so callers can keep a thin
+/// borrow without re-allocating.
+pub fn validate_agent_type(s: &str) -> Result<&str, String> {
+    match s {
+        "reasoning" | "writer" => Ok(s),
+        other => Err(format!(
+            "invalid agent_type '{other}' (expected 'reasoning' or 'writer')"
+        )),
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct Member {
     pub id: Uuid,
@@ -12,6 +32,7 @@ pub struct Member {
     pub graph_json: Value,
     pub provider_config_json: Value,
     pub version: i32,
+    pub agent_type: String,
 }
 
 #[async_trait]
@@ -23,6 +44,7 @@ pub trait MembersStore: Send + Sync {
         description: &str,
         graph: &Value,
         provider_config: &Value,
+        agent_type: &str,
     ) -> Result<Member, String>;
     async fn get(&self, id: Uuid) -> Result<Option<Member>, String>;
     async fn list_for_project(&self, project_id: Uuid) -> Result<Vec<Member>, String>;
@@ -33,6 +55,7 @@ pub trait MembersStore: Send + Sync {
         description: &str,
         graph: &Value,
         provider_config: &Value,
+        agent_type: &str,
     ) -> Result<Member, String>;
     async fn snapshot_id_for_current(&self, id: Uuid) -> Result<Uuid, String>;
     async fn engagement_id_for(&self, id: Uuid) -> Result<Uuid, String>;
@@ -79,17 +102,20 @@ impl MembersStore for PgMembersStore {
         description: &str,
         graph: &Value,
         provider_config: &Value,
+        agent_type: &str,
     ) -> Result<Member, String> {
+        let agent_type = validate_agent_type(agent_type)?;
         let mut tx = self.pool.begin().await.map_err(|e| e.to_string())?;
         let row: (Uuid, i32) = sqlx::query_as(
-            "INSERT INTO project_members (project_id, name, description, graph_json, provider_config_json)
-             VALUES ($1, $2, $3, $4, $5) RETURNING id, version",
+            "INSERT INTO project_members (project_id, name, description, graph_json, provider_config_json, agent_type)
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, version",
         )
         .bind(project_id)
         .bind(name)
         .bind(description)
         .bind(graph)
         .bind(provider_config)
+        .bind(agent_type)
         .fetch_one(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
@@ -105,12 +131,13 @@ impl MembersStore for PgMembersStore {
             graph_json: graph.clone(),
             provider_config_json: provider_config.clone(),
             version: row.1,
+            agent_type: agent_type.into(),
         })
     }
 
     async fn get(&self, id: Uuid) -> Result<Option<Member>, String> {
-        sqlx::query_as::<_, (Uuid, Uuid, String, String, Value, Value, i32)>(
-            "SELECT id, project_id, name, description, graph_json, provider_config_json, version
+        sqlx::query_as::<_, (Uuid, Uuid, String, String, Value, Value, i32, String)>(
+            "SELECT id, project_id, name, description, graph_json, provider_config_json, version, agent_type
              FROM project_members WHERE id = $1",
         )
         .bind(id)
@@ -126,13 +153,14 @@ impl MembersStore for PgMembersStore {
                 graph_json: r.4,
                 provider_config_json: r.5,
                 version: r.6,
+                agent_type: r.7,
             })
         })
     }
 
     async fn list_for_project(&self, project_id: Uuid) -> Result<Vec<Member>, String> {
-        sqlx::query_as::<_, (Uuid, Uuid, String, String, Value, Value, i32)>(
-            "SELECT id, project_id, name, description, graph_json, provider_config_json, version
+        sqlx::query_as::<_, (Uuid, Uuid, String, String, Value, Value, i32, String)>(
+            "SELECT id, project_id, name, description, graph_json, provider_config_json, version, agent_type
              FROM project_members WHERE project_id = $1 ORDER BY created_at",
         )
         .bind(project_id)
@@ -149,6 +177,7 @@ impl MembersStore for PgMembersStore {
                     graph_json: r.4,
                     provider_config_json: r.5,
                     version: r.6,
+                    agent_type: r.7,
                 })
                 .collect()
         })
@@ -161,12 +190,15 @@ impl MembersStore for PgMembersStore {
         description: &str,
         graph: &Value,
         provider_config: &Value,
+        agent_type: &str,
     ) -> Result<Member, String> {
+        let agent_type = validate_agent_type(agent_type)?;
         let mut tx = self.pool.begin().await.map_err(|e| e.to_string())?;
         let new_version: i32 = sqlx::query_scalar(
             "UPDATE project_members
                SET name = $2, description = $3, graph_json = $4,
-                   provider_config_json = $5, version = version + 1, updated_at = NOW()
+                   provider_config_json = $5, agent_type = $6,
+                   version = version + 1, updated_at = NOW()
              WHERE id = $1 RETURNING version",
         )
         .bind(id)
@@ -174,6 +206,7 @@ impl MembersStore for PgMembersStore {
         .bind(description)
         .bind(graph)
         .bind(provider_config)
+        .bind(agent_type)
         .fetch_one(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;

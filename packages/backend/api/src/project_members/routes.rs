@@ -10,7 +10,12 @@ use uuid::Uuid;
 
 use crate::project_members::graph;
 use crate::project_members::run_job::{self, TRIGGERED_BY_MANUAL};
+use crate::project_members::store::{DEFAULT_AGENT_TYPE, validate_agent_type};
 use crate::{AppState, auth::extractors::AuthClaims};
+
+fn default_agent_type() -> String {
+    DEFAULT_AGENT_TYPE.to_string()
+}
 
 #[derive(Deserialize)]
 pub struct CreateBody {
@@ -21,6 +26,8 @@ pub struct CreateBody {
     pub graph_json: Value,
     #[serde(default)]
     pub provider_config_json: Value,
+    #[serde(default = "default_agent_type")]
+    pub agent_type: String,
 }
 
 #[derive(Deserialize)]
@@ -31,6 +38,8 @@ pub struct UpdateBody {
     pub graph_json: Value,
     #[serde(default)]
     pub provider_config_json: Value,
+    #[serde(default = "default_agent_type")]
+    pub agent_type: String,
 }
 
 pub async fn create(
@@ -41,6 +50,9 @@ pub async fn create(
     if let Err(e) = graph::validate(&b.graph_json) {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response();
     }
+    if let Err(e) = validate_agent_type(&b.agent_type) {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response();
+    }
     match s
         .members
         .create(
@@ -49,6 +61,7 @@ pub async fn create(
             &b.description,
             &b.graph_json,
             &b.provider_config_json,
+            &b.agent_type,
         )
         .await
     {
@@ -70,6 +83,9 @@ pub async fn update(
     if let Err(e) = graph::validate(&b.graph_json) {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response();
     }
+    if let Err(e) = validate_agent_type(&b.agent_type) {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response();
+    }
     match s
         .members
         .update(
@@ -78,6 +94,7 @@ pub async fn update(
             &b.description,
             &b.graph_json,
             &b.provider_config_json,
+            &b.agent_type,
         )
         .await
     {

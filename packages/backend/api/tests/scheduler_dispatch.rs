@@ -131,7 +131,7 @@ async fn enqueue_run_with_scheduled_trigger_runs_graph_and_marks_run_scheduled()
     )]);
 
     let member = members
-        .create(project, "Jean", "", &jean_graph(), &json!({}))
+        .create(project, "Jean", "", &jean_graph(), &json!({}), "reasoning")
         .await
         .unwrap();
 

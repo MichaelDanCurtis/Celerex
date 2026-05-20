@@ -166,3 +166,146 @@ async fn post_run_creates_run_row_with_snapshot_and_manual_trigger() {
     assert!(runs[0].1.is_some(), "snapshot_id is set");
     assert_eq!(runs[0].2, "manual");
 }
+
+#[tokio::test]
+async fn agent_type_defaults_to_reasoning_and_round_trips() {
+    let db = common::start_test_db().await;
+    let app = celerex_api::build_app(db.pool.clone());
+    let eng = sqlx::query_scalar::<_, uuid::Uuid>(
+        "INSERT INTO engagements (name) VALUES ('Acme') RETURNING id",
+    )
+    .fetch_one(&db.pool)
+    .await
+    .unwrap();
+    let project = sqlx::query_scalar::<_, uuid::Uuid>(
+        "INSERT INTO projects (engagement_id, name) VALUES ($1, 'Jean') RETURNING id",
+    )
+    .bind(eng)
+    .fetch_one(&db.pool)
+    .await
+    .unwrap();
+    let token = token_for(eng).await;
+
+    // 1) POST without agent_type -> defaults to "reasoning"
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/project_members")
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::from(
+                    json!({
+                        "project_id": project,
+                        "name": "Default Member",
+                        "graph_json": { "nodes": [], "edges": [] },
+                        "provider_config_json": {}
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::CREATED);
+    let body: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(res.into_body(), 64 * 1024).await.unwrap(),
+    )
+    .unwrap();
+    assert_eq!(body["agent_type"], "reasoning");
+    let default_id = body["id"].as_str().unwrap().to_string();
+
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/api/project_members/{default_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(res.into_body(), 64 * 1024).await.unwrap(),
+    )
+    .unwrap();
+    assert_eq!(body["agent_type"], "reasoning");
+
+    // 2) POST with agent_type: "writer" -> round-trips
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/project_members")
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::from(
+                    json!({
+                        "project_id": project,
+                        "name": "Document Servicer",
+                        "graph_json": { "nodes": [], "edges": [] },
+                        "provider_config_json": {},
+                        "agent_type": "writer"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::CREATED);
+    let body: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(res.into_body(), 64 * 1024).await.unwrap(),
+    )
+    .unwrap();
+    assert_eq!(body["agent_type"], "writer");
+    let writer_id = body["id"].as_str().unwrap().to_string();
+
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/api/project_members/{writer_id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(res.into_body(), 64 * 1024).await.unwrap(),
+    )
+    .unwrap();
+    assert_eq!(body["agent_type"], "writer");
+
+    // 3) POST with garbage agent_type -> 400
+    let res = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/project_members")
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::from(
+                    json!({
+                        "project_id": project,
+                        "name": "Invalid",
+                        "graph_json": { "nodes": [], "edges": [] },
+                        "provider_config_json": {},
+                        "agent_type": "garbage"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}

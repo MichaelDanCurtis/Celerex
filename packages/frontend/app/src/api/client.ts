@@ -251,3 +251,69 @@ export async function fetchFleet(token: string): Promise<FleetRow[]> {
   return r.json();
 }
 
+// ---- Schedule endpoints (Sprint 2) ----------------------------------------
+
+export interface ApiSchedule {
+  id: string;
+  project_member_id: string;
+  cron_expr: string;
+  timezone: string;
+  next_fire_at: string;
+  last_fired_at: string | null;
+  enabled: boolean;
+}
+
+export interface CreateScheduleRequest {
+  project_member_id: string;
+  cron_expr: string;
+  timezone: string;
+  enabled?: boolean;
+}
+
+export async function createSchedule(
+  token: string,
+  body: CreateScheduleRequest,
+): Promise<ApiSchedule> {
+  const r = await fetch(`${API_BASE}/schedules`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`createSchedule: ${r.status}`);
+  return r.json();
+}
+
+export async function listSchedules(
+  token: string,
+  projectMemberId: string,
+): Promise<ApiSchedule[]> {
+  const r = await fetch(
+    `${API_BASE}/schedules?project_member_id=${projectMemberId}`,
+    { headers: { authorization: `Bearer ${token}` } },
+  );
+  if (!r.ok) throw new Error(`listSchedules: ${r.status}`);
+  return r.json();
+}
+
+export async function updateSchedule(
+  token: string,
+  id: string,
+  body: CreateScheduleRequest,
+): Promise<ApiSchedule> {
+  const r = await fetch(`${API_BASE}/schedules/${id}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`updateSchedule: ${r.status}`);
+  return r.json();
+}
+
+export async function deleteSchedule(token: string, id: string): Promise<void> {
+  const r = await fetch(`${API_BASE}/schedules/${id}`, {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!r.ok) throw new Error(`deleteSchedule: ${r.status}`);
+}
+
