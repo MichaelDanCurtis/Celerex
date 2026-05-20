@@ -1,4 +1,5 @@
 import { atom } from "jotai";
+import { atomWithStorage } from "jotai/utils";
 
 export interface DocMeta {
   id: string;
@@ -51,8 +52,17 @@ export const activeRunIdAtom = atom<string | null>(null);
 export const activeEngagementIdAtom = atom<string | null>(null);
 export const activeViewerDocIdAtom = atom<string | null>(null);
 
-export const tokenAtom = atom<string>(
-  typeof localStorage !== "undefined" ? (localStorage.getItem("celerex_jwt") ?? "") : "",
+// Persisted across refreshes via localStorage. Empty string = signed out.
+export const tokenAtom = atomWithStorage<string>("celerex_jwt", "");
+
+// Persisted engagement summary shown after login (id + name).
+export interface AuthEngagement {
+  id: string;
+  name: string;
+}
+export const authEngagementAtom = atomWithStorage<AuthEngagement | null>(
+  "celerex_auth_engagement",
+  null,
 );
 
 export const editorStoreAtom = atom<any>(null);

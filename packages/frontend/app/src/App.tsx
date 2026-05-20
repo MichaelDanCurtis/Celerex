@@ -9,6 +9,8 @@ import { MonitorPage } from "./pages/MonitorPage";
 import { FleetDashboard } from "./pages/FleetDashboard";
 import { DocsPage } from "./pages/DocsPage";
 import { PluginsPage } from "./pages/PluginsPage";
+import { SettingsPage } from "./pages/SettingsPage";
+import { LoginPage } from "./pages/LoginPage";
 import { exportDocAsMarkdown, printDocument } from "./utils/export";
 import { importMarkdownFile } from "./utils/import";
 import { addToastAtom } from "./state/toastAtom";
@@ -26,7 +28,6 @@ import { ToolsManager } from "./layout/ToolsManager";
 import { TaskQueue } from "./layout/TaskQueue";
 import { PluginManager } from "./layout/PluginManager";
 import { AgentTriggers } from "./layout/AgentTriggers";
-import { Settings } from "./layout/Settings";
 import { Breadcrumb } from "./layout/Breadcrumb";
 import { unreadCountAtom } from "./state/notificationAtom";
 import { NotificationPanel } from "./layout/NotificationPanel";
@@ -257,6 +258,12 @@ export function App() {
     onFind: useCallback(() => setFindReplaceOpen((prev) => !prev), []),
   });
 
+  // Gate the entire workspace on having a JWT. The token is persisted to
+  // localStorage by `tokenAtom`, so a real signin survives refreshes.
+  if (!token) {
+    return <LoginPage />;
+  }
+
   return (
     <div style={{ display: "flex", height: "100vh", width: "100vw" }}>
       {!focusModeActive && <Sidebar collapsed={sidebarCollapsed} onToggleCollapse={handleToggleSidebar} />}
@@ -295,7 +302,7 @@ export function App() {
         <FindReplace open={findReplaceOpen} onClose={() => setFindReplaceOpen(false)} />
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
           {activeView === "settings" ? (
-            <Settings />
+            <SettingsPage />
           ) : activeView === "agent-dashboard" ? (
             <AgentDashboard />
           ) : activeView === "pipeline-editor" ? (

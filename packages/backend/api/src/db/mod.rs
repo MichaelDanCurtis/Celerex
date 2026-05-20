@@ -28,6 +28,16 @@ pub async fn list_engagements(pool: &PgPool) -> sqlx::Result<Vec<Engagement>> {
     ).fetch_all(pool).await
 }
 
+/// Case-insensitive lookup by name. Returns `Ok(None)` if no match.
+pub async fn find_engagement_by_name(
+    pool: &PgPool,
+    name: &str,
+) -> sqlx::Result<Option<Engagement>> {
+    sqlx::query_as::<_, Engagement>(
+        "SELECT id, name, created_at FROM engagements WHERE LOWER(name) = LOWER($1) LIMIT 1"
+    ).bind(name).fetch_optional(pool).await
+}
+
 #[derive(sqlx::FromRow, serde::Serialize, Clone)]
 pub struct Project {
     pub id: Uuid,

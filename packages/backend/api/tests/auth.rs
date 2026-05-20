@@ -46,3 +46,54 @@ async fn protected_route_accepts_valid_token() {
         .await;
     resp.assert_status_ok();
 }
+
+#[tokio::test]
+async fn login_returns_token_for_existing_engagement() {
+    unsafe { std::env::set_var("CELEREX_JWT_SECRET", "test-secret"); }
+    let db = common::start_test_db().await;
+    // Seed an engagement directly so we control the name we'll look up.
+    let eng = sqlx::query_as::<_, (Uuid, String)>(
+        "INSERT INTO engagements (name) VALUES ($1) RETURNING id, name",
+    )
+    .bind("Acme Co")
+    .fetch_one(&db.pool)
+    .await
+    .unwrap();
+
+    let app = celerex_api::build_app(db.pool.clone());
+    let server = axum_test::TestServer::new(app).unwrap();
+
+    // Case-insensitive lookup ("ACME CO" should match "Acme Co").
+    let resp = server
+        .post("/api/auth/login")
+        .json(&serde_json::json!({ "engagement_name": "ACME CO" }))
+        .await;
+    resp.assert_status_ok();
+
+    let body: serde_json::Value = resp.json();
+    assert!(body["token"].as_str().unwrap().len() > 0);
+    assert_eq!(body["engagement"]["id"].as_str().unwrap(), eng.0.to_string());
+    assert_eq!(body["engagement"]["name"].as_str().unwrap(), "Acme Co");
+
+    // The returned token should grant access to a protected route.
+    let token = body["token"].as_str().unwrap();
+    let protected = server
+        .get("/api/projects")
+        .add_header("authorization", format!("Bearer {token}"))
+        .await;
+    protected.assert_status_ok();
+}
+
+#[tokio::test]
+async fn login_returns_404_for_unknown_engagement() {
+    unsafe { std::env::set_var("CELEREX_JWT_SECRET", "test-secret"); }
+    let db = common::start_test_db().await;
+    let app = celerex_api::build_app(db.pool.clone());
+    let server = axum_test::TestServer::new(app).unwrap();
+
+    let resp = server
+        .post("/api/auth/login")
+        .json(&serde_json::json!({ "engagement_name": "no-such-engagement" }))
+        .await;
+    resp.assert_status(axum::http::StatusCode::NOT_FOUND);
+}

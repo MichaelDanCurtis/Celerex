@@ -13,6 +13,8 @@ import {
   activeProjectIdAtom,
   engagementsForActiveProjectAtom,
   genId,
+  tokenAtom,
+  authEngagementAtom,
   type Engagement,
 } from "../state/atoms";
 import { addToastAtom } from "../state/toastAtom";
@@ -43,8 +45,17 @@ export function Sidebar({
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearchPanel, setShowSearchPanel] = useState(false);
   const [engagementManagerOpen, setEngagementManagerOpen] = useState(false);
+  const setToken = useSetAtom(tokenAtom);
+  const [authEngagement, setAuthEngagement] = useAtom(authEngagementAtom);
   // Sync the projects atom with the backend on mount (and exposes refresh()).
   useProjectsSync();
+
+  function handleSignOut() {
+    // Clearing the token sends App.tsx back to the LoginPage. atomWithStorage
+    // takes care of wiping localStorage too.
+    setToken("");
+    setAuthEngagement(null);
+  }
 
   const favoriteDocs = useMemo(() => {
     const allDocs = engagements.flatMap((e) => e.docs);
@@ -216,6 +227,48 @@ export function Sidebar({
           </>
         )}
       </div>
+
+      {!collapsed && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "6px 16px",
+            borderBottom: "1px solid var(--celerex-border)",
+            fontSize: 11,
+            color: "var(--celerex-text-secondary)",
+          }}
+        >
+          <span
+            style={{
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+            title={authEngagement?.name ?? "Signed in"}
+          >
+            {authEngagement?.name ?? "Signed in"}
+          </span>
+          <button
+            onClick={handleSignOut}
+            title="Sign out"
+            style={{
+              background: "transparent",
+              border: "1px solid var(--celerex-border)",
+              borderRadius: 4,
+              padding: "2px 8px",
+              fontSize: 11,
+              cursor: "pointer",
+              color: "var(--celerex-text-secondary)",
+              marginLeft: 8,
+              flexShrink: 0,
+            }}
+          >
+            Sign out
+          </button>
+        </div>
+      )}
 
       {showSearchPanel && (
         <SearchPanel onClose={() => setShowSearchPanel(false)} />
@@ -446,6 +499,14 @@ export function Sidebar({
               label="Plugins"
               active={activeView === "plugins"}
               onClick={() => setActiveView("plugins")}
+            />
+          </SidebarSection>
+
+          <SidebarSection title="Workspace">
+            <SidebarItem
+              label="Settings"
+              active={activeView === "settings"}
+              onClick={() => setActiveView("settings")}
             />
           </SidebarSection>
         </div>

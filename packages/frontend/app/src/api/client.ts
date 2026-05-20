@@ -53,6 +53,24 @@ async function request<T>(
   return res.json() as Promise<T>;
 }
 
+// ---- Auth endpoints ------------------------------------------------------
+
+export interface LoginResponse {
+  token: string;
+  engagement: { id: string; name: string };
+}
+
+/**
+ * Dev-mode signin: swaps an engagement name for a JWT minted by the backend.
+ * No password — this stands in for the missing real auth flow.
+ */
+export async function login(engagementName: string): Promise<LoginResponse> {
+  return request<LoginResponse>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ engagement_name: engagementName }),
+  });
+}
+
 // ---- Engagement endpoints ------------------------------------------------
 
 export async function fetchEngagements(): Promise<ApiEngagement[]> {
