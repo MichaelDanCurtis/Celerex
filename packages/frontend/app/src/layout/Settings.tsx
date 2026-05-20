@@ -1,6 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAtom } from "jotai";
-import { themeAtom, accentColorAtom, fontSizeAtom } from "../state/atoms";
+import { themeAtom, accentColorAtom, fontSizeAtom, tokenAtom } from "../state/atoms";
+import {
+  type ApiProviderKey,
+  listProviderKeys,
+  setProviderKey,
+  deleteProviderKey,
+} from "../api/client";
+
+const PROVIDER_IDS = ["anthropic", "openai", "kimi", "gemini"] as const;
+type ProviderId = (typeof PROVIDER_IDS)[number];
 
 const ACCENT_COLORS = [
   { name: "Blue", value: "#3b82f6" },
@@ -61,6 +70,228 @@ function ToggleSwitch({
         }}
       />
     </button>
+  );
+}
+
+function LlmProviderKeysSection() {
+  const [token] = useAtom(tokenAtom);
+  const [keys, setKeys] = useState<ApiProviderKey[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  const refresh = useCallback(async () => {
+    if (!token) return;
+    try {
+      const rows = await listProviderKeys(token);
+      setKeys(rows);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoaded(true);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const handleSet = async (providerId: ProviderId) => {
+    const key = drafts[providerId]?.trim();
+    if (!key) return;
+    setBusy(providerId);
+    try {
+      await setProviderKey(token, providerId, key);
+      setDrafts((d) => ({ ...d, [providerId]: "" }));
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleDelete = async (providerId: ProviderId) => {
+    setBusy(providerId);
+    try {
+      await deleteProviderKey(token, providerId);
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const sectionTitleStyle: React.CSSProperties = {
+    fontSize: 14,
+    fontWeight: 600,
+    color: "var(--celerex-text-primary)",
+    marginBottom: 16,
+    paddingBottom: 8,
+    borderBottom: "1px solid var(--celerex-border)",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: 13,
+    color: "var(--celerex-text-primary)",
+    fontWeight: 500,
+    textTransform: "capitalize",
+  };
+
+  const inputStyle: React.CSSProperties = {
+    padding: "6px 10px",
+    fontSize: 13,
+    border: "1px solid var(--celerex-border)",
+    borderRadius: 6,
+    background: "var(--celerex-bg-primary)",
+    color: "var(--celerex-text-primary)",
+    outline: "none",
+    boxSizing: "border-box" as const,
+    flex: 1,
+  };
+
+  const previewBoxStyle: React.CSSProperties = {
+    padding: "4px 10px",
+    fontSize: 12,
+    fontFamily: "monospace",
+    background: "var(--celerex-bg-sidebar)",
+    border: "1px solid var(--celerex-border)",
+    borderRadius: 4,
+    color: "var(--celerex-text-secondary)",
+  };
+
+  if (!token) {
+    return (
+      <div style={{ marginBottom: 32 }}>
+        <div style={sectionTitleStyle}>LLM Providers</div>
+        <div style={{ fontSize: 13, color: "var(--celerex-text-secondary)" }}>
+          Sign in to manage per-engagement provider keys.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginBottom: 32 }}>
+      <div style={sectionTitleStyle}>LLM Providers</div>
+      <div
+        style={{
+          fontSize: 12,
+          color: "var(--celerex-text-secondary)",
+          marginBottom: 16,
+        }}
+      >
+        Keys are stored encrypted per engagement. Only a masked preview is ever
+        returned. Setting a key replaces any existing one for that provider.
+      </div>
+      {error && (
+        <div
+          style={{
+            padding: "8px 10px",
+            marginBottom: 12,
+            border: "1px solid #ef4444",
+            borderRadius: 6,
+            background: "rgba(239, 68, 68, 0.08)",
+            color: "#ef4444",
+            fontSize: 12,
+          }}
+        >
+          {error}
+        </div>
+      )}
+      {PROVIDER_IDS.map((providerId) => {
+        const existing = keys.find((k) => k.provider_id === providerId);
+        const draft = drafts[providerId] ?? "";
+        const isBusy = busy === providerId;
+        return (
+          <div
+            key={providerId}
+            style={{
+              padding: "12px 0",
+              borderBottom: "1px solid var(--celerex-border)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ ...labelStyle, minWidth: 80 }}>{providerId}</span>
+              {existing ? (
+                <span style={previewBoxStyle}>{existing.key_preview}</span>
+              ) : (
+                <span
+                  style={{
+                    fontSize: 12,
+                    color: "var(--celerex-text-secondary)",
+                    fontStyle: "italic",
+                  }}
+                >
+                  {loaded ? "not configured" : "loading..."}
+                </span>
+              )}
+              {existing && (
+                <button
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() => void handleDelete(providerId)}
+                  style={{
+                    marginLeft: "auto",
+                    padding: "4px 10px",
+                    borderRadius: 6,
+                    fontSize: 12,
+                    border: "1px solid var(--celerex-border)",
+                    background: "transparent",
+                    color: "#ef4444",
+                    cursor: isBusy ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                type="password"
+                value={draft}
+                onChange={(e) =>
+                  setDrafts((d) => ({ ...d, [providerId]: e.target.value }))
+                }
+                placeholder={`Paste new ${providerId} key`}
+                style={inputStyle}
+                disabled={isBusy}
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                disabled={isBusy || !draft.trim()}
+                onClick={() => void handleSet(providerId)}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: 6,
+                  fontSize: 13,
+                  fontWeight: 500,
+                  border: "1px solid var(--celerex-border)",
+                  background:
+                    !isBusy && draft.trim()
+                      ? "var(--celerex-accent)"
+                      : "var(--celerex-bg-sidebar)",
+                  color:
+                    !isBusy && draft.trim()
+                      ? "#fff"
+                      : "var(--celerex-text-secondary)",
+                  cursor: !isBusy && draft.trim() ? "pointer" : "not-allowed",
+                }}
+              >
+                {existing ? "Replace" : "Set key"}
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -326,6 +557,9 @@ export function Settings() {
             </select>
           </div>
         </div>
+
+        {/* LLM Providers (per-engagement encrypted keys) */}
+        <LlmProviderKeysSection />
 
         {/* Keyboard Shortcuts */}
         <div style={sectionStyle}>

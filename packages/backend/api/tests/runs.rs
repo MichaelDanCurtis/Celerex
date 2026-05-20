@@ -32,6 +32,10 @@ fn build_router(pool: PgPool) -> Router {
     let notifiers_vec: Arc<Vec<Arc<dyn Notifier>>> = Arc::new(vec![Arc::new(
         notifiers::console::ConsoleNotifier,
     )]);
+    let provider_keys: Arc<dyn celerex_api::providers::store::ProviderKeysStore> = Arc::new(
+        celerex_api::providers::store::PgProviderKeysStore::from_env(pool.clone())
+            .expect("CELEREX_CRED_KEY must be set"),
+    );
     let state = AppState {
         pool,
         credentials,
@@ -41,6 +45,7 @@ fn build_router(pool: PgPool) -> Router {
         notifiers: notifiers_vec,
         providers: Arc::new(Vec::new()),
         providers_registry: Arc::new(celerex_orchestrator::llm::ProviderRegistry::new()),
+        provider_keys,
     };
     Router::new()
         .route("/api/runs", get(celerex_api::runs::routes::list))

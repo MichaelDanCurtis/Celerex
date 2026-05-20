@@ -545,6 +545,57 @@ export async function listProviders(token: string): Promise<string[]> {
   return body.providers ?? [];
 }
 
+// ---- Per-engagement provider keys ----------------------------------------
+//
+// Phase 1: storage + retrieval. The backend never returns plaintext keys —
+// only a masked `key_preview` such as `"sk-a...xyz"`. PUT replaces an
+// existing key (upsert).
+
+export interface ApiProviderKey {
+  provider_id: string;
+  key_preview: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function listProviderKeys(token: string): Promise<ApiProviderKey[]> {
+  const r = await fetch(`${API_BASE}/providers/keys`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!r.ok) throw new Error(`listProviderKeys: ${r.status}`);
+  return r.json();
+}
+
+export async function setProviderKey(
+  token: string,
+  providerId: string,
+  key: string,
+): Promise<ApiProviderKey> {
+  const r = await fetch(`${API_BASE}/providers/keys/${providerId}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ key }),
+  });
+  if (!r.ok) {
+    const body = await r.text().catch(() => "");
+    throw new Error(`setProviderKey: ${r.status}${body ? ` ${body}` : ""}`);
+  }
+  return r.json();
+}
+
+export async function deleteProviderKey(
+  token: string,
+  providerId: string,
+): Promise<void> {
+  const r = await fetch(`${API_BASE}/providers/keys/${providerId}`, {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!r.ok && r.status !== 404) {
+    throw new Error(`deleteProviderKey: ${r.status}`);
+  }
+}
+
 // ---- Plugin endpoints ----------------------------------------------------
 //
 // The backend stores a plugin "install" as a row in plugin_installs joined to

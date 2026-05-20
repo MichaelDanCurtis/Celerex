@@ -1,0 +1,7 @@
+{
+  "sensor_id": "press-line-3-temp",
+  "value": 72.4,
+  "unit": "celsius",
+  "timestamp": "2026-05-19T14:32:11Z",
+  "status": "nominal"
+}

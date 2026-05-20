@@ -5,6 +5,7 @@ pub mod auth;
 pub mod projects;
 pub mod docs;
 pub mod plugins;
+pub mod providers;
 pub mod webhooks;
 pub mod runs;
 pub mod llm;
@@ -19,6 +20,7 @@ use sqlx::PgPool;
 
 use crate::plugins::credentials::{CredentialStore, LocalAeadStore};
 use crate::project_members::store::{MembersStore, PgMembersStore};
+use crate::providers::store::{PgProviderKeysStore, ProviderKeysStore};
 use crate::runs::bus::RunBus;
 use celerex_orchestrator::{
     execution_type::ExecutionType,
@@ -41,6 +43,10 @@ pub struct AppState {
     pub notifiers: Arc<Vec<Arc<dyn notifiers::Notifier>>>,
     pub providers: Arc<Vec<String>>,
     pub providers_registry: Arc<ProviderRegistry>,
+    /// Per-engagement encrypted API keys for LLM providers. Phase 1: storage
+    /// + retrieval. Actual override-at-call-time wiring into the LlmHandler
+    /// is a follow-up.
+    pub provider_keys: Arc<dyn ProviderKeysStore>,
 }
 
 async fn list_providers(State(state): State<AppState>) -> Json<serde_json::Value> {
@@ -52,6 +58,16 @@ pub fn build_app(pool: PgPool) -> Router {
         LocalAeadStore::from_env().expect("CELEREX_CRED_KEY must be set")
     );
     build_app_with_store(pool, store)
+}
+
+/// Build a `PgProviderKeysStore` from `CELEREX_CRED_KEY`. Sharing the same
+/// envelope key as the plugin credential store keeps key management simple
+/// for Phase 1 — both encrypt-at-rest stores rotate together.
+fn build_provider_keys_store(pool: PgPool) -> Arc<dyn ProviderKeysStore> {
+    Arc::new(
+        PgProviderKeysStore::from_env(pool)
+            .expect("CELEREX_CRED_KEY must be set for provider_keys store"),
+    )
 }
 
 fn route_chain() -> Router<AppState> {
@@ -91,6 +107,11 @@ fn route_chain() -> Router<AppState> {
         )
         .route("/api/schedules/{id}/fire", post(scheduler::routes::fire))
         .route("/api/providers", get(list_providers))
+        .route("/api/providers/keys", get(providers::routes::list))
+        .route(
+            "/api/providers/keys/{provider_id}",
+            put(providers::routes::set_key).delete(providers::routes::delete_key),
+        )
         .route("/api/assistant/chat", post(assistant::chat))
         .route("/api/assistant/chat/stream", post(assistant::chat_stream))
 }
@@ -218,6 +239,7 @@ fn build_app_with_dispatcher_inner(
         .spawn();
     }
 
+    let provider_keys = build_provider_keys_store(pool.clone());
     route_chain().with_state(AppState {
         pool,
         credentials,
@@ -227,5 +249,6 @@ fn build_app_with_dispatcher_inner(
         notifiers,
         providers: Arc::new(provider_ids),
         providers_registry,
+        provider_keys,
     })
 }

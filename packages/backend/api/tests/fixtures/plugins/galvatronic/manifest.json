@@ -1,0 +1,34 @@
+{
+  "id": "galvatronic",
+  "name": "Galvatronic",
+  "version": "0.1.0-fixture",
+  "inbound": [],
+  "outbound": [
+    {
+      "id": "galvatronic.read_sensor",
+      "kind": "http",
+      "input_schema": {
+        "type": "object",
+        "properties": { "sensor_id": { "type": "string" } },
+        "required": ["sensor_id"]
+      }
+    },
+    {
+      "id": "galvatronic.list_devices",
+      "kind": "http",
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "id": "galvatronic.send_command",
+      "kind": "http",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "device_id": { "type": "string" },
+          "command":   { "type": "string" }
+        },
+        "required": ["device_id", "command"]
+      }
+    }
+  ]
+}

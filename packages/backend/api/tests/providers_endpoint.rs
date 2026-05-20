@@ -35,6 +35,10 @@ fn build_state(pool: PgPool, provider_ids: Vec<String>) -> AppState {
     let notifiers_vec: Arc<Vec<Arc<dyn Notifier>>> = Arc::new(vec![Arc::new(
         notifiers::console::ConsoleNotifier,
     )]);
+    let provider_keys: Arc<dyn celerex_api::providers::store::ProviderKeysStore> = Arc::new(
+        celerex_api::providers::store::PgProviderKeysStore::from_env(pool.clone())
+            .expect("CELEREX_CRED_KEY must be set"),
+    );
     AppState {
         pool,
         credentials,
@@ -44,6 +48,7 @@ fn build_state(pool: PgPool, provider_ids: Vec<String>) -> AppState {
         notifiers: notifiers_vec,
         providers: Arc::new(provider_ids),
         providers_registry: Arc::new(ProviderRegistry::new()),
+        provider_keys,
     }
 }
 

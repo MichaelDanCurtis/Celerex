@@ -1,0 +1,22 @@
+{
+  "devices": [
+    {
+      "device_id": "press-line-3",
+      "kind": "hydraulic_press",
+      "site": "Plant-A",
+      "online": true
+    },
+    {
+      "device_id": "cnc-mill-7",
+      "kind": "cnc_mill",
+      "site": "Plant-A",
+      "online": true
+    },
+    {
+      "device_id": "robotic-arm-12",
+      "kind": "scara_robot",
+      "site": "Plant-B",
+      "online": false
+    }
+  ]
+}

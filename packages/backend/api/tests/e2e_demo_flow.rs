@@ -120,6 +120,10 @@ fn build_app(
     let notifiers_vec: Arc<Vec<Arc<dyn Notifier>>> = Arc::new(vec![Arc::new(
         notifiers::console::ConsoleNotifier,
     )]);
+    let provider_keys: Arc<dyn celerex_api::providers::store::ProviderKeysStore> = Arc::new(
+        celerex_api::providers::store::PgProviderKeysStore::from_env(pool.clone())
+            .expect("CELEREX_CRED_KEY must be set"),
+    );
     let state = AppState {
         pool,
         credentials,
@@ -129,6 +133,7 @@ fn build_app(
         notifiers: notifiers_vec,
         providers: Arc::new(provider_ids),
         providers_registry: registry,
+        provider_keys,
     };
     Router::new()
         .route(
