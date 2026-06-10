@@ -69,6 +69,12 @@ export function NodeConfigPanel({
         <ScriptForm config={config} patch={patch} />
       ) : exec === "doc" ? (
         <DocForm config={config} patch={patch} />
+      ) : exec === "memory" ? (
+        <MemoryForm config={config} patch={patch} />
+      ) : exec === "galvo" ? (
+        <GalvoForm config={config} patch={patch} />
+      ) : exec === "m365" ? (
+        <M365Form config={config} patch={patch} />
       ) : exec === "input" ? (
         <JsonField
           label="Payload"
@@ -243,6 +249,127 @@ function DocForm({ config, patch }: { config: Cfg; patch: Patch }) {
           />
         </Field>
       )}
+    </>
+  );
+}
+
+const MEMORY_LABELS = [
+  "Entity",
+  "Decision",
+  "Pattern",
+  "Belief",
+  "Artifact",
+  "Session",
+  "Task",
+  "Failure",
+  "Convention",
+  "Constraint",
+];
+
+function MemoryForm({ config, patch }: { config: Cfg; patch: Patch }) {
+  const op = String(config.op ?? "search");
+  return (
+    <>
+      <Field label="Operation" hint="galvo-memory (Neo4j) — recall or store.">
+        <Select value={op} options={["search", "store"]} onChange={(v) => patch({ op: v })} />
+      </Field>
+      <Field label="Memory type" hint="The galvo-memory node label.">
+        <Select
+          value={String(config.mem_label ?? (op === "store" ? "Decision" : "Entity"))}
+          options={op === "search" ? MEMORY_LABELS : MEMORY_LABELS.filter((l) => l !== "Entity")}
+          onChange={(v) => patch({ mem_label: v })}
+        />
+      </Field>
+      <Field label="Scope" hint="Default: project:celerex">
+        <Input value={String(config.scope ?? "")} onChange={(v) => patch({ scope: v })} mono />
+      </Field>
+      {op === "search" ? (
+        <>
+          <Field label="Query" hint="Supports {{steps.id.outputs}}.">
+            <TextArea value={String(config.query ?? "")} onChange={(v) => patch({ query: v })} rows={3} />
+          </Field>
+          <Field label="Limit">
+            <Input value={String(config.limit ?? 5)} onChange={(v) => patch({ limit: Number(v) || 5 })} />
+          </Field>
+        </>
+      ) : (
+        <JsonField
+          label="Fields"
+          hint="Per-label properties, e.g. { title, rationale, confidence }."
+          value={config.fields ?? {}}
+          onChange={(v) => patch({ fields: v })}
+        />
+      )}
+    </>
+  );
+}
+
+function GalvoForm({ config, patch }: { config: Cfg; patch: Patch }) {
+  return (
+    <>
+      <Field label="Agent handle" hint="Galvo agent name (control plane).">
+        <Input value={String(config.agent ?? "")} onChange={(v) => patch({ agent: v })} mono />
+      </Field>
+      <Field label="Input" hint="Sent as the agent's input. Supports {{steps...}}.">
+        <TextArea value={String(config.input ?? "")} onChange={(v) => patch({ input: v })} rows={4} />
+      </Field>
+      <Field label="Token" hint="Optional. Else GALVO_CONTROL_PLANE_TOKEN env.">
+        <Input value={String(config.token ?? "")} onChange={(v) => patch({ token: v })} mono />
+      </Field>
+      <div style={{ fontSize: 10.5, color: "var(--celerex-text-secondary)", marginTop: 4 }}>
+        Targets GALVO_CONTROL_PLANE_URL (default http://localhost:8787).
+      </div>
+    </>
+  );
+}
+
+function M365Form({ config, patch }: { config: Cfg; patch: Patch }) {
+  const op = String(config.op ?? "copilot_publish");
+  return (
+    <>
+      <Field label="Operation">
+        <Select
+          value={op}
+          options={["copilot_publish", "copilot_setup", "graph_get"]}
+          onChange={(v) => patch({ op: v })}
+        />
+      </Field>
+      {op === "graph_get" && (
+        <Field label="Graph path" hint="e.g. /users/{id}/messages or /sites/{id}/drive">
+          <Input value={String(config.path ?? "")} onChange={(v) => patch({ path: v })} mono />
+        </Field>
+      )}
+      {(op === "copilot_publish" || op === "copilot_setup") && (
+        <Field label="Connection ID">
+          <Input value={String(config.connection_id ?? "")} onChange={(v) => patch({ connection_id: v })} mono />
+        </Field>
+      )}
+      {op === "copilot_setup" && (
+        <>
+          <Field label="Name">
+            <Input value={String(config.name ?? "")} onChange={(v) => patch({ name: v })} />
+          </Field>
+          <Field label="Description">
+            <Input value={String(config.description ?? "")} onChange={(v) => patch({ description: v })} />
+          </Field>
+        </>
+      )}
+      {op === "copilot_publish" && (
+        <>
+          <Field label="Item ID">
+            <Input value={String(config.item_id ?? "")} onChange={(v) => patch({ item_id: v })} mono />
+          </Field>
+          <Field label="Title">
+            <Input value={String(config.title ?? "")} onChange={(v) => patch({ title: v })} />
+          </Field>
+          <Field label="Content" hint="Usually {{steps.agent.outputs}}.">
+            <TextArea value={String(config.content ?? "")} onChange={(v) => patch({ content: v })} rows={4} mono />
+          </Field>
+        </>
+      )}
+      <div style={{ fontSize: 10.5, color: "var(--celerex-text-secondary)", marginTop: 4 }}>
+        Auth via AZURE_TENANT_ID / AZURE_CLIENT_ID / AZURE_CLIENT_SECRET env (app-only).
+      </div>
     </>
   );
 }

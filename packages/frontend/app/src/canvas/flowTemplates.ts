@@ -198,6 +198,101 @@ export const FLOW_TEMPLATES: FlowTemplate[] = [
       ],
     }),
   },
+  {
+    id: "memory-loop",
+    name: "Memory-augmented",
+    description: "Recall from galvo-memory → reason with an LLM → store the decision back.",
+    icon: "🧠",
+    build: () => ({
+      nodes: [
+        trigger("trigger", "Start", 40, 160),
+        {
+          id: "recall",
+          type: "action",
+          position: { x: 300, y: 160 },
+          config: {
+            execution: "memory",
+            template: "memory.search",
+            label: "Recall context",
+            op: "search",
+            mem_label: "Entity",
+            query: "{{steps.trigger.outputs}}",
+            limit: 5,
+          },
+        },
+        llm(
+          "agent",
+          "Reason with memory",
+          "You are a careful analyst. Use the recalled memory to inform your answer.",
+          "Given this recalled context, recommend a next step:\n\n{{steps.recall.outputs.hits}}",
+          560,
+          160,
+        ),
+        {
+          id: "store",
+          type: "action",
+          position: { x: 820, y: 160 },
+          config: {
+            execution: "memory",
+            template: "memory.store",
+            label: "Remember decision",
+            op: "store",
+            mem_label: "Decision",
+            fields: {
+              title: "Recommended next step from memory-augmented flow",
+              rationale: "Decision produced after recalling prior workspace context.",
+              confidence: 0.8,
+            },
+          },
+        },
+      ],
+      edges: [
+        { from: "trigger", to: "recall" },
+        { from: "recall", to: "agent" },
+        { from: "agent", to: "store" },
+      ],
+    }),
+  },
+  {
+    id: "m365-publish",
+    name: "Publish to M365 Copilot",
+    description: "Draft with an LLM → save a doc → publish it into Microsoft 365 Copilot.",
+    icon: "Ⓜ️",
+    build: () => ({
+      nodes: [
+        trigger("trigger", "Start", 40, 160),
+        llm(
+          "agent",
+          "Draft content",
+          "You write concise, well-structured Markdown briefs.",
+          "Write a short brief on this week's product highlights.",
+          300,
+          160,
+        ),
+        docCreate("doc", "Save doc", "Product Highlights", "{{steps.agent.outputs}}", 580, 160),
+        {
+          id: "publish",
+          type: "outbound",
+          position: { x: 860, y: 160 },
+          config: {
+            execution: "m365",
+            template: "m365.publish",
+            label: "Publish to Copilot",
+            op: "copilot_publish",
+            connection_id: "celerexdocs",
+            item_id: "highlights-1",
+            title: "Product Highlights",
+            content: "{{steps.agent.outputs}}",
+          },
+        },
+      ],
+      edges: [
+        { from: "trigger", to: "agent" },
+        { from: "agent", to: "doc" },
+        { from: "doc", to: "publish" },
+      ],
+    }),
+  },
 ];
 
 export function flowTemplateById(id: string): FlowTemplate | undefined {
