@@ -1,4 +1,5 @@
 pub mod assistant;
+pub mod connectors;
 pub mod db;
 pub mod engagements;
 pub mod auth;
@@ -159,6 +160,19 @@ pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>)
     dispatcher.register(
         ExecutionType::Doc,
         Arc::new(crate::docs::handler::DocHandler::new(pool.clone())),
+    );
+    // External connectors / federation: galvo-memory, Galvo agents, Microsoft 365.
+    dispatcher.register(
+        ExecutionType::Memory,
+        Arc::new(crate::connectors::memory::MemoryHandler::new()),
+    );
+    dispatcher.register(
+        ExecutionType::Galvo,
+        Arc::new(crate::connectors::galvo::GalvoHandler::new()),
+    );
+    dispatcher.register(
+        ExecutionType::M365,
+        Arc::new(crate::connectors::m365::M365Handler::new()),
     );
     build_app_with_dispatcher_inner(
         pool,

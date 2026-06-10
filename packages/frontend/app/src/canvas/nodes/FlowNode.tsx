@@ -175,6 +175,12 @@ function configSummary(category: NodeCategory, config: Record<string, unknown>):
     }
     case "input":
       return "trigger";
+    case "memory":
+      return `mem · ${String(config.op ?? "search")} · ${String(config.mem_label ?? "Entity")}`;
+    case "galvo":
+      return `galvo · ${truncate(String(config.agent ?? "agent"), 18)}`;
+    case "m365":
+      return `m365 · ${String(config.op ?? "publish")}`;
     default:
       return String(config.template ?? exec ?? "node");
   }

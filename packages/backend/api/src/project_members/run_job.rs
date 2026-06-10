@@ -159,11 +159,20 @@ pub async fn enqueue_run(
         project_id: Some(member.project_id),
         steps,
     };
+    let flow_name = member.name.clone();
     let exec = executor.clone();
     let pool_for_task = pool.clone();
     let notifiers_for_task = notifiers.clone();
     tokio::spawn(async move {
         let status = exec.run(req.clone()).await;
+        // Best-effort: record this run as a galvo-memory :Session node so the
+        // Celerex workspace accrues memory of what it has run.
+        let outcome = match &status {
+            Ok(RunStatus::Succeeded) => "success",
+            Ok(RunStatus::Failed) => "failed",
+            _ => "abandoned",
+        };
+        crate::connectors::memory::log_run_session(flow_name, engagement_id, req.run_id, outcome);
         let event = match status {
             Ok(RunStatus::Failed) => Some(NotificationEvent::RunFailed {
                 run_id: req.run_id,
