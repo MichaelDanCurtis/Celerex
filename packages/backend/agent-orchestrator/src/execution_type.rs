@@ -9,4 +9,7 @@ pub enum ExecutionType {
     Script,
     Llm,
     Doc,
+    /// A trigger / seed node: echoes its (templated) inputs downstream so an
+    /// entry point produces a payload for the rest of the flow to reference.
+    Input,
 }

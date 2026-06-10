@@ -26,6 +26,7 @@ export function MonitorPage() {
             id: n.id,
             type: n.type as Graph["nodes"][number]["type"],
             config: n.config,
+            position: (n as { position?: { x: number; y: number } }).position,
           })),
           edges: m.graph_json.edges,
         });

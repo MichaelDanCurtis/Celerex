@@ -43,7 +43,7 @@ export const themeAtom = atom<"light" | "dark">("light");
 export const accentColorAtom = atom<string>("#3b82f6");
 export const fontSizeAtom = atom<"small" | "medium" | "large">("medium");
 
-export const activeViewAtom = atom<"editor" | "dashboard" | "agent-dashboard" | "pipeline-editor" | "task-queue" | "agent-triggers" | "plugin-manager" | "plugins" | "tools-manager" | "settings" | "timeline" | "builder" | "monitor" | "fleet" | "docs">("editor");
+export const activeViewAtom = atom<"editor" | "dashboard" | "agent-dashboard" | "pipeline-editor" | "task-queue" | "agent-triggers" | "plugin-manager" | "plugins" | "tools-manager" | "settings" | "timeline" | "flows" | "builder" | "monitor" | "fleet" | "docs">("editor");
 
 export const activeMemberIdAtom = atom<string | null>(null);
 export const activeRunIdAtom = atom<string | null>(null);
