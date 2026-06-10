@@ -295,6 +295,14 @@ export async function getMember(
   return r.json();
 }
 
+export async function deleteMember(token: string, id: string): Promise<void> {
+  const r = await fetch(`${API_BASE}/project_members/${id}`, {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!r.ok && r.status !== 404) throw new Error(`deleteMember: ${r.status}`);
+}
+
 // ---- Fleet (Sprint 1 Task 12) ---------------------------------------------
 
 export interface FleetRow {
@@ -389,6 +397,27 @@ export interface ApiRunSummary {
   status: string;
   triggered_by: string;
   created_at: string;
+}
+
+/** One persisted step record from `GET /api/runs/{id}/steps` (historical runs). */
+export interface ApiRunStep {
+  step_id: string;
+  status: string;
+  inputs: unknown;
+  outputs: unknown | null;
+  error: string | null;
+  completed_at: string | null;
+}
+
+export async function listRunSteps(
+  token: string,
+  runId: string,
+): Promise<ApiRunStep[]> {
+  const r = await fetch(`${API_BASE}/runs/${runId}/steps`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!r.ok) throw new Error(`listRunSteps: ${r.status}`);
+  return r.json();
 }
 
 export async function listRuns(

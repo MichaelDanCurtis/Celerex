@@ -1,8 +1,9 @@
 use axum::{
     Json,
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
 };
+use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -45,5 +46,51 @@ pub async fn list(
         .list_for_member(q.project_member_id, limit)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    Ok(Json(rows))
+}
+
+/// One persisted step record for a (possibly historical) run.
+#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize)]
+pub struct RunStepRow {
+    pub step_id: String,
+    pub status: String,
+    pub inputs: serde_json::Value,
+    pub outputs: Option<serde_json::Value>,
+    pub error: Option<String>,
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+/// `GET /api/runs/{run_id}/steps` — the durable per-step history of a run.
+///
+/// This is what makes the Monitor useful for PAST runs: SSE only covers the
+/// live stream, while this reads the `run_steps` rows the executor persisted.
+/// Auth: 403 unless the run belongs to the caller's engagement.
+pub async fn steps(
+    AuthClaims(claims): AuthClaims,
+    State(state): State<AppState>,
+    Path(run_id): Path<Uuid>,
+) -> Result<Json<Vec<RunStepRow>>, (StatusCode, String)> {
+    let owner: Option<Uuid> =
+        sqlx::query_scalar("SELECT engagement_id FROM runs WHERE id = $1")
+            .bind(run_id)
+            .fetch_optional(&state.pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    match owner {
+        None => return Err((StatusCode::NOT_FOUND, "run not found".into())),
+        Some(eng) if eng != claims.engagement_id => {
+            return Err((StatusCode::FORBIDDEN, "forbidden".into()));
+        }
+        Some(_) => {}
+    }
+    let rows = sqlx::query_as::<_, RunStepRow>(
+        "SELECT step_id, status, inputs, outputs, error, completed_at
+         FROM run_steps WHERE run_id = $1
+         ORDER BY completed_at ASC NULLS LAST",
+    )
+    .bind(run_id)
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(rows))
 }

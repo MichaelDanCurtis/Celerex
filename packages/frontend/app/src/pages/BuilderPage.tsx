@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { AgentBuilderCanvas } from "../canvas/AgentBuilderCanvas";
 import { NodeConfigPanel } from "../canvas/NodeConfigPanel";
@@ -59,6 +59,9 @@ export function BuilderPage({
           edges: m.graph_json.edges,
         });
         setProviderConfig(m.provider_config_json ?? {});
+        // Fresh load = fresh history.
+        undoStack.current = [];
+        redoStack.current = [];
       })
       .catch((err) => {
         addToast({
@@ -77,6 +80,61 @@ export function BuilderPage({
   const upstreamIds = selected
     ? graph.nodes.filter((n) => n.id !== selected.id).map((n) => n.id)
     : [];
+
+  // ---- Undo / redo --------------------------------------------------------
+  // Every structural edit pushes the prior graph onto the undo stack; rapid
+  // bursts (e.g. the stream of position changes during a drag) coalesce into
+  // one entry via a 400ms window so ⌘Z steps feel like user-sized actions.
+  const undoStack = useRef<Graph[]>([]);
+  const redoStack = useRef<Graph[]>([]);
+  const lastPushAt = useRef(0);
+
+  const applyEdit = useCallback((next: Graph) => {
+    setGraph((prev) => {
+      const now = Date.now();
+      if (now - lastPushAt.current > 400) {
+        undoStack.current.push(prev);
+        if (undoStack.current.length > 50) undoStack.current.shift();
+        lastPushAt.current = now;
+      }
+      redoStack.current = [];
+      return next;
+    });
+  }, []);
+
+  const undo = useCallback(() => {
+    setGraph((prev) => {
+      const last = undoStack.current.pop();
+      if (!last) return prev;
+      redoStack.current.push(prev);
+      lastPushAt.current = 0;
+      return last;
+    });
+  }, []);
+
+  const redo = useCallback(() => {
+    setGraph((prev) => {
+      const next = redoStack.current.pop();
+      if (!next) return prev;
+      undoStack.current.push(prev);
+      lastPushAt.current = 0;
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable) return;
+      e.preventDefault();
+      if (e.shiftKey) redo();
+      else undo();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
 
   const handleSave = useCallback(async () => {
     if (!projectId && !activeMemberId) {
@@ -147,10 +205,10 @@ export function BuilderPage({
   const tabBtn = (active = false) =>
     ({
       padding: "6px 12px",
-      borderRadius: 6,
-      border: "1px solid var(--celerex-border)",
-      background: active ? "var(--celerex-accent)" : "transparent",
-      color: active ? "#fff" : "var(--celerex-text-secondary)",
+      borderRadius: 7,
+      border: "1px solid #232838",
+      background: active ? "var(--celerex-accent)" : "#13161f",
+      color: active ? "#fff" : "#aab2c6",
       cursor: "pointer",
       fontSize: 13,
       fontWeight: 500,
@@ -161,11 +219,11 @@ export function BuilderPage({
       <div
         style={{
           padding: "10px 12px",
-          borderBottom: "1px solid var(--celerex-border)",
+          borderBottom: "1px solid #1d2230",
           display: "flex",
           gap: 8,
           alignItems: "center",
-          background: "var(--celerex-bg-primary)",
+          background: "#0c0e15",
         }}
       >
         <button onClick={() => setView("flows")} style={tabBtn()} title="Back to flows">
@@ -176,11 +234,11 @@ export function BuilderPage({
           value={name}
           onChange={(e) => setName(e.target.value)}
           style={{
-            padding: "6px 8px",
-            borderRadius: 6,
-            border: "1px solid var(--celerex-border)",
-            background: "var(--celerex-bg-primary)",
-            color: "var(--celerex-text-primary)",
+            padding: "6px 10px",
+            borderRadius: 7,
+            border: "1px solid #232838",
+            background: "#11141d",
+            color: "#e6e9f0",
             fontSize: 14,
             fontWeight: 600,
             minWidth: 220,
@@ -241,7 +299,7 @@ export function BuilderPage({
         <AgentBuilderCanvas
           graph={graph}
           mode="edit"
-          onEdit={setGraph}
+          onEdit={applyEdit}
           onNodeClick={(id) => {
             setSelectedId(id);
             setTab("config");
@@ -263,10 +321,10 @@ export function BuilderPage({
               node={selected}
               upstreamIds={upstreamIds}
               onChange={(n) => {
-                setGraph((prev) => ({
-                  ...prev,
-                  nodes: prev.nodes.map((x) => (x.id === n.id ? n : x)),
-                }));
+                applyEdit({
+                  ...graph,
+                  nodes: graph.nodes.map((x) => (x.id === n.id ? n : x)),
+                });
               }}
             />
           ) : tab === "schedules" ? (

@@ -10,6 +10,7 @@ import { addToastAtom } from "../state/toastAtom";
 import {
   createMember,
   createProject,
+  deleteMember,
   listMembers,
   listProjects,
   runMemberNow,
@@ -108,6 +109,23 @@ export function FlowsPage({ token }: { token: string }) {
     [setMemberId, setView],
   );
 
+  const removeFlow = useCallback(
+    async (m: ApiProjectMember) => {
+      if (!window.confirm(`Delete “${m.name}”? Its run history and schedules go with it.`)) return;
+      try {
+        await deleteMember(token, m.id);
+        setFlows((prev) => prev.filter((f) => f.id !== m.id));
+        addToast({ message: `Deleted “${m.name}”`, type: "success" });
+      } catch (err) {
+        addToast({
+          message: err instanceof Error ? err.message : "Delete failed",
+          type: "error",
+        });
+      }
+    },
+    [token, addToast],
+  );
+
   const runFlow = useCallback(
     async (m: ApiProjectMember) => {
       try {
@@ -128,11 +146,16 @@ export function FlowsPage({ token }: { token: string }) {
 
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "28px 32px", maxWidth: 1100, margin: "0 auto", width: "100%" }}>
-      <header style={{ marginBottom: 8 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 700, marginBottom: 4 }}>Flows</h1>
-        <p style={{ color: "var(--celerex-text-secondary)", fontSize: 14 }}>
-          Wire triggers, AI agents, documents, and connectors into automations — n8n-style, on a visual canvas.
-        </p>
+      <header style={{ marginBottom: 8, display: "flex", alignItems: "flex-start", gap: 16 }}>
+        <div style={{ flex: 1 }}>
+          <h1 style={{ fontSize: 26, fontWeight: 700, marginBottom: 4 }}>Flows</h1>
+          <p style={{ color: "var(--celerex-text-secondary)", fontSize: 14 }}>
+            Wire triggers, AI agents, documents, and connectors into automations — n8n-style, on a visual canvas.
+          </p>
+        </div>
+        <button onClick={() => setView("network")} style={ghostBtn} title="See all flows as a living 3D graph">
+          🌐 View network
+        </button>
       </header>
 
       {/* Templates */}
@@ -208,6 +231,14 @@ export function FlowsPage({ token }: { token: string }) {
                     </button>
                     <button onClick={() => void runFlow(m)} style={ghostBtn}>
                       ▶ Run
+                    </button>
+                    <div style={{ flex: 1 }} />
+                    <button
+                      onClick={() => void removeFlow(m)}
+                      title="Delete flow"
+                      style={{ ...ghostBtn, color: "#ef4444", borderColor: "#ef444455" }}
+                    >
+                      🗑
                     </button>
                   </div>
                 </div>
