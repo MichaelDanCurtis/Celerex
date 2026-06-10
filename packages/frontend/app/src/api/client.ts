@@ -60,14 +60,23 @@ export interface LoginResponse {
   engagement: { id: string; name: string };
 }
 
-/**
- * Dev-mode signin: swaps an engagement name for a JWT minted by the backend.
- * No password — this stands in for the missing real auth flow.
- */
-export async function login(engagementName: string): Promise<LoginResponse> {
+/** Verify email + password, returning a session JWT. */
+export async function login(email: string, password: string): Promise<LoginResponse> {
   return request<LoginResponse>("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ engagement_name: engagementName }),
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+/** Create an account (provisioning the named workspace if new) and sign in. */
+export async function signup(
+  email: string,
+  password: string,
+  engagementName: string,
+): Promise<LoginResponse> {
+  return request<LoginResponse>("/auth/signup", {
+    method: "POST",
+    body: JSON.stringify({ email, password, engagement_name: engagementName }),
   });
 }
 

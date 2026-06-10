@@ -78,6 +78,7 @@ fn route_chain() -> Router<AppState> {
     Router::new()
         .route("/api/health", get(|| async { Json(json!({ "ok": true })) }))
         .route("/api/auth/login", post(auth::routes::login))
+        .route("/api/auth/signup", post(auth::routes::signup))
         .route("/api/engagements", get(engagements::list).post(engagements::create))
         .route("/api/projects", get(projects::list).post(projects::create))
         .route("/api/docs", post(docs::create))
@@ -151,10 +152,23 @@ pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>)
         provider_ids.push("gemini".to_string());
     }
     let registry_arc = Arc::new(registry);
-    dispatcher.register(
-        ExecutionType::Llm,
-        Arc::new(LlmHandler { registry: registry_arc.clone() }),
-    );
+    // Engagement-aware LLM handler: prefers a per-engagement decrypted key for
+    // an explicitly-named provider, falling back to the house registry. If the
+    // key store can't be built (no CELEREX_CRED_KEY), fall back to the plain
+    // env-only handler so the app still starts.
+    match crate::providers::store::PgProviderKeysStore::from_env(pool.clone()) {
+        Ok(keys) => dispatcher.register(
+            ExecutionType::Llm,
+            Arc::new(crate::llm::handler::EngagementLlmHandler::new(
+                registry_arc.clone(),
+                Arc::new(keys),
+            )),
+        ),
+        Err(_) => dispatcher.register(
+            ExecutionType::Llm,
+            Arc::new(LlmHandler { registry: registry_arc.clone() }),
+        ),
+    }
     // Full production handler set so every node type a flow can contain actually
     // executes. (E2E tests inject their own dispatcher + fixtures as needed.)
     //   Input  — trigger / seed nodes echo a payload downstream.
