@@ -54,6 +54,38 @@ integration left for later).
   (`async with galvo.serve(port=8787): …`). Not running by default, so this is
   build-+unit-tested; point `GALVO_CONTROL_PLANE_URL` at a live instance to use it.
 
+## 4. Galvo Hub mTLS A2A federation — `execution: "galvo"` + `transport: "hub"` ✅ round-trip verified
+
+Celerex is a first-class participant in Galvo's cross-org agent federation
+(`connectors/galvo_hub.rs`), reusing Galvo's own `galvo-federation` crate for
+all crypto — X25519 ECDH + HKDF-SHA256 + ChaCha20-Poly1305 sealing, Ed25519
+sender sigs — so the wire format can never drift from the Hub.
+
+- **Register** (`POST /api/galvo/hub/register`): generate A2A keys + a CSR,
+  exchange for an issued client cert over the Hub's TLS listener, persist a
+  keystore (`GALVO_HUB_KEYSTORE`, default `./galvo-hub-keys.json`). Optional
+  `elevate_tier` raises the org's trust tier (bootstrap-gated) so it clears
+  targets' default `Verified` policy.
+- **Invoke** (flow node `galvo` with `transport: "hub"`, or
+  `POST /api/galvo/hub/invoke`): lookup → request cap token → seal envelope →
+  `hub.relay`. The target `agent` is a federation handle (`org/agent`).
+- **Receive**: `GalvoHubClient::run_receiver` connects to `/push`, completes the
+  Hub's signed-nonce challenge-response handshake, then decrypts each relayed
+  envelope (verifying the sender's Ed25519 sig via `hub.lookup_agent`). This is
+  what makes Celerex agents *callable* over A2A, not just callers.
+- **Status**: `GET /api/galvo/hub/status`.
+- **Run the Hub** (local): `HUB_BOOTSTRAP_TOKEN=… cargo run -p galvo-hub --
+  --addr 127.0.0.1:8443 --data-dir ./hub-data [--plaintext-ws-port 8444]`. The
+  CA lands at `./hub-data/ca.crt` (point `GALVO_HUB_CA_PATH` at it).
+- **Verified (2026-06-10):** `tests/galvo_hub_federation.rs` boots the REAL Hub
+  in-process and drives a full encrypted A2A round trip through Celerex's own
+  client + receiver (register both ends → elevate → relay → decrypt → assert
+  plaintext), plus a trust-policy rejection. The mTLS Hub A2A path is no longer
+  deferred — it's live.
+
 ## Tests
-`cargo test -p celerex-api --lib connectors` — 8 wiremock unit tests (memory
-store/search, galvo invoke, m365 token→publish / graph_get / missing-creds).
+- `cargo test -p celerex-api --lib connectors` — wiremock unit tests (memory
+  store/search, galvo control-plane invoke, m365 token→publish / graph_get /
+  missing-creds, galvo-hub CSR + keystore).
+- `cargo test -p celerex-api --test galvo_hub_federation` — the in-process Hub
+  mTLS A2A round trip + trust-gating rejection.
