@@ -49,6 +49,11 @@ fn build_router(pool: PgPool) -> Router {
     };
     Router::new()
         .route("/api/runs", get(celerex_api::runs::routes::list))
+        .route("/api/runs/{run_id}/steps", get(celerex_api::runs::routes::steps))
+        .route(
+            "/api/project_members/{id}",
+            axum::routing::delete(celerex_api::project_members::routes::delete),
+        )
         .with_state(state)
 }
 
@@ -212,4 +217,120 @@ async fn list_runs_empty_for_member_without_runs() {
     let body = body_json(res).await;
     let arr = body.as_array().expect("array");
     assert_eq!(arr.len(), 0);
+}
+
+#[tokio::test]
+async fn run_steps_returns_history_and_enforces_tenancy() {
+    let db = common::start_test_db().await;
+    let app = build_router(db.pool.clone());
+    let (eng, project, member) = seed_engagement_project_member(&db.pool).await;
+    let run_id = insert_run(&db.pool, eng, project, member, "manual").await;
+
+    sqlx::query(
+        "INSERT INTO run_steps (run_id, step_id, status, inputs, outputs, completed_at)
+         VALUES ($1, 'a', 'succeeded', '{}'::jsonb, '{\"ok\":true}'::jsonb, NOW()),
+                ($1, 'b', 'failed', '{}'::jsonb, NULL, NOW() + interval '1 second')",
+    )
+    .bind(run_id)
+    .execute(&db.pool)
+    .await
+    .unwrap();
+
+    // Owner sees ordered step history.
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/runs/{run_id}/steps"))
+                .header("authorization", format!("Bearer {}", auth(eng)))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let arr = body_json(res).await;
+    assert_eq!(arr.as_array().unwrap().len(), 2);
+    assert_eq!(arr[0]["step_id"], "a");
+    assert_eq!(arr[0]["outputs"]["ok"], true);
+    assert_eq!(arr[1]["step_id"], "b");
+    assert_eq!(arr[1]["status"], "failed");
+
+    // A different engagement gets 403.
+    let other = sqlx::query_scalar::<_, Uuid>(
+        "INSERT INTO engagements (name) VALUES ('Other') RETURNING id",
+    )
+    .fetch_one(&db.pool)
+    .await
+    .unwrap();
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/runs/{run_id}/steps"))
+                .header("authorization", format!("Bearer {}", auth(other)))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn delete_member_cascades_and_enforces_tenancy() {
+    let db = common::start_test_db().await;
+    let app = build_router(db.pool.clone());
+    let (eng, project, member) = seed_engagement_project_member(&db.pool).await;
+    let run_id = insert_run(&db.pool, eng, project, member, "manual").await;
+
+    // Wrong engagement → 403, member survives.
+    let other = sqlx::query_scalar::<_, Uuid>(
+        "INSERT INTO engagements (name) VALUES ('Intruder') RETURNING id",
+    )
+    .fetch_one(&db.pool)
+    .await
+    .unwrap();
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!("/api/project_members/{member}"))
+                .header("authorization", format!("Bearer {}", auth(other)))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+
+    // Owner → 204, member + dependent runs are gone.
+    let res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!("/api/project_members/{member}"))
+                .header("authorization", format!("Bearer {}", auth(eng)))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+
+    let member_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM project_members WHERE id = $1")
+            .bind(member)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+    assert_eq!(member_count, 0);
+    let run_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM runs WHERE id = $1")
+        .bind(run_id)
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    assert_eq!(run_count, 0);
 }

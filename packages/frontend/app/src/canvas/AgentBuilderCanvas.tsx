@@ -5,6 +5,7 @@ import {
   BackgroundVariant,
   Controls,
   MiniMap,
+  Panel,
   Node,
   Edge,
   NodeChange,
@@ -20,6 +21,7 @@ import "@xyflow/react/dist/style.css";
 import { useCallback, useRef, useState, useEffect } from "react";
 import { Graph, RunState, StepState, NodeCategory, FlowNodeData } from "./types";
 import { FlowNode } from "./nodes/FlowNode";
+import { autoLayout } from "./layout";
 import {
   PALETTE_GROUPS,
   PaletteItem,
@@ -54,25 +56,63 @@ export function AgentBuilderCanvas(props: AgentBuilderCanvasProps) {
 }
 
 function CanvasInner({ graph, mode, onEdit, runState, onNodeClick }: AgentBuilderCanvasProps) {
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, fitView } = useReactFlow();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const addCounter = useRef(0);
-  const [nodes, setNodes] = useState<Node[]>(() => toReactFlowNodes(graph, runState));
-  const [edges, setEdges] = useState<Edge[]>(() => toReactFlowEdges(graph, runState));
 
   // Refs mirror the latest nodes/edges so change handlers never echo a STALE
   // sibling collection back to the parent graph. (The classic bug: ReactFlow's
   // on-mount dimension-measurement fires onNodesChange while the `edges` closure
   // is still the empty initial array, wiping every edge.)
-  const nodesRef = useRef<Node[]>(nodes);
-  const edgesRef = useRef<Edge[]>(edges);
+  const nodesRef = useRef<Node[]>([]);
+  const edgesRef = useRef<Edge[]>([]);
+
+  // Node-toolbar actions (edit mode only) — injected into every node's data.
+  const deleteNode = useCallback(
+    (id: string) => {
+      const nextN = nodesRef.current.filter((n) => n.id !== id);
+      const nextE = edgesRef.current.filter((e) => e.source !== id && e.target !== id);
+      setNodes(nextN);
+      setEdges(nextE);
+      onEdit?.(fromReactFlow(nextN, nextE));
+    },
+    [onEdit],
+  );
+  const duplicateNode = useCallback(
+    (id: string) => {
+      const src = nodesRef.current.find((n) => n.id === id);
+      if (!src) return;
+      addCounter.current += 1;
+      const d = src.data as FlowNodeData;
+      const clone: Node = {
+        id: `n_${Date.now()}_${addCounter.current}`,
+        type: src.type,
+        position: { x: src.position.x + 36, y: src.position.y + 36 },
+        selected: false,
+        data: {
+          ...d,
+          state: "idle",
+          config: JSON.parse(JSON.stringify(d.config ?? {})),
+        } satisfies FlowNodeData,
+      };
+      const nextN = [...nodesRef.current, clone];
+      setNodes(nextN);
+      onEdit?.(fromReactFlow(nextN, edgesRef.current));
+    },
+    [onEdit],
+  );
+  const handlers = mode === "edit" ? { onDelete: deleteNode, onDuplicate: duplicateNode } : undefined;
+
+  const [nodes, setNodes] = useState<Node[]>(() => toReactFlowNodes(graph, runState, handlers));
+  const [edges, setEdges] = useState<Edge[]>(() => toReactFlowEdges(graph, runState));
   nodesRef.current = nodes;
   edgesRef.current = edges;
 
   useEffect(() => {
-    setNodes(toReactFlowNodes(graph, runState));
+    setNodes(toReactFlowNodes(graph, runState, handlers));
     setEdges(toReactFlowEdges(graph, runState));
-  }, [graph, runState]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- handlers are stable per mode
+  }, [graph, runState, mode, deleteNode, duplicateNode]);
 
   // Only structural edits (move / add / remove) should rewrite the parent graph.
   // Echoing dimension/select changes would re-sync the graph and loop.
@@ -201,11 +241,25 @@ function CanvasInner({ graph, mode, onEdit, runState, onNodeClick }: AgentBuilde
             markerEnd: { type: MarkerType.ArrowClosed, color: "#5b6478", width: 18, height: 18 },
             style: { stroke: "#5b6478", strokeWidth: 1.6 },
           }}
+          deleteKeyCode={mode === "edit" ? ["Backspace", "Delete"] : null}
+          snapToGrid
+          snapGrid={[18, 18]}
+          minZoom={0.15}
+          maxZoom={2.5}
           proOptions={{ hideAttribution: true }}
           fitView
           fitViewOptions={{ padding: 0.25 }}
           style={{ background: "#0f1117" }}
         >
+          {mode === "edit" && (
+            <CanvasActions
+              onTidy={() => {
+                const next = autoLayout(fromReactFlow(nodesRef.current, edgesRef.current));
+                onEdit?.(next);
+                setTimeout(() => fitView({ padding: 0.25, duration: 300 }), 50);
+              }}
+            />
+          )}
           <Background variant={BackgroundVariant.Dots} gap={18} size={1.4} color="#2b3142" />
           <MiniMap
             pannable
@@ -230,6 +284,59 @@ function CanvasInner({ graph, mode, onEdit, runState, onNodeClick }: AgentBuilde
         {measured && nodes.length === 0 && <EmptyHint mode={mode} />}
       </div>
     </div>
+  );
+}
+
+function CanvasActions({ onTidy }: { onTidy: () => void }) {
+  const [help, setHelp] = useState(false);
+  const btn: React.CSSProperties = {
+    padding: "6px 12px",
+    borderRadius: 8,
+    border: "1px solid #232838",
+    background: "#13161f",
+    color: "#cbd2e0",
+    fontSize: 12.5,
+    fontWeight: 600,
+    cursor: "pointer",
+  };
+  return (
+    <Panel position="top-right" style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+      <button onClick={onTidy} style={btn} title="Auto-arrange nodes left-to-right">
+        ✨ Tidy
+      </button>
+      <div style={{ position: "relative" }}>
+        <button onClick={() => setHelp((h) => !h)} style={{ ...btn, padding: "6px 10px" }} title="Shortcuts">
+          ?
+        </button>
+        {help && (
+          <div
+            style={{
+              position: "absolute",
+              right: 0,
+              top: 36,
+              width: 240,
+              padding: "10px 12px",
+              borderRadius: 10,
+              border: "1px solid #232838",
+              background: "#13161f",
+              color: "#aab2c6",
+              fontSize: 12,
+              lineHeight: 1.7,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+              zIndex: 10,
+            }}
+          >
+            <div style={{ color: "#dfe3ee", fontWeight: 700, marginBottom: 4 }}>Shortcuts</div>
+            <div>Drag palette item → add node</div>
+            <div>Drag handle → handle → connect</div>
+            <div>⌫ / Del → delete selection</div>
+            <div>Shift + drag → box select</div>
+            <div>⌘Z / ⌘⇧Z → undo / redo</div>
+            <div>Scroll / pinch → zoom · drag → pan</div>
+          </div>
+        )}
+      </div>
+    </Panel>
   );
 }
 
@@ -362,7 +469,12 @@ function PaletteSidebar({ onAdd }: { onAdd: (item: PaletteItem) => void }) {
 
 // ---- Graph <-> ReactFlow conversion (config-preserving) -------------------
 
-function toReactFlowNodes(g: Graph, rs?: RunState): Node[] {
+interface NodeHandlers {
+  onDelete: (id: string) => void;
+  onDuplicate: (id: string) => void;
+}
+
+function toReactFlowNodes(g: Graph, rs?: RunState, handlers?: NodeHandlers): Node[] {
   return g.nodes.map((n, i) => ({
     id: n.id,
     type: n.type,
@@ -372,6 +484,8 @@ function toReactFlowNodes(g: Graph, rs?: RunState): Node[] {
       state: rs?.steps[n.id] ?? "idle",
       category: n.type,
       config: n.config,
+      onDelete: handlers?.onDelete,
+      onDuplicate: handlers?.onDuplicate,
     } satisfies FlowNodeData,
   }));
 }

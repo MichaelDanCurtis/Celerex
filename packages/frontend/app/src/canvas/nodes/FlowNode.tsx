@@ -1,11 +1,11 @@
-import { Handle, Position, NodeProps, Node } from "@xyflow/react";
+import { Handle, NodeToolbar, Position, NodeProps, Node } from "@xyflow/react";
 import { CATEGORY_META, accentFor, iconFor } from "../palette";
 import { FlowNodeData, NodeCategory, StepState } from "../types";
 
 export type FlowNodeType = Node<FlowNodeData>;
 
 /** One node renderer for all four categories — LangFlow-style cards. */
-export function FlowNode({ data, selected }: NodeProps<FlowNodeType>) {
+export function FlowNode({ id, data, selected }: NodeProps<FlowNodeType>) {
   const category: NodeCategory = data.category ?? "action";
   const config = data.config ?? {};
   const accent = accentFor(category, config);
@@ -31,6 +31,30 @@ export function FlowNode({ data, selected }: NodeProps<FlowNodeType>) {
         animation: state === "running" ? "celerex-pulse 1.2s ease-in-out infinite" : undefined,
       }}
     >
+      {(data.onDelete || data.onDuplicate) && (
+        <NodeToolbar isVisible={selected} position={Position.Top} offset={8}>
+          <div style={{ display: "flex", gap: 6 }}>
+            {data.onDuplicate && (
+              <button
+                onClick={() => data.onDuplicate?.(id)}
+                title="Duplicate node"
+                style={toolbarBtn}
+              >
+                ⧉
+              </button>
+            )}
+            {data.onDelete && (
+              <button
+                onClick={() => data.onDelete?.(id)}
+                title="Delete node"
+                style={{ ...toolbarBtn, color: "#f87171", borderColor: "rgba(248,113,113,0.4)" }}
+              >
+                🗑
+              </button>
+            )}
+          </div>
+        </NodeToolbar>
+      )}
       {category !== "inbound" && (
         <Handle
           type="target"
@@ -108,16 +132,31 @@ export function FlowNode({ data, selected }: NodeProps<FlowNodeType>) {
         {configSummary(category, config)}
       </div>
 
-      {category !== "outbound" && (
-        <Handle
-          type="source"
-          position={Position.Right}
-          style={handleStyle(accent)}
-        />
-      )}
+      {/* Every node gets a source handle — even "outbound" ones can feed a
+          downstream node (e.g. doc.create piping document_id into doc.append).
+          The executor already supports it; hiding the handle only hid edges. */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        style={handleStyle(accent)}
+      />
     </div>
   );
 }
+
+const toolbarBtn: React.CSSProperties = {
+  width: 28,
+  height: 26,
+  borderRadius: 7,
+  border: "1px solid #2a3145",
+  background: "#13161f",
+  color: "#cbd2e0",
+  fontSize: 13,
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
 
 function StateGlyph({ state }: { state: StepState }) {
   if (state === "running")

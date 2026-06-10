@@ -36,4 +36,7 @@ export interface FlowNodeData extends Record<string, unknown> {
   state?: StepState;
   category: NodeCategory;
   config: Record<string, unknown>;
+  /** Edit-mode toolbar callbacks, injected by the canvas (absent in monitor mode). */
+  onDelete?: (id: string) => void;
+  onDuplicate?: (id: string) => void;
 }

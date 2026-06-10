@@ -7,6 +7,7 @@ import { themeAtom, engagementsAtom, activeDocIdAtom, genId, editorStoreAtom, op
 import { FlowsPage } from "./pages/FlowsPage";
 import { BuilderPage } from "./pages/BuilderPage";
 import { MonitorPage } from "./pages/MonitorPage";
+import { NetworkPage } from "./pages/NetworkPage";
 import { FleetDashboard } from "./pages/FleetDashboard";
 import { DocsPage } from "./pages/DocsPage";
 import { PluginsPage } from "./pages/PluginsPage";
@@ -323,6 +324,8 @@ export function App() {
             <PluginManager />
           ) : activeView === "flows" ? (
             <FlowsPage token={token} />
+          ) : activeView === "network" ? (
+            <NetworkPage token={token} />
           ) : activeView === "builder" ? (
             <BuilderPage projectId={activeProjectId ?? ""} token={token} />
           ) : activeView === "monitor" ? (
