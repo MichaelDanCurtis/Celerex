@@ -157,6 +157,60 @@ pub async fn replace_block(
     Ok(r.rows_affected())
 }
 
+// ---- Users (real auth) ---------------------------------------------------
+
+/// Find an engagement by name (case-insensitive) or create it. Used by signup
+/// so a new account also provisions its workspace.
+pub async fn find_or_create_engagement(pool: &PgPool, name: &str) -> sqlx::Result<Engagement> {
+    if let Some(e) = find_engagement_by_name(pool, name).await? {
+        return Ok(e);
+    }
+    create_engagement(pool, name).await
+}
+
+/// Create a user. Returns the new user id. Surfaces the unique-email violation
+/// to the caller (mapped to 409 at the route layer).
+pub async fn create_user(
+    pool: &PgPool,
+    email: &str,
+    password_hash: &str,
+    engagement_id: Uuid,
+) -> sqlx::Result<Uuid> {
+    let row: (Uuid,) = sqlx::query_as(
+        "INSERT INTO users (email, password_hash, engagement_id) VALUES ($1, $2, $3) RETURNING id",
+    )
+    .bind(email)
+    .bind(password_hash)
+    .bind(engagement_id)
+    .fetch_one(pool)
+    .await?;
+    Ok(row.0)
+}
+
+/// Row needed to authenticate a login: the stored hash + the user's engagement
+/// (id + name) for the JWT and the response. Case-insensitive email match.
+pub struct UserLogin {
+    pub password_hash: String,
+    pub engagement_id: Uuid,
+    pub engagement_name: String,
+}
+
+pub async fn find_user_for_login(pool: &PgPool, email: &str) -> sqlx::Result<Option<UserLogin>> {
+    let row: Option<(String, Uuid, String)> = sqlx::query_as(
+        "SELECT u.password_hash, u.engagement_id, e.name
+         FROM users u JOIN engagements e ON e.id = u.engagement_id
+         WHERE LOWER(u.email) = LOWER($1)",
+    )
+    .bind(email)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|(password_hash, engagement_id, engagement_name)| UserLogin {
+        password_hash,
+        engagement_id,
+        engagement_name,
+    }))
+}
+
 pub async fn install_plugin(
     pool: &PgPool,
     eng: Uuid,
