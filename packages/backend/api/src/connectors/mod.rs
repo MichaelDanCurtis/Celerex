@@ -10,5 +10,6 @@
 //! encode Celerex-specific integration details (base URLs, auth, payloads).
 
 pub mod galvo;
+pub mod galvo_hub;
 pub mod m365;
 pub mod memory;

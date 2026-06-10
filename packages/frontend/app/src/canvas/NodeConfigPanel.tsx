@@ -305,19 +305,35 @@ function MemoryForm({ config, patch }: { config: Cfg; patch: Patch }) {
 }
 
 function GalvoForm({ config, patch }: { config: Cfg; patch: Patch }) {
+  const transport = String(config.transport ?? "control_plane");
+  const isHub = transport === "hub";
   return (
     <>
-      <Field label="Agent handle" hint="Galvo agent name (control plane).">
+      <Field label="Transport" hint="Control plane = direct HTTP. Hub = encrypted mTLS A2A federation.">
+        <Select
+          value={transport}
+          options={["control_plane", "hub"]}
+          onChange={(v) => patch({ transport: v })}
+        />
+      </Field>
+      <Field
+        label={isHub ? "Target handle (org/agent)" : "Agent name"}
+        hint={isHub ? "Federated agent handle, e.g. acme/researcher." : "Galvo agent name on the control plane."}
+      >
         <Input value={String(config.agent ?? "")} onChange={(v) => patch({ agent: v })} mono />
       </Field>
       <Field label="Input" hint="Sent as the agent's input. Supports {{steps...}}.">
         <TextArea value={String(config.input ?? "")} onChange={(v) => patch({ input: v })} rows={4} />
       </Field>
-      <Field label="Token" hint="Optional. Else GALVO_CONTROL_PLANE_TOKEN env.">
-        <Input value={String(config.token ?? "")} onChange={(v) => patch({ token: v })} mono />
-      </Field>
+      {!isHub && (
+        <Field label="Token" hint="Optional. Else GALVO_CONTROL_PLANE_TOKEN env.">
+          <Input value={String(config.token ?? "")} onChange={(v) => patch({ token: v })} mono />
+        </Field>
+      )}
       <div style={{ fontSize: 10.5, color: "var(--celerex-text-secondary)", marginTop: 4 }}>
-        Targets GALVO_CONTROL_PLANE_URL (default http://localhost:8787).
+        {isHub
+          ? "Relays through the Galvo Hub (register at /api/galvo/hub/register)."
+          : "Targets GALVO_CONTROL_PLANE_URL (default http://localhost:8787)."}
       </div>
     </>
   );

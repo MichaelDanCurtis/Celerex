@@ -59,6 +59,42 @@ fn err(m: impl Into<String>) -> DispatchError {
 impl Handler for GalvoHandler {
     async fn invoke(&self, config: Value, inputs: Value) -> Result<Value, DispatchError> {
         let op = config.get("op").and_then(|v| v.as_str()).unwrap_or("invoke");
+        // `transport: "hub"` routes through the Galvo Hub's encrypted mTLS A2A
+        // relay (federation) instead of a direct control-plane call. The target
+        // `agent` is then a full federation handle ("org/agent").
+        if config.get("transport").and_then(|v| v.as_str()) == Some("hub") {
+            let to = config
+                .get("agent")
+                .or_else(|| config.get("to_handle"))
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| err("galvo hub invoke: missing `agent` (target handle org/agent)"))?;
+            let payload_val = config
+                .get("input")
+                .cloned()
+                .or_else(|| inputs.get("input").cloned())
+                .unwrap_or_else(|| inputs.clone());
+            let payload = serde_json::to_vec(&payload_val).unwrap_or_default();
+            let ks_path = crate::connectors::galvo_hub::keystore_path();
+            let ks = crate::connectors::galvo_hub::HubKeystore::load(&ks_path).map_err(|e| {
+                err(format!(
+                    "galvo hub: no keystore at {} ({e}) — register via POST /api/galvo/hub/register first",
+                    ks_path.display()
+                ))
+            })?;
+            let client = crate::connectors::galvo_hub::GalvoHubClient::new(ks);
+            let env = client
+                .invoke(to, &payload)
+                .await
+                .map_err(|e| err(format!("galvo hub invoke: {e}")))?;
+            return Ok(json!({
+                "relayed": true,
+                "transport": "hub",
+                "from": env.header.from,
+                "to": env.header.to,
+                "task_id": env.header.task_id,
+                "msg_id": env.header.msg_id,
+            }));
+        }
         match op {
             "invoke" => {
                 let agent = config

@@ -2,6 +2,7 @@ pub mod assistant;
 pub mod connectors;
 pub mod db;
 pub mod engagements;
+pub mod galvo_hub_routes;
 pub mod auth;
 pub mod projects;
 pub mod docs;
@@ -103,6 +104,9 @@ fn route_chain() -> Router<AppState> {
         .route("/api/runs", get(runs::routes::list))
         .route("/api/runs/{run_id}/steps", get(runs::routes::steps))
         .route("/api/runs/{run_id}/events", get(runs::sse::stream))
+        .route("/api/galvo/hub/register", post(galvo_hub_routes::register))
+        .route("/api/galvo/hub/status", get(galvo_hub_routes::status))
+        .route("/api/galvo/hub/invoke", post(galvo_hub_routes::invoke))
         .route(
             "/api/schedules",
             post(scheduler::routes::create).get(scheduler::routes::list),
