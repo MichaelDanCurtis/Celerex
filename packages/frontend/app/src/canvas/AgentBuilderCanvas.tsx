@@ -202,18 +202,22 @@ function CanvasInner({ graph, mode, onEdit, runState, onNodeClick }: AgentBuilde
   }, []);
 
   // ReactFlow drops edges (and warns: error#004) if it first mounts into a
-  // zero-size container, and never retries. Once the wrapper has real
-  // dimensions, flip `measured` — it keys the ReactFlow below so it remounts
-  // once against a sized container and resolves handle positions for edges.
-  const [measured, setMeasured] = useState(false);
+  // too-small/zero-size container, and never retries. We key the ReactFlow on a
+  // coarse width *bucket* so that a significant size change — sidebar collapse,
+  // a panel toggle, or simply mounting cramped then expanding — remounts it
+  // against a properly-sized container and re-resolves handle positions for
+  // edges. Stable within a bucket, so no churn during normal interaction.
+  const [sizeKey, setSizeKey] = useState(0);
   useEffect(() => {
     const el = wrapperRef.current;
     if (!el) return;
-    const check = () => {
-      if (el.clientWidth > 0 && el.clientHeight > 0) setMeasured(true);
+    const compute = () => {
+      const usable = el.clientWidth > 120 && el.clientHeight > 120;
+      const bucket = usable ? Math.max(1, Math.round(el.clientWidth / 160)) : 0;
+      setSizeKey((prev) => (prev === bucket ? prev : bucket));
     };
-    check();
-    const ro = new ResizeObserver(check);
+    compute();
+    const ro = new ResizeObserver(compute);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -228,7 +232,7 @@ function CanvasInner({ graph, mode, onEdit, runState, onNodeClick }: AgentBuilde
         onDragOver={onDragOver}
       >
         <ReactFlow
-          key={measured ? "rf-sized" : "rf-init"}
+          key={`rf-w${sizeKey}`}
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}
@@ -281,7 +285,7 @@ function CanvasInner({ graph, mode, onEdit, runState, onNodeClick }: AgentBuilde
             }}
           />
         </ReactFlow>
-        {measured && nodes.length === 0 && <EmptyHint mode={mode} />}
+        {sizeKey > 0 && nodes.length === 0 && <EmptyHint mode={mode} />}
       </div>
     </div>
   );
