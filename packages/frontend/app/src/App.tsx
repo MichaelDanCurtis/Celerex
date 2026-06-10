@@ -346,7 +346,11 @@ export function App() {
           {versionHistoryOpen && <VersionHistory onClose={() => setVersionHistoryOpen(false)} />}
           {activityLogOpen && <ActivityLog onClose={() => setActivityLogOpen(false)} />}
           {trashOpen && <TrashBin onClose={() => setTrashOpen(false)} />}
-          {!focusModeActive && aiPanelOpen && <AIPanel />}
+          {/* The AI doc-copilot is for the document editor — the flow/network
+              views are full-bleed canvases that shouldn't share width with it. */}
+          {!focusModeActive &&
+            aiPanelOpen &&
+            !["flows", "builder", "monitor", "network"].includes(activeView) && <AIPanel />}
         </div>
       </main>
       <ToastContainer />
