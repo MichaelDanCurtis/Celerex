@@ -94,6 +94,7 @@ fn execution_from(config: &Value) -> Result<ExecutionType, String> {
         "script" => Ok(ExecutionType::Script),
         "llm" => Ok(ExecutionType::Llm),
         "doc" => Ok(ExecutionType::Doc),
+        "input" => Ok(ExecutionType::Input),
         other => Err(format!("unknown execution type: {other}")),
     }
 }

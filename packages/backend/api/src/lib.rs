@@ -18,6 +18,7 @@ use std::sync::Arc;
 use axum::{Router, routing::{get, patch, post, put}, Json, extract::State};
 use serde_json::json;
 use sqlx::PgPool;
+use tower_http::cors::{Any, CorsLayer};
 
 use crate::plugins::credentials::{CredentialStore, LocalAeadStore};
 use crate::project_members::store::{MembersStore, PgMembersStore};
@@ -26,7 +27,7 @@ use crate::runs::bus::RunBus;
 use celerex_orchestrator::{
     execution_type::ExecutionType,
     executor::Executor,
-    handlers::llm::LlmHandler,
+    handlers::{http::HttpHandler, input::InputHandler, llm::LlmHandler, script::ScriptHandler},
     llm::{Provider, ProviderRegistry},
     tool_dispatch::Dispatcher,
 };
@@ -146,6 +147,19 @@ pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>)
         ExecutionType::Llm,
         Arc::new(LlmHandler { registry: registry_arc.clone() }),
     );
+    // Full production handler set so every node type a flow can contain actually
+    // executes. (E2E tests inject their own dispatcher + fixtures as needed.)
+    //   Input  — trigger / seed nodes echo a payload downstream.
+    //   Http   — outbound HTTP / plugin connectors.
+    //   Script — local command execution.
+    //   Doc    — read/write documents (the "doc builder" backbone).
+    dispatcher.register(ExecutionType::Input, Arc::new(InputHandler));
+    dispatcher.register(ExecutionType::Http, Arc::new(HttpHandler::new()));
+    dispatcher.register(ExecutionType::Script, Arc::new(ScriptHandler));
+    dispatcher.register(
+        ExecutionType::Doc,
+        Arc::new(crate::docs::handler::DocHandler::new(pool.clone())),
+    );
     build_app_with_dispatcher_inner(
         pool,
         credentials,
@@ -242,15 +256,24 @@ fn build_app_with_dispatcher_inner(
     }
 
     let provider_keys = build_provider_keys_store(pool.clone());
-    route_chain().with_state(AppState {
-        pool,
-        credentials,
-        executor,
-        members,
-        run_bus,
-        notifiers,
-        providers: Arc::new(provider_ids),
-        providers_registry,
-        provider_keys,
-    })
+    // Permissive CORS so the Vite dev frontend (a different origin, :5173) can
+    // call the API (:3001). Auth is Bearer-token (not cookies), so `Any` origin
+    // is safe — there are no ambient credentials to leak cross-site.
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+    route_chain()
+        .with_state(AppState {
+            pool,
+            credentials,
+            executor,
+            members,
+            run_bus,
+            notifiers,
+            providers: Arc::new(provider_ids),
+            providers_registry,
+            provider_keys,
+        })
+        .layer(cors)
 }

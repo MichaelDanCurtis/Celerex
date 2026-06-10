@@ -4,6 +4,7 @@ import { Sidebar } from "./layout/Sidebar";
 import { EditorArea } from "./layout/EditorArea";
 import { AIPanel } from "./layout/AIPanel";
 import { themeAtom, engagementsAtom, activeDocIdAtom, genId, editorStoreAtom, openDocAtom, activeViewAtom, activeProjectIdAtom, tokenAtom } from "./state/atoms";
+import { FlowsPage } from "./pages/FlowsPage";
 import { BuilderPage } from "./pages/BuilderPage";
 import { MonitorPage } from "./pages/MonitorPage";
 import { FleetDashboard } from "./pages/FleetDashboard";
@@ -320,6 +321,8 @@ export function App() {
             <TimelineView />
           ) : activeView === "plugin-manager" ? (
             <PluginManager />
+          ) : activeView === "flows" ? (
+            <FlowsPage token={token} />
           ) : activeView === "builder" ? (
             <BuilderPage projectId={activeProjectId ?? ""} token={token} />
           ) : activeView === "monitor" ? (

@@ -75,6 +75,41 @@ pub fn apply_agent_type_defaults(graph: &mut serde_json::Value, agent_type: &str
     }
 }
 
+/// Inject the run's `engagement_id` into `doc` nodes that didn't pin one.
+///
+/// The `DocHandler` only sees node `config` + `inputs` (not run context), so a
+/// `create` op needs the tenant id baked into its config. We fill it from the
+/// run's engagement unless the author explicitly set one. Append/read ops carry
+/// an explicit `document_id` and are unaffected.
+pub fn apply_doc_engagement(graph: &mut serde_json::Value, engagement_id: Uuid) {
+    let Some(nodes) = graph.get_mut("nodes").and_then(|n| n.as_array_mut()) else {
+        return;
+    };
+    for node in nodes {
+        let is_doc = node
+            .get("config")
+            .and_then(|c| c.get("execution"))
+            .and_then(|e| e.as_str())
+            == Some("doc");
+        if !is_doc {
+            continue;
+        }
+        let Some(cfg) = node.get_mut("config").and_then(|c| c.as_object_mut()) else {
+            continue;
+        };
+        let needs = cfg
+            .get("engagement_id")
+            .map(|v| v.is_null())
+            .unwrap_or(true);
+        if needs {
+            cfg.insert(
+                "engagement_id".to_string(),
+                json!(engagement_id.to_string()),
+            );
+        }
+    }
+}
+
 /// Shared pipeline for starting a run: lookup member, snapshot, compile graph,
 /// INSERT `runs` row, spawn the executor + notifier task.
 ///
@@ -92,9 +127,14 @@ pub async fn enqueue_run(
         .get(member_id)
         .await?
         .ok_or_else(|| format!("member {member_id} not found"))?;
-    let snap_id = members.snapshot_id_for_current(member_id).await?;
+    // A member created out-of-band (seeded directly, imported, etc.) may have no
+    // snapshot row yet. The `runs.snapshot_id` column is nullable, so pin NULL
+    // rather than hard-failing the whole run — the run still executes against the
+    // member's current graph.
+    let snap_id: Option<Uuid> = members.snapshot_id_for_current(member_id).await.ok();
     let mut graph = member.graph_json.clone();
     apply_agent_type_defaults(&mut graph, &member.agent_type);
+    apply_doc_engagement(&mut graph, engagement_id);
     let steps = graph::compile(&graph)?;
 
     let run_id = Uuid::new_v4();
