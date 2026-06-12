@@ -16,6 +16,7 @@ import {
   type ApiPluginInstall,
 } from "../api/client";
 import { EngagementManager } from "../layout/EngagementManager";
+import { ProviderKeysSettings } from "../components/ProviderKeysSettings";
 
 const APP_VERSION = "v0.1-overnight";
 
@@ -252,6 +253,11 @@ export function SettingsPage() {
               )}
             </div>
           )}
+        </Section>
+
+        {/* Provider API Keys (per-engagement, encrypted) */}
+        <Section title="Provider API Keys">
+          <ProviderKeysSettings />
         </Section>
 
         {/* Engagements & Projects */}
