@@ -484,6 +484,24 @@ export async function listRuns(
   return r.json();
 }
 
+export interface ApiRunActivity {
+  id: string;
+  project_member_id: string | null;
+  flow_name: string | null;
+  status: string;
+  triggered_by: string;
+  created_at: string;
+}
+
+/** Engagement-wide recent runs across all flows (newest first). */
+export async function listRecentRuns(token: string, limit = 50): Promise<ApiRunActivity[]> {
+  const r = await fetch(`${API_BASE}/runs/recent?limit=${limit}`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!r.ok) throw new Error(`listRecentRuns: ${r.status}`);
+  return r.json();
+}
+
 // ---- Workspace assistant + provider introspection -------------------------
 
 export interface AssistantChatResponse {
