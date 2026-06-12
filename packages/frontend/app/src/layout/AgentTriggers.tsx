@@ -9,6 +9,8 @@ import {
   type TriggerDef,
   type TriggerType,
   type TriggerConfig,
+  type EventConfig,
+  type QueueConfig,
 } from "../data/triggers";
 import { getAllAgents } from "../data/agents";
 

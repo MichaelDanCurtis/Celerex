@@ -57,13 +57,18 @@ export const selectedModelAtom = atom<string>(
 );
 
 // API keys stored per provider: Record<providerId, apiKey>
-export const apiKeysAtom = atom<Record<string, string>>(() => {
+function loadApiKeys(): Record<string, string> {
   try {
     return JSON.parse(localStorage.getItem("celerex-ai-keys") || "{}");
   } catch {
     return {};
   }
-});
+}
+// Writable primitive atom seeded from localStorage (same pattern as
+// selectedModelAtom above). Passing a getter function would make this a
+// read-only derived atom, leaving its setter typed `never` — which is why
+// AIProviderSelector's setApiKeys(...) failed to typecheck.
+export const apiKeysAtom = atom<Record<string, string>>(loadApiKeys());
 
 // Derived: get current provider object
 export const selectedProviderAtom = atom((get) => {

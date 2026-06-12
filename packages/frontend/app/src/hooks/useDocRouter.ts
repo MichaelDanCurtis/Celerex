@@ -22,7 +22,7 @@ function hashFromDocId(docId: string): string {
  * Hash format: #doc:<id>  (e.g. #doc:home)
  */
 export function useDocRouter() {
-  const [activeDocId, setActiveDocId] = useAtom(activeDocIdAtom);
+  const [activeDocId] = useAtom(activeDocIdAtom);
   const openDoc = useSetAtom(openDocAtom);
 
   // On mount: if the URL already contains a doc hash, navigate to it

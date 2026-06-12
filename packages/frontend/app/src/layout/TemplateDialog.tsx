@@ -9,15 +9,15 @@ interface TemplateDialogProps {
 
 const categoryLabels: Record<DocTemplate["category"], string> = {
   general: "General",
-  consulting: "Consulting",
+  business: "Business",
   research: "Research",
 };
 
-const categoryOrder: DocTemplate["category"][] = ["general", "consulting", "research"];
+const categoryOrder: DocTemplate["category"][] = ["general", "business", "research"];
 
 const badgeColors: Record<DocTemplate["category"], { bg: string; text: string }> = {
   general: { bg: "rgba(59,130,246,0.12)", text: "#3b82f6" },
-  consulting: { bg: "rgba(168,85,247,0.12)", text: "#a855f7" },
+  business: { bg: "rgba(168,85,247,0.12)", text: "#a855f7" },
   research: { bg: "rgba(34,197,94,0.12)", text: "#22c55e" },
 };
 

@@ -597,7 +597,6 @@ function EngagementGroup({
   onCreateDoc,
   onDeleteDoc,
   onDuplicateDoc,
-  onDeleteEngagement,
   onRename,
   onReorderDocs,
 }: {
