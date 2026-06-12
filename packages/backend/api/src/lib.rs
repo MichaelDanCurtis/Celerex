@@ -9,6 +9,7 @@ pub mod docs;
 pub mod metrics;
 pub mod plugins;
 pub mod providers;
+pub mod reviews;
 pub mod webhooks;
 pub mod runs;
 pub mod llm;
@@ -105,6 +106,8 @@ fn route_chain() -> Router<AppState> {
         .route("/api/runs", get(runs::routes::list))
         .route("/api/runs/{run_id}/steps", get(runs::routes::steps))
         .route("/api/runs/{run_id}/events", get(runs::sse::stream))
+        .route("/api/approvals", get(reviews::list_approvals))
+        .route("/api/runs/{run_id}/review", post(reviews::submit_review))
         .route("/api/galvo/hub/register", post(galvo_hub_routes::register))
         .route("/api/galvo/hub/status", get(galvo_hub_routes::status))
         .route("/api/galvo/hub/invoke", post(galvo_hub_routes::invoke))

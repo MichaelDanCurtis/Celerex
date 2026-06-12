@@ -169,9 +169,20 @@ pub async fn enqueue_run(
         let outcome = match &status {
             Ok(RunStatus::Succeeded) => "success",
             Ok(RunStatus::Failed) => "failed",
+            Ok(RunStatus::AwaitingReview) => "awaiting_review",
             _ => "abandoned",
         };
         crate::connectors::memory::log_run_session(flow_name, engagement_id, req.run_id, outcome);
+
+        // A paused run isn't terminal: stamp `awaiting_review` (the executor leaves
+        // the row at `running`) and emit no terminal notification — the run resumes
+        // when a human approves/rejects via the approvals API.
+        if matches!(status, Ok(RunStatus::AwaitingReview)) {
+            let _ = sqlx::query("UPDATE runs SET status = 'awaiting_review' WHERE id = $1")
+                .bind(req.run_id)
+                .execute(&pool_for_task)
+                .await;
+        }
         let event = match status {
             Ok(RunStatus::Failed) => Some(NotificationEvent::RunFailed {
                 run_id: req.run_id,

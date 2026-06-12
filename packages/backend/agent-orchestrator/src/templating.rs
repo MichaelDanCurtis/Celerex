@@ -40,6 +40,13 @@ impl StepContext {
     pub fn set(&mut self, step_id: &str, output: Value) {
         self.outputs.insert(step_id.to_string(), output);
     }
+
+    /// Look up a step's recorded output, if any. Used by the executor to tell
+    /// whether a `Review` step already has a (seeded) human decision — present
+    /// means resolve the gate, absent means pause the run.
+    pub fn output(&self, step_id: &str) -> Option<&Value> {
+        self.outputs.get(step_id)
+    }
 }
 
 pub fn resolve(value: &Value, ctx: &StepContext) -> Result<Value, TemplateError> {

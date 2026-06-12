@@ -33,6 +33,17 @@ pub enum StepKind {
         config: serde_json::Value,
         inputs: serde_json::Value,
     },
+    /// Human-in-the-loop gate. When reached without a recorded decision the run
+    /// PAUSES (`RunStatus::AwaitingReview`); once a person approves/rejects, the
+    /// run resumes. `prompt` is shown to the reviewer; `content` is a template
+    /// resolved against upstream outputs to produce the draft they review, and
+    /// the (possibly edited) approved content flows downstream as this step's
+    /// `outputs.content`. Approve = gate open (downstream runs); reject = gate
+    /// closed (downstream skipped), same semantics as `Filter`.
+    Review {
+        prompt: String,
+        content: serde_json::Value,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -42,6 +53,8 @@ pub enum RunStatus {
     Running,
     Succeeded,
     Failed,
+    /// Non-terminal: a `Review` step paused the run pending a human decision.
+    AwaitingReview,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -429,6 +429,47 @@ export async function listRunSteps(
   return r.json();
 }
 
+// ---- Human-in-the-loop approvals ----------------------------------------
+
+export interface ApiApproval {
+  run_id: string;
+  step_id: string;
+  project_member_id: string | null;
+  flow_name: string | null;
+  prompt: string;
+  /** The draft the agent produced — string for markdown drafts, else JSON. */
+  draft: unknown;
+  created_at: string;
+}
+
+/** Runs paused awaiting this engagement's review. */
+export async function listApprovals(token: string): Promise<ApiApproval[]> {
+  const r = await fetch(`${API_BASE}/approvals`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!r.ok) throw new Error(`listApprovals: ${r.status}`);
+  return r.json();
+}
+
+/**
+ * Approve or reject a paused run, resuming it. On approve, `content` (if given)
+ * replaces the draft and flows downstream; omit it to ship the draft as-is.
+ */
+export async function submitReview(
+  token: string,
+  runId: string,
+  decision: "approve" | "reject",
+  content?: string,
+): Promise<{ run_id: string; approved: boolean; resumed: boolean }> {
+  const r = await fetch(`${API_BASE}/runs/${runId}/review`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({ decision, content }),
+  });
+  if (!r.ok) throw new Error(`submitReview: ${r.status} ${await r.text().catch(() => "")}`);
+  return r.json();
+}
+
 export async function listRuns(
   token: string,
   projectMemberId: string,

@@ -77,6 +77,23 @@ impl Executor {
         self.execute(&req, StepContext::new(), &HashSet::new()).await
     }
 
+    /// Resume a paused run after a human review decision.
+    ///
+    /// Unlike `retry`, the caller supplies the rebuilt context directly — the
+    /// approval endpoint loads prior `run_steps` from the database (async) and
+    /// seeds `ctx` with succeeded upstream outputs PLUS the human decision keyed
+    /// by the review step id; `already_done` lists the steps to skip. The review
+    /// step is intentionally NOT in `already_done` so `execute` re-processes it,
+    /// sees its decision in `ctx`, and opens or closes the gate accordingly.
+    pub async fn resume_from(
+        &self,
+        req: JobRequest,
+        ctx: StepContext,
+        already_done: HashSet<String>,
+    ) -> Result<RunStatus, ExecError> {
+        self.execute(&req, ctx, &already_done).await
+    }
+
     pub async fn retry(&self, req: JobRequest) -> Result<RunStatus, ExecError> {
         let prior = self.store.records_for(req.run_id);
         let succeeded: HashSet<String> = prior
@@ -130,6 +147,49 @@ impl Executor {
             if step.depends_on.iter().any(|d| blocked.contains(d)) {
                 blocked.insert(step_id.clone());
                 continue;
+            }
+
+            // Human-in-the-loop gate. A `Review` step with a seeded decision
+            // (resume path) resolves the gate; without one (fresh run) it PAUSES
+            // the whole run — persist an `AwaitingReview` marker carrying the
+            // draft and return without marking the run terminal.
+            if let StepKind::Review { prompt, content } = &step.kind {
+                match ctx.output(&step.id).cloned() {
+                    Some(decision) => {
+                        let approved = decision
+                            .get("approved")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false);
+                        self.store.record(StepRecord {
+                            run_id: req.run_id,
+                            step_id: step.id.clone(),
+                            status: RunStatus::Succeeded,
+                            inputs: serde_json::json!({ "prompt": prompt }),
+                            outputs: Some(decision),
+                            error: None,
+                        });
+                        // The decision is already in `ctx` under this step id, so
+                        // downstream `{{steps.<id>.outputs.content}}` resolves to
+                        // the (possibly edited) approved content.
+                        if !approved {
+                            blocked.insert(step.id.clone());
+                        }
+                        continue;
+                    }
+                    None => {
+                        let draft = templating::resolve(content, &ctx).unwrap_or(Value::Null);
+                        self.store.started(req.run_id, &step.id);
+                        self.store.record(StepRecord {
+                            run_id: req.run_id,
+                            step_id: step.id.clone(),
+                            status: RunStatus::AwaitingReview,
+                            inputs: serde_json::json!({ "prompt": prompt, "draft": draft }),
+                            outputs: None,
+                            error: None,
+                        });
+                        return Ok(RunStatus::AwaitingReview);
+                    }
+                }
             }
 
             self.store.started(req.run_id, &step.id);
@@ -219,6 +279,11 @@ impl Executor {
                     error: Some(format!("filter: {e}")),
                 },
             },
+            // Review steps are intercepted in `execute` (pause/resolve) and never
+            // dispatched here.
+            StepKind::Review { .. } => {
+                unreachable!("Review steps are handled in execute() before dispatch")
+            }
         }
     }
 }
