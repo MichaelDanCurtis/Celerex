@@ -199,6 +199,11 @@ pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>)
         ExecutionType::M365,
         Arc::new(crate::connectors::m365::M365Handler::new()),
     );
+    // Design handoff: render a Celerex Design template's slots with flow data.
+    dispatcher.register(
+        ExecutionType::Render,
+        Arc::new(celerex_orchestrator::handlers::render::RenderHandler),
+    );
     build_app_with_dispatcher_inner(
         pool,
         credentials,
