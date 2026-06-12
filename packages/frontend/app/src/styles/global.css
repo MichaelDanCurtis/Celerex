@@ -40,3 +40,36 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* ---- Celerex Flow canvas ------------------------------------------------ */
+
+@keyframes celerex-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px #60a5fa, 0 6px 22px rgba(96, 165, 250, 0.30); }
+  50%      { box-shadow: 0 0 0 2px #60a5fa, 0 8px 30px rgba(96, 165, 250, 0.55); }
+}
+
+/* Dark theming for ReactFlow chrome (controls/minimap/edges) on the flow canvas. */
+.react-flow__controls-button {
+  background: #13161f;
+  border-bottom: 1px solid #232838;
+  color: #cbd2e0;
+  fill: #cbd2e0;
+}
+.react-flow__controls-button:hover {
+  background: #1c2130;
+}
+.react-flow__edge-path {
+  stroke-width: 1.6;
+}
+.react-flow__edge.animated .react-flow__edge-path {
+  stroke: #60a5fa;
+}
+.react-flow__attribution {
+  display: none;
+}
+.react-flow__handle {
+  transition: transform 100ms ease;
+}
+.react-flow__handle:hover {
+  transform: scale(1.25);
+}

@@ -4,8 +4,10 @@ import { Sidebar } from "./layout/Sidebar";
 import { EditorArea } from "./layout/EditorArea";
 import { AIPanel } from "./layout/AIPanel";
 import { themeAtom, engagementsAtom, activeDocIdAtom, genId, editorStoreAtom, openDocAtom, activeViewAtom, activeProjectIdAtom, tokenAtom } from "./state/atoms";
+import { FlowsPage } from "./pages/FlowsPage";
 import { BuilderPage } from "./pages/BuilderPage";
 import { MonitorPage } from "./pages/MonitorPage";
+import { NetworkPage } from "./pages/NetworkPage";
 import { FleetDashboard } from "./pages/FleetDashboard";
 import { DocsPage } from "./pages/DocsPage";
 import { PluginsPage } from "./pages/PluginsPage";
@@ -320,6 +322,10 @@ export function App() {
             <TimelineView />
           ) : activeView === "plugin-manager" ? (
             <PluginManager />
+          ) : activeView === "flows" ? (
+            <FlowsPage token={token} />
+          ) : activeView === "network" ? (
+            <NetworkPage token={token} />
           ) : activeView === "builder" ? (
             <BuilderPage projectId={activeProjectId ?? ""} token={token} />
           ) : activeView === "monitor" ? (
@@ -340,7 +346,11 @@ export function App() {
           {versionHistoryOpen && <VersionHistory onClose={() => setVersionHistoryOpen(false)} />}
           {activityLogOpen && <ActivityLog onClose={() => setActivityLogOpen(false)} />}
           {trashOpen && <TrashBin onClose={() => setTrashOpen(false)} />}
-          {!focusModeActive && aiPanelOpen && <AIPanel />}
+          {/* The AI doc-copilot is for the document editor — the flow/network
+              views are full-bleed canvases that shouldn't share width with it. */}
+          {!focusModeActive &&
+            aiPanelOpen &&
+            !["flows", "builder", "monitor", "network"].includes(activeView) && <AIPanel />}
         </div>
       </main>
       <ToastContainer />

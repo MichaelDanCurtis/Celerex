@@ -94,6 +94,10 @@ fn execution_from(config: &Value) -> Result<ExecutionType, String> {
         "script" => Ok(ExecutionType::Script),
         "llm" => Ok(ExecutionType::Llm),
         "doc" => Ok(ExecutionType::Doc),
+        "input" => Ok(ExecutionType::Input),
+        "memory" => Ok(ExecutionType::Memory),
+        "galvo" => Ok(ExecutionType::Galvo),
+        "m365" => Ok(ExecutionType::M365),
         other => Err(format!("unknown execution type: {other}")),
     }
 }

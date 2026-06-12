@@ -19,10 +19,15 @@ tracing-subscriber.workspace = true
 anyhow.workspace = true
 uuid.workspace = true
 chrono.workspace = true
-reqwest = { version = "0.12", features = ["json", "stream"] }
+reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"] }
 futures-util = "0.3"
 bytes = "1"
 dirs = "5"
+# Galvo Hub mTLS A2A federation — reuse Galvo's own tested crypto/envelope/client.
+galvo-federation = { path = "../../../../lucidity/Galvo/engine/galvo-federation" }
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"] }
+rcgen = { version = "0.13", features = ["pem"] }
+base64 = "0.22"
 sqlx = { workspace = true }
 jsonwebtoken = { workspace = true }
 ring = { workspace = true }
@@ -32,6 +37,7 @@ cron = "0.12"
 chrono-tz = "0.9"
 jsonschema = "0.18"
 thiserror = "1"
+argon2 = "0.5"
 calamine = "0.25"
 docx-rs = "0.4"
 tokio-stream = { version = "0.1", features = ["sync"] }
@@ -47,3 +53,6 @@ axum-test = "17"
 async-trait = { workspace = true }
 wiremock = "0.6"
 celerex-orchestrator = { path = "../agent-orchestrator", features = ["test-support"] }
+# Run the real Galvo Hub in-process for the mTLS A2A federation round-trip test.
+galvo-hub = { path = "../../../../lucidity/Galvo/engine/galvo-hub" }
+tempfile = "3"

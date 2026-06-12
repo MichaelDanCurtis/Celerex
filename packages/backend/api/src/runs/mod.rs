@@ -67,8 +67,31 @@ impl PgRunStore {
 
 impl RunStore for PgRunStore {
     fn record(&self, rec: StepRecord) {
+        // Publish to the live SSE bus SYNCHRONOUSLY (before spawning the DB
+        // write). This guarantees event ordering on the bus matches execution
+        // order — in particular `RunCompleted`, which the executor publishes
+        // via `completed()` immediately after the final `record()`, can never
+        // race ahead of the last step event and prematurely close the stream.
+        let ev = match rec.status {
+            RunStatus::Succeeded => RunEvent::RunStepSucceeded {
+                run_id: rec.run_id,
+                step_id: rec.step_id.clone(),
+                outputs: rec.outputs.clone().unwrap_or(serde_json::json!({})),
+            },
+            RunStatus::Failed => RunEvent::RunStepFailed {
+                run_id: rec.run_id,
+                step_id: rec.step_id.clone(),
+                error: rec.error.clone().unwrap_or_default(),
+            },
+            RunStatus::Running | RunStatus::Pending => RunEvent::RunStepStarted {
+                run_id: rec.run_id,
+                step_id: rec.step_id.clone(),
+            },
+        };
+        self.bus.publish(rec.run_id, ev);
+
+        // Persist asynchronously — the durable history doesn't gate the live UI.
         let pool = self.pool.clone();
-        let bus = self.bus.clone();
         tokio::spawn(async move {
             let status = format!("{:?}", rec.status).to_lowercase();
             let _ = sqlx::query(
@@ -83,28 +106,49 @@ impl RunStore for PgRunStore {
             .bind(&rec.error)
             .execute(&pool)
             .await;
-
-            let ev = match rec.status {
-                RunStatus::Succeeded => RunEvent::RunStepSucceeded {
-                    run_id: rec.run_id,
-                    step_id: rec.step_id.clone(),
-                    outputs: rec.outputs.clone().unwrap_or(serde_json::json!({})),
-                },
-                RunStatus::Failed => RunEvent::RunStepFailed {
-                    run_id: rec.run_id,
-                    step_id: rec.step_id.clone(),
-                    error: rec.error.clone().unwrap_or_default(),
-                },
-                RunStatus::Running | RunStatus::Pending => RunEvent::RunStepStarted {
-                    run_id: rec.run_id,
-                    step_id: rec.step_id.clone(),
-                },
-            };
-            bus.publish(rec.run_id, ev);
         });
     }
 
     fn records_for(&self, _run_id: Uuid) -> Vec<StepRecord> {
         Vec::new()
+    }
+
+    /// Emit a `RunStepStarted` so the live canvas can light the node "running"
+    /// the moment dispatch begins (the per-step `record()` only fires on a
+    /// terminal status).
+    fn started(&self, run_id: Uuid, step_id: &str) {
+        self.bus.publish(
+            run_id,
+            RunEvent::RunStepStarted {
+                run_id,
+                step_id: step_id.to_string(),
+            },
+        );
+    }
+
+    /// Emit the terminal `RunCompleted` (which the frontend uses as its
+    /// end-of-stream signal) and durably stamp the final run status.
+    fn completed(&self, run_id: Uuid, status: RunStatus) {
+        let status_str = match status {
+            RunStatus::Succeeded => "succeeded",
+            RunStatus::Failed => "failed",
+            RunStatus::Running | RunStatus::Pending => "running",
+        };
+        self.bus.publish(
+            run_id,
+            RunEvent::RunCompleted {
+                run_id,
+                status: status_str.to_string(),
+            },
+        );
+        let pool = self.pool.clone();
+        let status_owned = status_str.to_string();
+        tokio::spawn(async move {
+            let _ = sqlx::query("UPDATE runs SET status = $2 WHERE id = $1")
+                .bind(run_id)
+                .bind(&status_owned)
+                .execute(&pool)
+                .await;
+        });
     }
 }

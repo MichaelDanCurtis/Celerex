@@ -468,6 +468,16 @@ export function Sidebar({
 
           <SidebarSection title="Agents">
             <SidebarItem
+              label="⚡ Flows"
+              active={activeView === "flows" || activeView === "builder" || activeView === "monitor"}
+              onClick={() => setActiveView("flows")}
+            />
+            <SidebarItem
+              label="🌐 Network"
+              active={activeView === "network"}
+              onClick={() => setActiveView("network")}
+            />
+            <SidebarItem
               label="Agent Dashboard"
               active={activeView === "agent-dashboard"}
               onClick={() => setActiveView("agent-dashboard")}

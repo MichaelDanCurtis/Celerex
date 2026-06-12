@@ -138,6 +138,36 @@ pub async fn list(
     }
 }
 
+/// `DELETE /api/project_members/{id}` — remove a flow and everything hanging
+/// off it (snapshots, schedules, runs, notifications all cascade in the DB).
+/// 403 unless the member belongs to the caller's engagement.
+pub async fn delete(
+    a: AuthClaims,
+    State(s): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> impl IntoResponse {
+    let engagement_id = match s.members.engagement_id_for(id).await {
+        Ok(v) => v,
+        Err(_) => return StatusCode::NOT_FOUND.into_response(),
+    };
+    if engagement_id != a.0.engagement_id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"}))).into_response();
+    }
+    match sqlx::query("DELETE FROM project_members WHERE id = $1")
+        .bind(id)
+        .execute(&s.pool)
+        .await
+    {
+        Ok(r) if r.rows_affected() == 0 => StatusCode::NOT_FOUND.into_response(),
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
 pub async fn run_manual(
     a: AuthClaims,
     State(s): State<AppState>,

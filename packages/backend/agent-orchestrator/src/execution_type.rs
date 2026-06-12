@@ -9,4 +9,13 @@ pub enum ExecutionType {
     Script,
     Llm,
     Doc,
+    /// A trigger / seed node: echoes its (templated) inputs downstream so an
+    /// entry point produces a payload for the rest of the flow to reference.
+    Input,
+    /// galvo-memory: read/write the Neo4j-backed agent memory via its sidecar.
+    Memory,
+    /// Galvo federation: invoke a Galvo agent via its control plane.
+    Galvo,
+    /// Microsoft 365 / Graph: publish to Copilot connectors + read Graph data.
+    M365,
 }

@@ -1,6 +1,8 @@
 pub mod assistant;
+pub mod connectors;
 pub mod db;
 pub mod engagements;
+pub mod galvo_hub_routes;
 pub mod auth;
 pub mod projects;
 pub mod docs;
@@ -18,6 +20,7 @@ use std::sync::Arc;
 use axum::{Router, routing::{get, patch, post, put}, Json, extract::State};
 use serde_json::json;
 use sqlx::PgPool;
+use tower_http::cors::{Any, CorsLayer};
 
 use crate::plugins::credentials::{CredentialStore, LocalAeadStore};
 use crate::project_members::store::{MembersStore, PgMembersStore};
@@ -26,7 +29,7 @@ use crate::runs::bus::RunBus;
 use celerex_orchestrator::{
     execution_type::ExecutionType,
     executor::Executor,
-    handlers::llm::LlmHandler,
+    handlers::{http::HttpHandler, input::InputHandler, llm::LlmHandler, script::ScriptHandler},
     llm::{Provider, ProviderRegistry},
     tool_dispatch::Dispatcher,
 };
@@ -75,6 +78,7 @@ fn route_chain() -> Router<AppState> {
     Router::new()
         .route("/api/health", get(|| async { Json(json!({ "ok": true })) }))
         .route("/api/auth/login", post(auth::routes::login))
+        .route("/api/auth/signup", post(auth::routes::signup))
         .route("/api/engagements", get(engagements::list).post(engagements::create))
         .route("/api/projects", get(projects::list).post(projects::create))
         .route("/api/docs", post(docs::create))
@@ -92,12 +96,18 @@ fn route_chain() -> Router<AppState> {
         )
         .route(
             "/api/project_members/{id}",
-            get(project_members::routes::get).put(project_members::routes::update),
+            get(project_members::routes::get)
+                .put(project_members::routes::update)
+                .delete(project_members::routes::delete),
         )
         .route("/api/projects/{project_id}/members", get(project_members::routes::list))
         .route("/api/project_members/{id}/run", post(project_members::routes::run_manual))
         .route("/api/runs", get(runs::routes::list))
+        .route("/api/runs/{run_id}/steps", get(runs::routes::steps))
         .route("/api/runs/{run_id}/events", get(runs::sse::stream))
+        .route("/api/galvo/hub/register", post(galvo_hub_routes::register))
+        .route("/api/galvo/hub/status", get(galvo_hub_routes::status))
+        .route("/api/galvo/hub/invoke", post(galvo_hub_routes::invoke))
         .route(
             "/api/schedules",
             post(scheduler::routes::create).get(scheduler::routes::list),
@@ -142,9 +152,48 @@ pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>)
         provider_ids.push("gemini".to_string());
     }
     let registry_arc = Arc::new(registry);
+    // Engagement-aware LLM handler: prefers a per-engagement decrypted key for
+    // an explicitly-named provider, falling back to the house registry. If the
+    // key store can't be built (no CELEREX_CRED_KEY), fall back to the plain
+    // env-only handler so the app still starts.
+    match crate::providers::store::PgProviderKeysStore::from_env(pool.clone()) {
+        Ok(keys) => dispatcher.register(
+            ExecutionType::Llm,
+            Arc::new(crate::llm::handler::EngagementLlmHandler::new(
+                registry_arc.clone(),
+                Arc::new(keys),
+            )),
+        ),
+        Err(_) => dispatcher.register(
+            ExecutionType::Llm,
+            Arc::new(LlmHandler { registry: registry_arc.clone() }),
+        ),
+    }
+    // Full production handler set so every node type a flow can contain actually
+    // executes. (E2E tests inject their own dispatcher + fixtures as needed.)
+    //   Input  — trigger / seed nodes echo a payload downstream.
+    //   Http   — outbound HTTP / plugin connectors.
+    //   Script — local command execution.
+    //   Doc    — read/write documents (the "doc builder" backbone).
+    dispatcher.register(ExecutionType::Input, Arc::new(InputHandler));
+    dispatcher.register(ExecutionType::Http, Arc::new(HttpHandler::new()));
+    dispatcher.register(ExecutionType::Script, Arc::new(ScriptHandler));
     dispatcher.register(
-        ExecutionType::Llm,
-        Arc::new(LlmHandler { registry: registry_arc.clone() }),
+        ExecutionType::Doc,
+        Arc::new(crate::docs::handler::DocHandler::new(pool.clone())),
+    );
+    // External connectors / federation: galvo-memory, Galvo agents, Microsoft 365.
+    dispatcher.register(
+        ExecutionType::Memory,
+        Arc::new(crate::connectors::memory::MemoryHandler::new()),
+    );
+    dispatcher.register(
+        ExecutionType::Galvo,
+        Arc::new(crate::connectors::galvo::GalvoHandler::new()),
+    );
+    dispatcher.register(
+        ExecutionType::M365,
+        Arc::new(crate::connectors::m365::M365Handler::new()),
     );
     build_app_with_dispatcher_inner(
         pool,
@@ -242,15 +291,24 @@ fn build_app_with_dispatcher_inner(
     }
 
     let provider_keys = build_provider_keys_store(pool.clone());
-    route_chain().with_state(AppState {
-        pool,
-        credentials,
-        executor,
-        members,
-        run_bus,
-        notifiers,
-        providers: Arc::new(provider_ids),
-        providers_registry,
-        provider_keys,
-    })
+    // Permissive CORS so the Vite dev frontend (a different origin, :5173) can
+    // call the API (:3001). Auth is Bearer-token (not cookies), so `Any` origin
+    // is safe — there are no ambient credentials to leak cross-site.
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+    route_chain()
+        .with_state(AppState {
+            pool,
+            credentials,
+            executor,
+            members,
+            run_bus,
+            notifiers,
+            providers: Arc::new(provider_ids),
+            providers_registry,
+            provider_keys,
+        })
+        .layer(cors)
 }
