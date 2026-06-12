@@ -67,9 +67,15 @@ document was created from the templated script output. Full backend + frontend
 test suites green; `vite build` clean.
 
 ## Notes / known
-- `tsc -b` reports pre-existing type errors inside `node_modules/@blocksuite/*`
-  (they ship raw TS); the app is bundled by Vite (no typecheck), so this does not
-  affect running or building the app. All **first-party** `src/` code is type-clean.
+- **Typecheck gate.** `bun run build` runs `scripts/typecheck.mjs` (also
+  `bun run typecheck`) before `vite build`. BlockSuite/Affine (`@blocksuite/*`
+  `0.22.4`, the latest release) intentionally ships its raw `.ts` source as the
+  package's types, so `tsc` type-checks the library itself and `skipLibCheck`
+  can't help (it only skips `.d.ts`). Those ~20 errors live entirely in
+  `node_modules` and are bundled fine by Vite. The gate runs the workspace `tsc`,
+  **fails on any first-party error**, and reports the suppressed vendored count for
+  transparency. BlockSuite versions are pinned to `0.22.4` (not `latest`) for
+  reproducibility. All first-party `src/` code is type-clean.
 - Per-engagement provider keys are stored encrypted but not yet injected into the
   LLM handler at call time (pre-existing Phase-1 limitation) — LLM nodes use the
   env-configured house provider.
