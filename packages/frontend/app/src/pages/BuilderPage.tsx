@@ -40,6 +40,17 @@ export function BuilderPage({
   const [tab, setTab] = useState<RightTab>("config");
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
+  // The inspector is a collapsible drawer: on narrow windows the fixed 340px
+  // panel + 232px palette squeeze the canvas, so let the user reclaim the full
+  // width. Default-collapsed when the viewport is too narrow to fit both panels
+  // comfortably; selecting a node or a tab always re-opens it.
+  const [panelOpen, setPanelOpen] = useState(
+    () => typeof window === "undefined" || window.innerWidth >= 1100,
+  );
+  const openPanel = useCallback((t?: RightTab) => {
+    if (t) setTab(t);
+    setPanelOpen(true);
+  }, []);
 
   // Hydrate canvas when an existing flow is selected.
   useEffect(() => {
@@ -281,19 +292,31 @@ export function BuilderPage({
           {running ? "Starting…" : "▶ Run"}
         </button>
         <div style={{ flex: 1 }} />
-        {activeMemberId && (
-          <div style={{ display: "flex", gap: 4 }}>
-            <button data-testid="tab-config" onClick={() => setTab("config")} style={tabBtn(tab === "config")}>
-              Config
-            </button>
-            <button data-testid="tab-schedules" onClick={() => setTab("schedules")} style={tabBtn(tab === "schedules")}>
-              Schedules
-            </button>
-            <button data-testid="tab-runs" onClick={() => setTab("runs")} style={tabBtn(tab === "runs")}>
-              Runs
-            </button>
-          </div>
-        )}
+        <div style={{ display: "flex", gap: 4 }}>
+          {activeMemberId && (
+            <>
+              <button data-testid="tab-config" onClick={() => openPanel("config")} style={tabBtn(panelOpen && tab === "config")}>
+                Config
+              </button>
+              <button data-testid="tab-schedules" onClick={() => openPanel("schedules")} style={tabBtn(panelOpen && tab === "schedules")}>
+                Schedules
+              </button>
+              <button data-testid="tab-runs" onClick={() => openPanel("runs")} style={tabBtn(panelOpen && tab === "runs")}>
+                Runs
+              </button>
+            </>
+          )}
+          {/* Collapse toggle is always available — even an unsaved new flow
+              benefits from reclaiming the canvas width. */}
+          <button
+            data-testid="toggle-inspector"
+            onClick={() => setPanelOpen((o) => !o)}
+            style={tabBtn(false)}
+            title={panelOpen ? "Hide inspector — widen canvas" : "Show inspector"}
+          >
+            {panelOpen ? "⟩ Hide" : "⟨ Inspector"}
+          </button>
+        </div>
       </div>
       <div style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
         <AgentBuilderCanvas
@@ -302,37 +325,64 @@ export function BuilderPage({
           onEdit={applyEdit}
           onNodeClick={(id) => {
             setSelectedId(id);
-            setTab("config");
+            openPanel("config");
           }}
         />
-        <div
-          style={{
-            width: 340,
-            flexShrink: 0,
-            display: "flex",
-            flexDirection: "column",
-            borderLeft: "1px solid var(--celerex-border)",
-            overflow: "hidden",
-            background: "var(--celerex-bg-primary)",
-          }}
-        >
-          {tab === "config" || !activeMemberId ? (
-            <NodeConfigPanel
-              node={selected}
-              upstreamIds={upstreamIds}
-              onChange={(n) => {
-                applyEdit({
-                  ...graph,
-                  nodes: graph.nodes.map((x) => (x.id === n.id ? n : x)),
-                });
-              }}
-            />
-          ) : tab === "schedules" ? (
-            <SchedulesPanel token={token} projectMemberId={activeMemberId} />
-          ) : (
-            <RunHistoryPanel token={token} projectMemberId={activeMemberId} />
-          )}
-        </div>
+        {panelOpen ? (
+          <div
+            style={{
+              width: 340,
+              flexShrink: 0,
+              display: "flex",
+              flexDirection: "column",
+              borderLeft: "1px solid var(--celerex-border)",
+              overflow: "hidden",
+              background: "var(--celerex-bg-primary)",
+            }}
+          >
+            {tab === "config" || !activeMemberId ? (
+              <NodeConfigPanel
+                node={selected}
+                upstreamIds={upstreamIds}
+                onChange={(n) => {
+                  applyEdit({
+                    ...graph,
+                    nodes: graph.nodes.map((x) => (x.id === n.id ? n : x)),
+                  });
+                }}
+              />
+            ) : tab === "schedules" ? (
+              <SchedulesPanel token={token} projectMemberId={activeMemberId} />
+            ) : (
+              <RunHistoryPanel token={token} projectMemberId={activeMemberId} />
+            )}
+          </div>
+        ) : (
+          <button
+            data-testid="inspector-rail"
+            onClick={() => openPanel()}
+            title="Show inspector"
+            style={{
+              width: 30,
+              flexShrink: 0,
+              border: "none",
+              borderLeft: "1px solid var(--celerex-border)",
+              background: "var(--celerex-bg-primary)",
+              color: "#8a93a8",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 12,
+              fontWeight: 600,
+              letterSpacing: 1,
+              writingMode: "vertical-rl",
+              textOrientation: "mixed",
+            }}
+          >
+            ⟨ Inspector
+          </button>
+        )}
       </div>
     </div>
   );
