@@ -3,6 +3,7 @@ import { useAtomValue } from "jotai";
 import { tokenAtom } from "../state/atoms";
 import { listApprovals, submitReview, type ApiApproval } from "../api/client";
 import { Markdown } from "../utils/renderMarkdown";
+import { ReviewEditor } from "./ReviewEditor";
 
 type ReviewView = "split" | "edit" | "preview";
 
@@ -38,6 +39,7 @@ export function TaskQueue() {
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [view, setView] = useState<ReviewView>("split");
+  const [editorItem, setEditorItem] = useState<ApiApproval | null>(null);
 
   const refresh = useCallback(async () => {
     if (!token) return;
@@ -77,24 +79,25 @@ export function TaskQueue() {
     setError(null);
   }
 
-  async function decide(decision: "approve" | "reject") {
-    if (!active) return;
+  // Core submit used by both the inline pane and the full editor surface.
+  async function submit(runId: string, decision: "approve" | "reject", content?: string) {
     setBusy(true);
     setError(null);
     try {
-      await submitReview(
-        token,
-        active.run_id,
-        decision,
-        decision === "approve" ? edited : undefined,
-      );
+      await submitReview(token, runId, decision, decision === "approve" ? content : undefined);
       setSelected(null);
+      setEditorItem(null);
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
+  }
+
+  async function decide(decision: "approve" | "reject") {
+    if (!active) return;
+    await submit(active.run_id, decision, edited);
   }
 
   return (
@@ -259,6 +262,25 @@ export function TaskQueue() {
                       </div>
                       <div style={{ display: "flex", gap: 10, marginTop: 12, justifyContent: "flex-end" }}>
                         <button
+                          data-testid="open-editor"
+                          onClick={() => setEditorItem(item)}
+                          disabled={busy}
+                          title="Open the draft in the full document editor"
+                          style={{
+                            marginRight: "auto",
+                            padding: "8px 16px",
+                            borderRadius: 8,
+                            border: "1px solid var(--celerex-accent)",
+                            background: "transparent",
+                            color: "var(--celerex-accent)",
+                            fontSize: 13,
+                            fontWeight: 600,
+                            cursor: busy ? "not-allowed" : "pointer",
+                          }}
+                        >
+                          ✎ Open in editor
+                        </button>
+                        <button
                           data-testid="reject"
                           onClick={() => void decide("reject")}
                           disabled={busy}
@@ -302,6 +324,18 @@ export function TaskQueue() {
           </div>
         )}
       </div>
+
+      {editorItem && (
+        <ReviewEditor
+          draft={draftToText(editorItem.draft)}
+          flowName={editorItem.flow_name}
+          prompt={editorItem.prompt}
+          busy={busy}
+          onApprove={(content) => void submit(editorItem.run_id, "approve", content)}
+          onReject={() => void submit(editorItem.run_id, "reject")}
+          onClose={() => setEditorItem(null)}
+        />
+      )}
     </div>
   );
 }
