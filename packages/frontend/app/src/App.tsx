@@ -29,6 +29,7 @@ import { AgentDashboard } from "./layout/AgentDashboard";
 import { PipelineEditor } from "./layout/PipelineEditor";
 import { ToolsManager } from "./layout/ToolsManager";
 import { TaskQueue } from "./layout/TaskQueue";
+import { ActivityPage } from "./pages/ActivityPage";
 import { PluginManager } from "./layout/PluginManager";
 import { AgentTriggers } from "./layout/AgentTriggers";
 import { Breadcrumb } from "./layout/Breadcrumb";
@@ -313,6 +314,8 @@ export function App() {
             <PipelineEditor />
           ) : activeView === "tools-manager" ? (
             <ToolsManager />
+          ) : activeView === "activity" ? (
+            <ActivityPage />
           ) : activeView === "task-queue" ? (
             <TaskQueue />
           ) : activeView === "agent-triggers" ? (

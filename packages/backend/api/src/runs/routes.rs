@@ -49,6 +49,49 @@ pub async fn list(
     Ok(Json(rows))
 }
 
+/// One row in the engagement-wide activity feed.
+#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize)]
+pub struct RunActivityRow {
+    pub id: Uuid,
+    pub project_member_id: Option<Uuid>,
+    pub flow_name: Option<String>,
+    pub status: String,
+    pub triggered_by: String,
+    pub created_at: DateTime<Utc>,
+}
+
+/// `GET /api/runs/recent?limit=<n>` — the engagement's most recent runs across
+/// ALL flows (newest first), joined with the flow name. Powers the Activity
+/// dashboard; auth scopes to the caller's engagement.
+pub async fn recent(
+    AuthClaims(claims): AuthClaims,
+    State(state): State<AppState>,
+    Query(q): Query<RecentQuery>,
+) -> Result<Json<Vec<RunActivityRow>>, (StatusCode, String)> {
+    let limit = q.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
+    let rows = sqlx::query_as::<_, RunActivityRow>(
+        "SELECT r.id, r.project_member_id, pm.name AS flow_name,
+                r.status, r.triggered_by, r.created_at
+         FROM runs r
+         LEFT JOIN project_members pm ON pm.id = r.project_member_id
+         WHERE r.engagement_id = $1
+         ORDER BY r.created_at DESC
+         LIMIT $2",
+    )
+    .bind(claims.engagement_id)
+    .bind(limit)
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(rows))
+}
+
+#[derive(Deserialize)]
+pub struct RecentQuery {
+    #[serde(default)]
+    pub limit: Option<i64>,
+}
+
 /// One persisted step record for a (possibly historical) run.
 #[derive(Debug, Clone, sqlx::FromRow, serde::Serialize)]
 pub struct RunStepRow {

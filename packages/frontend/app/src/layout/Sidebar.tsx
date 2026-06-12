@@ -493,6 +493,11 @@ export function Sidebar({
               onClick={() => setActiveView("task-queue")}
             />
             <SidebarItem
+              label="Activity"
+              active={activeView === "activity"}
+              onClick={() => setActiveView("activity")}
+            />
+            <SidebarItem
               label="Agent Triggers"
               active={activeView === "agent-triggers"}
               onClick={() => setActiveView("agent-triggers")}
