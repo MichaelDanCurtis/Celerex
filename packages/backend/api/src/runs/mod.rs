@@ -83,6 +83,15 @@ impl RunStore for PgRunStore {
                 step_id: rec.step_id.clone(),
                 error: rec.error.clone().unwrap_or_default(),
             },
+            RunStatus::AwaitingReview => RunEvent::RunAwaitingReview {
+                run_id: rec.run_id,
+                step_id: rec.step_id.clone(),
+                draft: rec
+                    .inputs
+                    .get("draft")
+                    .cloned()
+                    .unwrap_or(serde_json::Value::Null),
+            },
             RunStatus::Running | RunStatus::Pending => RunEvent::RunStepStarted {
                 run_id: rec.run_id,
                 step_id: rec.step_id.clone(),
@@ -93,7 +102,10 @@ impl RunStore for PgRunStore {
         // Persist asynchronously — the durable history doesn't gate the live UI.
         let pool = self.pool.clone();
         tokio::spawn(async move {
-            let status = format!("{:?}", rec.status).to_lowercase();
+            let status = match rec.status {
+                RunStatus::AwaitingReview => "awaiting_review".to_string(),
+                other => format!("{other:?}").to_lowercase(),
+            };
             let _ = sqlx::query(
                 "INSERT INTO run_steps (run_id, step_id, status, inputs, outputs, error, completed_at)
                  VALUES ($1, $2, $3, $4, $5, $6, NOW())",
@@ -129,10 +141,17 @@ impl RunStore for PgRunStore {
     /// Emit the terminal `RunCompleted` (which the frontend uses as its
     /// end-of-stream signal) and durably stamp the final run status.
     fn completed(&self, run_id: Uuid, status: RunStatus) {
+        // `AwaitingReview` is NOT terminal — pausing is handled by `record()` + the
+        // run driver, which never calls `completed()` with it. Guard defensively so
+        // a stray call can't emit a stream-closing `RunCompleted`.
+        if status == RunStatus::AwaitingReview {
+            return;
+        }
         let status_str = match status {
             RunStatus::Succeeded => "succeeded",
             RunStatus::Failed => "failed",
             RunStatus::Running | RunStatus::Pending => "running",
+            RunStatus::AwaitingReview => unreachable!("guarded above"),
         };
         self.bus.publish(
             run_id,

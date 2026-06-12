@@ -63,6 +63,18 @@ pub fn compile(graph: &Value) -> Result<Vec<Step>, String> {
             .filter_map(|e| e["from"].as_str().map(|s| s.to_string()))
             .collect();
         let kind = match ty {
+            // A filter node flagged `execution: "review"` is a human-in-the-loop
+            // gate (`StepKind::Review`) rather than an expression gate. Reusing
+            // the filter category keeps its one-in/one-gated-out canvas semantics.
+            "filter" if config.get("execution").and_then(|v| v.as_str()) == Some("review") => {
+                StepKind::Review {
+                    prompt: config["prompt"]
+                        .as_str()
+                        .unwrap_or("Review and approve this draft")
+                        .into(),
+                    content: config.get("content").cloned().unwrap_or(Value::Null),
+                }
+            }
             "filter" => StepKind::Filter {
                 expression: config["expression"].as_str().unwrap_or("").into(),
             },
@@ -123,5 +135,38 @@ mod tests {
     fn rejects_unknown_node_type() {
         let g = json!({ "nodes": [{"id":"a","type":"squirrel","config":{}}], "edges": [] });
         assert!(validate(&g).is_err());
+    }
+
+    #[test]
+    fn review_filter_compiles_to_review_step() {
+        let g = json!({
+            "nodes": [{
+                "id": "r", "type": "filter",
+                "config": {
+                    "execution": "review",
+                    "prompt": "Approve it",
+                    "content": "{{steps.x.outputs.text}}"
+                }
+            }],
+            "edges": []
+        });
+        let steps = compile(&g).unwrap();
+        match &steps[0].kind {
+            StepKind::Review { prompt, content } => {
+                assert_eq!(prompt, "Approve it");
+                assert_eq!(content, &json!("{{steps.x.outputs.text}}"));
+            }
+            other => panic!("expected Review, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn plain_filter_still_compiles_to_filter() {
+        let g = json!({
+            "nodes": [{"id":"f","type":"filter","config":{"expression":"true"}}],
+            "edges": []
+        });
+        let steps = compile(&g).unwrap();
+        assert!(matches!(steps[0].kind, StepKind::Filter { .. }));
     }
 }

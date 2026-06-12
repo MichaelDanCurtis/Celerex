@@ -11,6 +11,9 @@ pub enum RunEvent {
     RunStepStarted { run_id: Uuid, step_id: String },
     RunStepSucceeded { run_id: Uuid, step_id: String, outputs: Value },
     RunStepFailed { run_id: Uuid, step_id: String, error: String },
+    /// A `Review` step paused the run pending a human decision. Carries the
+    /// resolved draft so the live monitor can show what's awaiting approval.
+    RunAwaitingReview { run_id: Uuid, step_id: String, draft: Value },
     RunCompleted { run_id: Uuid, status: String },
 }
 
