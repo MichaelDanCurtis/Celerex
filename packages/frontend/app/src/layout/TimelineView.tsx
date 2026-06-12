@@ -15,7 +15,6 @@ interface TimelineGroup {
 
 function classifyDate(timestamp: number): string {
   const now = new Date();
-  const date = new Date(timestamp);
 
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const startOfYesterday = startOfToday - 86400000;

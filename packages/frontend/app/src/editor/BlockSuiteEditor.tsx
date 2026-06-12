@@ -52,7 +52,7 @@ export function BlockSuiteEditor({ mode, workspace, docId }: BlockSuiteEditorPro
         if (cancelled) return;
 
         const storeManager = getTestStoreManager();
-        workspace.storeExtensions = storeManager.get();
+        workspace.storeExtensions = storeManager.get("store");
 
         const doc = getOrCreateDoc(workspace, docId);
         const store = doc.getStore();
@@ -76,7 +76,7 @@ export function BlockSuiteEditor({ mode, workspace, docId }: BlockSuiteEditorPro
         editor.style.width = "100%";
         editor.style.height = "100%";
 
-        if (cancelled) return;
+        if (cancelled || !container) return;
 
         container.appendChild(editor);
         editorRef.current = editor;

@@ -71,7 +71,6 @@ export function App() {
   const editorStore = useAtomValue(editorStoreAtom);
   const [theme, setTheme] = useAtom(themeAtom);
   const [engagements, setEngagements] = useAtom(engagementsAtom);
-  const [, setActiveDocId] = useAtom(activeDocIdAtom);
   const openDoc = useSetAtom(openDocAtom);
   const addToast = useSetAtom(addToastAtom);
   const activeView = useAtomValue(activeViewAtom);

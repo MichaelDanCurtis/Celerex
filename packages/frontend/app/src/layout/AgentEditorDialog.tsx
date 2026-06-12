@@ -94,7 +94,7 @@ export function AgentEditorDialog({
   }, [open, onClose]);
 
   const toggleIO = useCallback(
-    (list: IOTypeId[], setList: React.Dispatch<React.SetStateAction<IOTypeId[]>>, id: IOTypeId) => {
+    (_list: IOTypeId[], setList: React.Dispatch<React.SetStateAction<IOTypeId[]>>, id: IOTypeId) => {
       setList((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
     },
     []

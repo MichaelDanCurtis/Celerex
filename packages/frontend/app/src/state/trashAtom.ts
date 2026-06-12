@@ -78,6 +78,6 @@ export const restoreFromTrashAtom = atom(null, (get, set, docId: string) => {
 });
 
 // Permanently delete a doc from trash
-export const permanentDeleteAtom = atom(null, (get, set, docId: string) => {
+export const permanentDeleteAtom = atom(null, (_get, set, docId: string) => {
   set(trashAtom, (prev) => prev.filter((t) => t.id !== docId));
 });

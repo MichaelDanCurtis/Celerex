@@ -2,18 +2,15 @@ import { useState, useMemo } from "react";
 import {
   CATEGORIES,
   searchAgents,
-  getAllAgents,
   addCustomAgent,
   updateCustomAgent,
   deleteCustomAgent,
-  IO_TYPES,
   getIOType,
   type AgentDef,
   type CategoryId,
-  type IOTypeId,
 } from "../data/agents";
 import { AgentEditorDialog } from "./AgentEditorDialog";
-import { SUBCATEGORIES, classifyAgent, getSubcategoryLabel } from "../data/subcategories";
+import { SUBCATEGORIES, classifyAgent } from "../data/subcategories";
 import { getToolById, TOOL_CATEGORIES } from "../data/tools";
 
 const statusColors: Record<AgentDef["status"], string> = {
