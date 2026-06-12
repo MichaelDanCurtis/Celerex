@@ -244,6 +244,19 @@ export const PALETTE_GROUPS: PaletteGroup[] = [
         description: "Gate downstream nodes on a condition.",
         defaultConfig: { expression: "{{steps.trigger.outputs.triggered}} == true" },
       },
+      {
+        type: "review.approve",
+        label: "Review & approve",
+        category: "filter",
+        icon: "✅",
+        accent: "#fbbf24",
+        description: "Pause for a human to approve/edit before continuing.",
+        defaultConfig: {
+          execution: "review",
+          prompt: "Review and approve this draft",
+          content: "{{steps.agent.outputs}}",
+        },
+      },
     ],
   },
   {

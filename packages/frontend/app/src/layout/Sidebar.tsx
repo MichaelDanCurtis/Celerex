@@ -488,7 +488,7 @@ export function Sidebar({
               onClick={() => setActiveView("pipeline-editor")}
             />
             <SidebarItem
-              label="Task Queue"
+              label="Approvals"
               active={activeView === "task-queue"}
               onClick={() => setActiveView("task-queue")}
             />
