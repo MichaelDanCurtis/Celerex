@@ -39,15 +39,19 @@ bunx vite        # → http://localhost:5173
 
 ## 4. Sign in
 
-The dev login swaps an **existing** engagement name for a JWT. Seed one once:
+Auth is real email + password (argon2id; 7-day JWT carrying the engagement id).
+Open http://localhost:5173, click **Create an account**, and sign up — signup
+provisions the engagement + user in one step:
 
 ```bash
-curl -s -X POST http://localhost:3001/api/engagements \
-  -H 'content-type: application/json' -d '{"name":"Demo"}'
+# (equivalent via API)
+curl -s -X POST http://localhost:3001/api/auth/signup \
+  -H 'content-type: application/json' \
+  -d '{"email":"demo@celerex.app","password":"demodemo2026","engagement_name":"Demo Workspace"}'
 ```
 
-Then open http://localhost:5173, sign in as `Demo`, and click **⚡ Flows** in the
-sidebar (under "Agents").
+Then sign in with that email/password and click **⚡ Flows** in the sidebar
+(under "Agents").
 
 ## 5. Try it
 
@@ -76,6 +80,7 @@ test suites green; `vite build` clean.
   **fails on any first-party error**, and reports the suppressed vendored count for
   transparency. BlockSuite versions are pinned to `0.22.4` (not `latest`) for
   reproducibility. All first-party `src/` code is type-clean.
-- Per-engagement provider keys are stored encrypted but not yet injected into the
-  LLM handler at call time (pre-existing Phase-1 limitation) — LLM nodes use the
+- Per-engagement provider keys ARE injected at call time: `EngagementLlmHandler`
+  decrypts the engagement's stored key for an explicitly-named provider
+  (anthropic/openai/kimi/gemini); with no per-engagement key it falls back to the
   env-configured house provider.
