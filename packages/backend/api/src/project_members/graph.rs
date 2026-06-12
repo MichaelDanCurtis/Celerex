@@ -110,6 +110,7 @@ fn execution_from(config: &Value) -> Result<ExecutionType, String> {
         "memory" => Ok(ExecutionType::Memory),
         "galvo" => Ok(ExecutionType::Galvo),
         "m365" => Ok(ExecutionType::M365),
+        "render" => Ok(ExecutionType::Render),
         other => Err(format!("unknown execution type: {other}")),
     }
 }

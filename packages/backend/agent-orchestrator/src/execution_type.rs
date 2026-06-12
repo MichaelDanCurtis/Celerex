@@ -18,4 +18,7 @@ pub enum ExecutionType {
     Galvo,
     /// Microsoft 365 / Graph: publish to Copilot connectors + read Graph data.
     M365,
+    /// Server-side design-template slot substitution — fills a Celerex Design
+    /// template's `{{slot:name}}` placeholders with flow data (see render.rs).
+    Render,
 }
