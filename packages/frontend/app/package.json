@@ -5,16 +5,17 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "typecheck": "node scripts/typecheck.mjs",
+    "build": "node scripts/typecheck.mjs && vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@blocksuite/affine": "latest",
-    "@blocksuite/global": "latest",
-    "@blocksuite/integration-test": "latest",
-    "@blocksuite/std": "latest",
+    "@blocksuite/affine": "0.22.4",
+    "@blocksuite/global": "0.22.4",
+    "@blocksuite/integration-test": "0.22.4",
+    "@blocksuite/std": "0.22.4",
     "@xyflow/react": "^12.3.0",
     "jotai": "^2.10.3",
     "react": "^19.2.1",
