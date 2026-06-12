@@ -8,6 +8,7 @@ pub mod projects;
 pub mod docs;
 pub mod metrics;
 pub mod plugins;
+pub mod design;
 pub mod providers;
 pub mod reviews;
 pub mod webhooks;
@@ -109,6 +110,10 @@ fn route_chain() -> Router<AppState> {
         .route("/api/runs/{run_id}/events", get(runs::sse::stream))
         .route("/api/approvals", get(reviews::list_approvals))
         .route("/api/runs/{run_id}/review", post(reviews::submit_review))
+        .route("/api/design/ingest", post(design::ingest))
+        .route("/api/design/templates", get(design::list_templates))
+        .route("/api/design/templates/{id}", get(design::get_template))
+        .route("/api/design/assets/{id}", get(design::get_asset))
         .route("/api/galvo/hub/register", post(galvo_hub_routes::register))
         .route("/api/galvo/hub/status", get(galvo_hub_routes::status))
         .route("/api/galvo/hub/invoke", post(galvo_hub_routes::invoke))

@@ -10,9 +10,18 @@ support both MJML + HTML via `render.engine`; (4) live ingest auto-scaffolds the
 after; (5) desktop-first distribution, hosted web (open-design `apps/web`) later.
 
 **Build order:** (A) `Render` ExecutionType — keystone, server-side slot substitution
-[in progress]; (B) `design_templates` table + `/api/design/ingest` + `/templates`;
-(C) scoped `design.publish` token + pairing; (D) clone open-design → strip/re-brand →
-`.cdb` export + "Connect to Celerex".
+[DONE — render.rs]; (B) `design_templates`/`design_assets` + `/api/design/ingest`,
+`/templates`, `/templates/{id}`, `/assets/{id}` [DONE — design/, migration 0015,
+design_ingest.rs]; (C) scoped `design.publish` token + pairing + live-mode flow
+auto-scaffold; (D) clone open-design → strip/re-brand → `.cdb` export + "Connect to Celerex".
+
+**v0.1 transport note:** `/api/design/ingest` accepts the bundle as **JSON** (the
+unzipped CDB: `{manifest, template_html, tokens_css, slots, assets:[{path,content_type,base64}]}`).
+The multipart `.cdb` **zip** wrapper (+ sha256 integrity) is added alongside the desktop
+app in (D) — there is no real `.cdb` producer until then. HTML is sanitized on ingest
+(strip script/`on*`/`javascript:`; design CSS preserved). Live-mode flow auto-scaffold
+(decision §10.4) deferred to (C): v0.1 stores into the Library; the Render node inlines
+the template's HTML+slots when a flow is wired.
 
 ## 0. The product shape (settled)
 
