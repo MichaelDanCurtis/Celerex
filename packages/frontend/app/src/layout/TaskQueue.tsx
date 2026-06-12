@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAtomValue } from "jotai";
 import { tokenAtom } from "../state/atoms";
 import { listApprovals, submitReview, type ApiApproval } from "../api/client";
+import { Markdown } from "../utils/renderMarkdown";
+
+type ReviewView = "split" | "edit" | "preview";
 
 /** Coerce a draft (string markdown or arbitrary JSON) into editable text. */
 function draftToText(draft: unknown): string {
@@ -34,6 +37,7 @@ export function TaskQueue() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [view, setView] = useState<ReviewView>("split");
 
   const refresh = useCallback(async () => {
     if (!token) return;
@@ -182,24 +186,77 @@ export function TaskQueue() {
 
                   {open && (
                     <div style={{ padding: "0 16px 16px" }}>
-                      <textarea
-                        value={edited}
-                        onChange={(e) => setEdited(e.target.value)}
-                        spellCheck
+                      {/* View toggle: edit source, side-by-side, or rendered preview. */}
+                      <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
+                        {(["edit", "split", "preview"] as ReviewView[]).map((v) => (
+                          <button
+                            key={v}
+                            onClick={() => setView(v)}
+                            style={{
+                              padding: "4px 12px",
+                              borderRadius: 6,
+                              border: "1px solid var(--celerex-border)",
+                              background: view === v ? "var(--celerex-accent)" : "transparent",
+                              color: view === v ? "#fff" : "var(--celerex-text-secondary)",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              textTransform: "capitalize",
+                            }}
+                          >
+                            {v}
+                          </button>
+                        ))}
+                      </div>
+                      <div
                         style={{
-                          width: "100%",
-                          minHeight: 220,
-                          resize: "vertical",
-                          padding: "12px 14px",
-                          borderRadius: 8,
-                          border: "1px solid var(--celerex-border)",
-                          background: "var(--celerex-bg-primary)",
-                          color: "var(--celerex-text-primary)",
-                          fontSize: 13.5,
-                          lineHeight: 1.6,
-                          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                          display: "grid",
+                          gridTemplateColumns:
+                            view === "split" ? "1fr 1fr" : "1fr",
+                          gap: 12,
+                          minHeight: 240,
                         }}
-                      />
+                      >
+                        {view !== "preview" && (
+                          <textarea
+                            value={edited}
+                            onChange={(e) => setEdited(e.target.value)}
+                            spellCheck
+                            style={{
+                              width: "100%",
+                              minHeight: 240,
+                              resize: "vertical",
+                              padding: "12px 14px",
+                              borderRadius: 8,
+                              border: "1px solid var(--celerex-border)",
+                              background: "var(--celerex-bg-primary)",
+                              color: "var(--celerex-text-primary)",
+                              fontSize: 13.5,
+                              lineHeight: 1.6,
+                              fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                            }}
+                          />
+                        )}
+                        {view !== "edit" && (
+                          <div
+                            data-testid="review-preview"
+                            style={{
+                              minHeight: 240,
+                              maxHeight: 520,
+                              overflow: "auto",
+                              padding: "12px 16px",
+                              borderRadius: 8,
+                              border: "1px solid var(--celerex-border)",
+                              background: "var(--celerex-bg-primary)",
+                              color: "var(--celerex-text-primary)",
+                              fontSize: 14,
+                              lineHeight: 1.6,
+                            }}
+                          >
+                            <Markdown source={edited} />
+                          </div>
+                        )}
+                      </div>
                       <div style={{ display: "flex", gap: 10, marginTop: 12, justifyContent: "flex-end" }}>
                         <button
                           data-testid="reject"
