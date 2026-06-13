@@ -10,7 +10,16 @@ use axum::{
     response::IntoResponse,
 };
 
+use std::sync::OnceLock;
+
 use crate::{AppState, auth::extractors::DeviceAuth};
+
+/// Process-wide reqwest client: reuses connection pools/TLS across proxied
+/// requests rather than rebuilding them per call.
+fn http_client() -> &'static reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(reqwest::Client::new)
+}
 
 /// Map a provider id to (upstream base URL, protocol). Base is overridable via
 /// `DESIGN_LLM_<PROVIDER>_BASE` for tests. Returns None for unknown providers.
@@ -44,14 +53,14 @@ pub async fn proxy(
     let mut url = format!("{base}/{rest}");
     if let Some(q) = query { url.push('?'); url.push_str(&q); }
 
-    let client = reqwest::Client::new();
-    let mut req = client.request(method, &url).body(body.to_vec());
+    let mut req = http_client().request(method, &url).body(body);
     if let Some(ct) = headers.get(header::CONTENT_TYPE) {
         req = req.header(header::CONTENT_TYPE, ct);
     }
     req = match protocol {
         "anthropic" => req.header("x-api-key", &key).header("anthropic-version", "2023-06-01"),
-        _ => req.header(header::AUTHORIZATION, format!("Bearer {key}")),
+        "openai" => req.header(header::AUTHORIZATION, format!("Bearer {key}")),
+        _ => unreachable!("protocol must match a variant returned by upstream_for"),
     };
 
     let upstream = req.send().await
