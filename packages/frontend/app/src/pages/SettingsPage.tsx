@@ -17,6 +17,7 @@ import {
 } from "../api/client";
 import { EngagementManager } from "../layout/EngagementManager";
 import { ProviderKeysSettings } from "../components/ProviderKeysSettings";
+import { ApproveDeviceSettings } from "../components/ApproveDeviceSettings";
 
 const APP_VERSION = "v0.1-overnight";
 
@@ -258,6 +259,11 @@ export function SettingsPage() {
         {/* Provider API Keys (per-engagement, encrypted) */}
         <Section title="Provider API Keys">
           <ProviderKeysSettings />
+        </Section>
+
+        {/* Devices (Celerex Design pairing) */}
+        <Section title="Devices">
+          <ApproveDeviceSettings />
         </Section>
 
         {/* Engagements & Projects */}

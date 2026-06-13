@@ -693,6 +693,28 @@ export async function deleteProviderKey(
   }
 }
 
+// ---- Design device pairing -----------------------------------------------
+//
+// `POST /api/design/pair/approve` approves a pending device-pairing request by
+// its short user code. Requires a full session token (AuthClaims). Returns
+// `{ ok: true, label }` on success, or HTTP 404 if the code is unknown/expired.
+
+export async function approveDevice(
+  token: string,
+  userCode: string,
+): Promise<{ ok: boolean; label?: string }> {
+  const r = await fetch(`${API_BASE}/design/pair/approve`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ user_code: userCode }),
+  });
+  if (!r.ok) {
+    const body = await r.text().catch(() => "");
+    throw new Error(body || `approveDevice: ${r.status}`);
+  }
+  return r.json();
+}
+
 // ---- Workspace metrics summary -------------------------------------------
 //
 // `GET /api/metrics/summary` returns a point-in-time aggregation of
