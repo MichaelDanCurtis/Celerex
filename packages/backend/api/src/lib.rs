@@ -19,7 +19,7 @@ pub mod project_members;
 pub mod notifiers;
 
 use std::sync::Arc;
-use axum::{Router, routing::{get, patch, post, put}, Json, extract::State};
+use axum::{Router, routing::{any, get, patch, post, put}, Json, extract::State};
 use serde_json::json;
 use sqlx::PgPool;
 use tower_http::cors::{Any, CorsLayer};
@@ -114,6 +114,9 @@ fn route_chain() -> Router<AppState> {
         .route("/api/design/templates", get(design::list_templates))
         .route("/api/design/templates/{id}", get(design::get_template))
         .route("/api/design/assets/{id}", get(design::get_asset))
+        .route("/api/design/providers", get(design::list_design_providers))
+        .route("/api/design/llm/{provider}/{*rest}", any(design::proxy::proxy))
+        .route("/api/design/providers/{id}/key", get(design::copy_provider_key))
         .route("/api/design/tokens", post(design::mint_token))
         .route("/api/design/pair/start", post(design::pair_start))
         .route("/api/design/pair/approve", post(design::pair_approve))

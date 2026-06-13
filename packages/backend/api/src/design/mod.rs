@@ -6,6 +6,7 @@
 //! `GET /api/design/templates` lists the library; `GET /api/design/assets/{id}`
 //! serves a stored asset. See docs/plans/2026-06-12-design-handoff-contract.md.
 
+pub mod proxy;
 pub mod sanitize;
 pub mod scaffold;
 
@@ -24,8 +25,8 @@ use uuid::Uuid;
 use crate::{
     AppState,
     auth::{
-        extractors::{AuthClaims, DesignAuth},
-        jwt::{mint_scoped, SCOPE_DESIGN_PUBLISH},
+        extractors::{AuthClaims, DesignAuth, DeviceAuth},
+        jwt::{mint_scoped, SCOPE_DESIGN_DEVICE},
     },
 };
 
@@ -369,6 +370,71 @@ pub async fn get_asset(
 }
 
 // ===========================================================================
+// Provider gateway: provider/model config for the Celerex Design desktop app.
+// ===========================================================================
+
+/// v0.1 proxy-supported providers + curated model lists. Only providers with an
+/// Anthropic/OpenAI-compatible upstream the proxy understands appear here
+/// (kimi/gemini deferred).
+struct CatalogEntry { id: &'static str, label: &'static str, protocol: &'static str,
+                      models: &'static [&'static str], default_model: &'static str }
+const DESIGN_PROVIDER_CATALOG: &[CatalogEntry] = &[
+    CatalogEntry { id: "anthropic", label: "Anthropic (Claude)", protocol: "anthropic",
+        models: &["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
+        default_model: "claude-sonnet-4-6" },
+    CatalogEntry { id: "openai", label: "OpenAI", protocol: "openai",
+        models: &["gpt-4o", "o3"], default_model: "gpt-4o" },
+];
+
+#[derive(Serialize)]
+pub struct DesignProvider {
+    id: String, label: String, protocol: String, has_key: bool,
+    proxy_base_url: String, models: Vec<String>, default_model: String,
+}
+
+/// `GET /api/design/providers` — provider/model config for the engagement. No secrets.
+pub async fn list_design_providers(
+    DesignAuth(claims): DesignAuth,
+    State(state): State<AppState>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    let metas = state.provider_keys.list_for_engagement(claims.engagement_id).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let configured: std::collections::HashSet<String> =
+        metas.into_iter().map(|m| m.provider_id).collect();
+    let providers: Vec<DesignProvider> = DESIGN_PROVIDER_CATALOG.iter().map(|c| DesignProvider {
+        id: c.id.into(), label: c.label.into(), protocol: c.protocol.into(),
+        has_key: configured.contains(c.id),
+        proxy_base_url: format!("/api/design/llm/{}", c.id),
+        models: c.models.iter().map(|s| s.to_string()).collect(),
+        default_model: c.default_model.into(),
+    }).collect();
+    Ok(Json(serde_json::json!({ "providers": providers })))
+}
+
+/// `GET /api/design/providers/{id}/key` — opt-in raw-key copy. Confirm-gated +
+/// audit-logged. Default base_url comes from the catalog.
+pub async fn copy_provider_key(
+    DeviceAuth(claims): DeviceAuth,
+    State(state): State<AppState>,
+    Path(provider): Path<String>,
+    headers: axum::http::HeaderMap,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    if headers.get("x-celerex-confirm-copy").and_then(|v| v.to_str().ok()) != Some("true") {
+        return Err((StatusCode::BAD_REQUEST, "raw-key copy requires x-celerex-confirm-copy: true".into()));
+    }
+    let key = state.provider_keys.get(claims.engagement_id, &provider).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
+        .ok_or((StatusCode::NOT_FOUND, "no key configured".into()))?;
+    let base_url = match provider.as_str() {
+        "anthropic" => "https://api.anthropic.com",
+        "openai" => "https://api.openai.com",
+        _ => return Err((StatusCode::NOT_FOUND, "unknown provider".into())),
+    };
+    tracing::warn!(engagement=%claims.engagement_id, provider=%provider, "design device copied a raw provider key");
+    Ok(Json(serde_json::json!({ "provider_id": provider, "api_key": key, "base_url": base_url })))
+}
+
+// ===========================================================================
 // Device credentials: scoped token mint + device-pairing handshake (piece C).
 // ===========================================================================
 
@@ -389,12 +455,12 @@ pub async fn mint_token(
     let token = mint_scoped(
         claims.engagement_id,
         &claims.sub,
-        SCOPE_DESIGN_PUBLISH,
+        SCOPE_DESIGN_DEVICE,
         DESIGN_TOKEN_TTL_SECS,
     );
     Json(TokenResponse {
         token,
-        scope: SCOPE_DESIGN_PUBLISH.to_string(),
+        scope: SCOPE_DESIGN_DEVICE.to_string(),
         expires_at: Utc::now() + Duration::seconds(DESIGN_TOKEN_TTL_SECS),
     })
 }
@@ -492,7 +558,7 @@ pub async fn pair_approve(
     let token = mint_scoped(
         claims.engagement_id,
         &claims.sub,
-        SCOPE_DESIGN_PUBLISH,
+        SCOPE_DESIGN_DEVICE,
         DESIGN_TOKEN_TTL_SECS,
     );
     sqlx::query(

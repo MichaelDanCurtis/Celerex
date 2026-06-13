@@ -49,7 +49,7 @@ async fn scoped_token_can_publish_but_nothing_else() {
         .await;
     res.assert_status_ok();
     let body: Value = res.json();
-    assert_eq!(body["scope"], "design.publish");
+    assert_eq!(body["scope"], "design.device");
     let scoped = body["token"].as_str().unwrap().to_string();
 
     // The scoped token CAN publish.
