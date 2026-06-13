@@ -6,6 +6,7 @@
 //! `GET /api/design/templates` lists the library; `GET /api/design/assets/{id}`
 //! serves a stored asset. See docs/plans/2026-06-12-design-handoff-contract.md.
 
+pub mod proxy;
 pub mod sanitize;
 pub mod scaffold;
 

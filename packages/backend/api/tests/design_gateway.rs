@@ -36,3 +36,47 @@ async fn providers_lists_configured_keys_without_secrets() {
     let openai = provs.iter().find(|p| p["id"] == "openai").unwrap();
     assert_eq!(openai["has_key"], false);
 }
+
+use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::matchers::{method, path, header};
+
+#[tokio::test]
+async fn proxy_injects_key_and_relays_upstream() {
+    let upstream = MockServer::start().await;
+    Mock::given(method("POST")).and(path("/v1/messages")).and(header("x-api-key", "sk-real"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("{\"ok\":true}"))
+        .mount(&upstream).await;
+    unsafe { std::env::set_var("DESIGN_LLM_ANTHROPIC_BASE", upstream.uri()); }
+
+    let (_db, server, eng, token) = setup().await;
+    let session = celerex_api::auth::jwt::mint_for_tests(eng);
+    server.put("/api/providers/keys/anthropic")
+        .add_header("authorization", format!("Bearer {session}"))
+        .json(&serde_json::json!({ "key": "sk-real" })).await.assert_status_ok();
+
+    let res = server.post("/api/design/llm/anthropic/v1/messages")
+        .add_header("authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({ "model": "claude-sonnet-4-6", "messages": [] })).await;
+    res.assert_status_ok();
+    assert!(res.text().contains("\"ok\":true"));
+    unsafe { std::env::remove_var("DESIGN_LLM_ANTHROPIC_BASE"); }
+}
+
+#[tokio::test]
+async fn proxy_409_when_no_key_configured() {
+    let (_db, server, _eng, token) = setup().await;
+    let res = server.post("/api/design/llm/anthropic/v1/messages")
+        .add_header("authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({})).await;
+    res.assert_status(StatusCode::CONFLICT);
+}
+
+#[tokio::test]
+async fn proxy_rejects_publish_only_token() {
+    let (_db, server, eng, _token) = setup().await;
+    let publish = celerex_api::auth::jwt::mint_scoped(eng, "dev", "design.publish", 3600);
+    let res = server.post("/api/design/llm/anthropic/v1/messages")
+        .add_header("authorization", format!("Bearer {publish}"))
+        .json(&serde_json::json!({})).await;
+    res.assert_status(StatusCode::FORBIDDEN);
+}
