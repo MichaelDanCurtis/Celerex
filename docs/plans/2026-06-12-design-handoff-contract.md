@@ -12,8 +12,11 @@ after; (5) desktop-first distribution, hosted web (open-design `apps/web`) later
 **Build order:** (A) `Render` ExecutionType — keystone, server-side slot substitution
 [DONE — render.rs]; (B) `design_templates`/`design_assets` + `/api/design/ingest`,
 `/templates`, `/templates/{id}`, `/assets/{id}` [DONE — design/, migration 0015,
-design_ingest.rs]; (C) scoped `design.publish` token + pairing + live-mode flow
-auto-scaffold; (D) clone open-design → strip/re-brand → `.cdb` export + "Connect to Celerex".
+design_ingest.rs]; (C) scoped `design.publish` token + device-pairing + live-mode flow
+auto-scaffold [DONE — `Claims.scope`/`DesignAuth`, `POST /api/design/tokens`,
+`/pair/{start,approve,poll}`, migration 0016 `design_pairings`, `design/scaffold.rs`
+(`trigger→fill→render→review→deliver`), design_pairing.rs]; (D) clone open-design →
+strip/re-brand → `.cdb` export + "Connect to Celerex".
 
 **v0.1 transport note:** `/api/design/ingest` accepts the bundle as **JSON** (the
 unzipped CDB: `{manifest, template_html, tokens_css, slots, assets:[{path,content_type,base64}]}`).
