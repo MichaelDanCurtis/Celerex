@@ -25,7 +25,7 @@ use uuid::Uuid;
 use crate::{
     AppState,
     auth::{
-        extractors::{AuthClaims, DesignAuth},
+        extractors::{AuthClaims, DesignAuth, DeviceAuth},
         jwt::{mint_scoped, SCOPE_DESIGN_DEVICE},
     },
 };
@@ -409,6 +409,29 @@ pub async fn list_design_providers(
         default_model: c.default_model.into(),
     }).collect();
     Ok(Json(serde_json::json!({ "providers": providers })))
+}
+
+/// `GET /api/design/providers/{id}/key` — opt-in raw-key copy. Confirm-gated +
+/// audit-logged. Default base_url comes from the catalog.
+pub async fn copy_provider_key(
+    DeviceAuth(claims): DeviceAuth,
+    State(state): State<AppState>,
+    Path(provider): Path<String>,
+    headers: axum::http::HeaderMap,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    if headers.get("x-celerex-confirm-copy").and_then(|v| v.to_str().ok()) != Some("true") {
+        return Err((StatusCode::BAD_REQUEST, "raw-key copy requires x-celerex-confirm-copy: true".into()));
+    }
+    let key = state.provider_keys.get(claims.engagement_id, &provider).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
+        .ok_or((StatusCode::NOT_FOUND, "no key configured".into()))?;
+    let base_url = match provider.as_str() {
+        "anthropic" => "https://api.anthropic.com",
+        "openai" => "https://api.openai.com",
+        _ => return Err((StatusCode::NOT_FOUND, "unknown provider".into())),
+    };
+    tracing::warn!(engagement=%claims.engagement_id, provider=%provider, "design device copied a raw provider key");
+    Ok(Json(serde_json::json!({ "provider_id": provider, "api_key": key, "base_url": base_url })))
 }
 
 // ===========================================================================

@@ -116,6 +116,7 @@ fn route_chain() -> Router<AppState> {
         .route("/api/design/assets/{id}", get(design::get_asset))
         .route("/api/design/providers", get(design::list_design_providers))
         .route("/api/design/llm/{provider}/{*rest}", any(design::proxy::proxy))
+        .route("/api/design/providers/{id}/key", get(design::copy_provider_key))
         .route("/api/design/tokens", post(design::mint_token))
         .route("/api/design/pair/start", post(design::pair_start))
         .route("/api/design/pair/approve", post(design::pair_approve))

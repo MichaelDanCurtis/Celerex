@@ -80,3 +80,26 @@ async fn proxy_rejects_publish_only_token() {
         .json(&serde_json::json!({})).await;
     res.assert_status(StatusCode::FORBIDDEN);
 }
+
+#[tokio::test]
+async fn key_copy_requires_confirm_and_returns_decrypted() {
+    let (_db, server, eng, token) = setup().await;
+    let session = celerex_api::auth::jwt::mint_for_tests(eng);
+    server.put("/api/providers/keys/anthropic")
+        .add_header("authorization", format!("Bearer {session}"))
+        .json(&serde_json::json!({ "key": "sk-copyme" })).await.assert_status_ok();
+
+    // without confirm header → 400
+    let res = server.get("/api/design/providers/anthropic/key")
+        .add_header("authorization", format!("Bearer {token}")).await;
+    res.assert_status(StatusCode::BAD_REQUEST);
+
+    // with confirm header → decrypted key
+    let res = server.get("/api/design/providers/anthropic/key")
+        .add_header("authorization", format!("Bearer {token}"))
+        .add_header("x-celerex-confirm-copy", "true").await;
+    res.assert_status_ok();
+    let body: Value = res.json();
+    assert_eq!(body["api_key"], "sk-copyme");
+    assert_eq!(body["base_url"], "https://api.anthropic.com");
+}
