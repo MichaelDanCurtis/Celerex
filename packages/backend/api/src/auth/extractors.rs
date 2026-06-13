@@ -2,7 +2,7 @@ use axum::{
     extract::FromRequestParts,
     http::{request::Parts, StatusCode, header::AUTHORIZATION},
 };
-use crate::auth::jwt::{verify, Claims, SCOPE_DESIGN_PUBLISH};
+use crate::auth::jwt::{verify, Claims, SCOPE_DESIGN_PUBLISH, SCOPE_DESIGN_DEVICE};
 
 /// Verify the `Authorization: Bearer <jwt>` header and return its claims. Shared
 /// by both extractors below; scope policy is applied by the caller.
@@ -38,14 +38,31 @@ impl<S: Send + Sync> FromRequestParts<S> for AuthClaims {
 /// publish bundles but nothing else.
 pub struct DesignAuth(pub Claims);
 
+// DesignAuth (ingest + providers-config): session, publish (legacy), or device.
 impl<S: Send + Sync> FromRequestParts<S> for DesignAuth {
     type Rejection = (StatusCode, &'static str);
 
     async fn from_request_parts(parts: &mut Parts, _: &S) -> Result<Self, Self::Rejection> {
         let claims = claims_from_parts(parts)?;
         match claims.scope.as_deref() {
-            None | Some(SCOPE_DESIGN_PUBLISH) => Ok(DesignAuth(claims)),
+            None | Some(SCOPE_DESIGN_PUBLISH) | Some(SCOPE_DESIGN_DEVICE) => Ok(DesignAuth(claims)),
             Some(_) => Err((StatusCode::FORBIDDEN, "token scope not permitted here")),
+        }
+    }
+}
+
+/// Device-only routes (LLM proxy, key copy): full session OR `design.device`.
+/// A publish-only legacy token is rejected here — it cannot proxy LLM traffic.
+pub struct DeviceAuth(pub Claims);
+
+impl<S: Send + Sync> FromRequestParts<S> for DeviceAuth {
+    type Rejection = (StatusCode, &'static str);
+
+    async fn from_request_parts(parts: &mut Parts, _: &S) -> Result<Self, Self::Rejection> {
+        let claims = claims_from_parts(parts)?;
+        match claims.scope.as_deref() {
+            None | Some(SCOPE_DESIGN_DEVICE) => Ok(DeviceAuth(claims)),
+            Some(_) => Err((StatusCode::FORBIDDEN, "device scope required")),
         }
     }
 }

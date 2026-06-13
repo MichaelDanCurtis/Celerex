@@ -25,7 +25,7 @@ use crate::{
     AppState,
     auth::{
         extractors::{AuthClaims, DesignAuth},
-        jwt::{mint_scoped, SCOPE_DESIGN_PUBLISH},
+        jwt::{mint_scoped, SCOPE_DESIGN_DEVICE},
     },
 };
 
@@ -389,12 +389,12 @@ pub async fn mint_token(
     let token = mint_scoped(
         claims.engagement_id,
         &claims.sub,
-        SCOPE_DESIGN_PUBLISH,
+        SCOPE_DESIGN_DEVICE,
         DESIGN_TOKEN_TTL_SECS,
     );
     Json(TokenResponse {
         token,
-        scope: SCOPE_DESIGN_PUBLISH.to_string(),
+        scope: SCOPE_DESIGN_DEVICE.to_string(),
         expires_at: Utc::now() + Duration::seconds(DESIGN_TOKEN_TTL_SECS),
     })
 }
@@ -492,7 +492,7 @@ pub async fn pair_approve(
     let token = mint_scoped(
         claims.engagement_id,
         &claims.sub,
-        SCOPE_DESIGN_PUBLISH,
+        SCOPE_DESIGN_DEVICE,
         DESIGN_TOKEN_TTL_SECS,
     );
     sqlx::query(

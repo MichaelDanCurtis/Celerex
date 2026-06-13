@@ -21,6 +21,10 @@ pub struct Claims {
 /// design bundles into the engagement's Design Library.
 pub const SCOPE_DESIGN_PUBLISH: &str = "design.publish";
 
+/// The full Celerex Design device capability: publish + read provider config +
+/// proxy LLM traffic. Granted to a paired device (supersedes publish-only).
+pub const SCOPE_DESIGN_DEVICE: &str = "design.device";
+
 pub fn verify(token: &str, secret: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
     let data = decode::<Claims>(
         token,
