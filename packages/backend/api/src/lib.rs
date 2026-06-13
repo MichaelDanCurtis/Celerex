@@ -114,6 +114,7 @@ fn route_chain() -> Router<AppState> {
         .route("/api/design/templates", get(design::list_templates))
         .route("/api/design/templates/{id}", get(design::get_template))
         .route("/api/design/assets/{id}", get(design::get_asset))
+        .route("/api/design/providers", get(design::list_design_providers))
         .route("/api/design/tokens", post(design::mint_token))
         .route("/api/design/pair/start", post(design::pair_start))
         .route("/api/design/pair/approve", post(design::pair_approve))

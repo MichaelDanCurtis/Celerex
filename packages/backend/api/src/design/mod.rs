@@ -369,6 +369,48 @@ pub async fn get_asset(
 }
 
 // ===========================================================================
+// Provider gateway: provider/model config for the Celerex Design desktop app.
+// ===========================================================================
+
+/// v0.1 proxy-supported providers + curated model lists. Only providers with an
+/// Anthropic/OpenAI-compatible upstream the proxy understands appear here
+/// (kimi/gemini deferred).
+struct CatalogEntry { id: &'static str, label: &'static str, protocol: &'static str,
+                      models: &'static [&'static str], default_model: &'static str }
+const DESIGN_PROVIDER_CATALOG: &[CatalogEntry] = &[
+    CatalogEntry { id: "anthropic", label: "Anthropic (Claude)", protocol: "anthropic",
+        models: &["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
+        default_model: "claude-sonnet-4-6" },
+    CatalogEntry { id: "openai", label: "OpenAI", protocol: "openai",
+        models: &["gpt-4o", "o3"], default_model: "gpt-4o" },
+];
+
+#[derive(Serialize)]
+pub struct DesignProvider {
+    id: String, label: String, protocol: String, has_key: bool,
+    proxy_base_url: String, models: Vec<String>, default_model: String,
+}
+
+/// `GET /api/design/providers` — provider/model config for the engagement. No secrets.
+pub async fn list_design_providers(
+    DesignAuth(claims): DesignAuth,
+    State(state): State<AppState>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    let metas = state.provider_keys.list_for_engagement(claims.engagement_id).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let configured: std::collections::HashSet<String> =
+        metas.into_iter().map(|m| m.provider_id).collect();
+    let providers: Vec<DesignProvider> = DESIGN_PROVIDER_CATALOG.iter().map(|c| DesignProvider {
+        id: c.id.into(), label: c.label.into(), protocol: c.protocol.into(),
+        has_key: configured.contains(c.id),
+        proxy_base_url: format!("/api/design/llm/{}", c.id),
+        models: c.models.iter().map(|s| s.to_string()).collect(),
+        default_model: c.default_model.into(),
+    }).collect();
+    Ok(Json(serde_json::json!({ "providers": providers })))
+}
+
+// ===========================================================================
 // Device credentials: scoped token mint + device-pairing handshake (piece C).
 // ===========================================================================
 
