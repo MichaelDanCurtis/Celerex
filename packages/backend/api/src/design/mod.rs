@@ -435,6 +435,118 @@ pub async fn copy_provider_key(
 }
 
 // ===========================================================================
+// Connectors-via-Agent (2a): the Agent is the connector credential VAULT. Design
+// adopts the catalog + creds over the device token and runs connectors locally.
+// Mirrors the provider catalog + confirm-gated key-copy above; connector creds
+// share the engagement_provider_keys store (connector ids namespace alongside
+// provider ids — no new table). Read-only tool set in v1.
+// ===========================================================================
+
+struct ConnectorCatalogEntry {
+    id: &'static str,
+    label: &'static str,
+    /// "api_key" | "app_creds" | "internal"
+    auth_kind: &'static str,
+    /// (name, description) — all read-only in v1.
+    tools: &'static [(&'static str, &'static str)],
+}
+const DESIGN_CONNECTOR_CATALOG: &[ConnectorCatalogEntry] = &[
+    ConnectorCatalogEntry { id: "m365", label: "Microsoft 365", auth_kind: "app_creds",
+        tools: &[("list_recent_messages", "List the most recent Outlook messages"),
+                 ("list_files", "List recent OneDrive/SharePoint files")] },
+    ConnectorCatalogEntry { id: "galvo-memory", label: "Galvo Memory", auth_kind: "internal",
+        tools: &[("search", "Search the engagement's agent memory")] },
+    ConnectorCatalogEntry { id: "http-api", label: "Generic API (key)", auth_kind: "api_key",
+        tools: &[("get", "GET a configured JSON HTTP endpoint")] },
+];
+
+#[derive(Serialize, Clone)]
+pub struct ConnectorToolInfo {
+    name: String,
+    description: String,
+}
+
+#[derive(Serialize)]
+pub struct DesignConnector {
+    id: String,
+    label: String,
+    auth_kind: String,
+    configured: bool,
+    tools: Vec<ConnectorToolInfo>,
+}
+
+/// `GET /api/design/connectors` — connector catalog for the engagement. No secrets.
+pub async fn list_design_connectors(
+    DesignAuth(claims): DesignAuth,
+    State(state): State<AppState>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    let metas = state.provider_keys.list_for_engagement(claims.engagement_id).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let configured: std::collections::HashSet<String> =
+        metas.into_iter().map(|m| m.provider_id).collect();
+    let connectors: Vec<DesignConnector> = DESIGN_CONNECTOR_CATALOG.iter().map(|c| DesignConnector {
+        id: c.id.into(),
+        label: c.label.into(),
+        auth_kind: c.auth_kind.into(),
+        // internal connectors carry no user secret and are always available;
+        // api_key / app_creds connectors require a vaulted credential.
+        configured: c.auth_kind == "internal" || configured.contains(c.id),
+        tools: c.tools.iter().map(|(n, d)| ConnectorToolInfo { name: (*n).into(), description: (*d).into() }).collect(),
+    }).collect();
+    Ok(Json(serde_json::json!({ "connectors": connectors })))
+}
+
+/// `GET /api/design/connectors/{id}/credential` — confirm-gated credential adopt.
+/// The Design daemon pulls this on pairing and runs the connector locally.
+pub async fn get_connector_credential(
+    DeviceAuth(claims): DeviceAuth,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: axum::http::HeaderMap,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    if headers.get("x-celerex-confirm-copy").and_then(|v| v.to_str().ok()) != Some("true") {
+        return Err((StatusCode::BAD_REQUEST, "credential adopt requires x-celerex-confirm-copy: true".into()));
+    }
+    let entry = DESIGN_CONNECTOR_CATALOG.iter().find(|c| c.id == id)
+        .ok_or((StatusCode::NOT_FOUND, "unknown connector".to_string()))?;
+    if entry.auth_kind == "internal" {
+        // internal connectors carry no user secret; the daemon resolves them itself.
+        return Ok(Json(serde_json::json!({ "connector_id": id, "kind": "internal", "value": Value::Null })));
+    }
+    let value = state.provider_keys.get(claims.engagement_id, &id).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
+        .ok_or((StatusCode::NOT_FOUND, "connector not configured".to_string()))?;
+    tracing::warn!(engagement=%claims.engagement_id, connector=%id, "design device adopted a connector credential");
+    Ok(Json(serde_json::json!({ "connector_id": id, "kind": entry.auth_kind, "value": value })))
+}
+
+#[derive(serde::Deserialize)]
+pub struct SetConnectorCredentialBody {
+    /// The credential value. For `app_creds` connectors this is a JSON blob string
+    /// (e.g. `{"tenant":...,"client_id":...,"client_secret":...}`).
+    value: String,
+}
+
+/// `PUT /api/design/connectors/{id}/credential` — store a connector credential in the
+/// vault. Session-authed (configured in the Agent UI). Connector ids are validated
+/// against the catalog, so this does NOT share the provider-key id allowlist.
+pub async fn set_connector_credential(
+    AuthClaims(claims): AuthClaims,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<SetConnectorCredentialBody>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    let entry = DESIGN_CONNECTOR_CATALOG.iter().find(|c| c.id == id)
+        .ok_or((StatusCode::NOT_FOUND, "unknown connector".to_string()))?;
+    if entry.auth_kind == "internal" {
+        return Err((StatusCode::BAD_REQUEST, "internal connectors have no credential to set".into()));
+    }
+    state.provider_keys.set(claims.engagement_id, &id, &body.value).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    Ok(Json(serde_json::json!({ "connector_id": id, "configured": true })))
+}
+
+// ===========================================================================
 // Device credentials: scoped token mint + device-pairing handshake (piece C).
 // ===========================================================================
 
