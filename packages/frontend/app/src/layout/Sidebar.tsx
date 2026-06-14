@@ -200,7 +200,7 @@ export function Sidebar({
       >
         {collapsed ? "C" : (
           <>
-            <span style={{ flex: 1 }}>Celerex</span>
+            <span style={{ flex: 1 }}>OmniVyx Agent</span>
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -560,7 +560,7 @@ export function Sidebar({
           justifyContent: collapsed ? "center" : "space-between",
         }}
       >
-        <span>{collapsed ? "v0.1" : "Celerex v0.1.0"}</span>
+        <span>{collapsed ? "v0.1" : "OmniVyx Agent v0.1.0"}</span>
         <button
           onClick={(e) => {
             e.stopPropagation();

@@ -156,7 +156,7 @@ export const chatMessagesAtom = atom<ChatMessage[]>([
     id: "msg:welcome",
     role: "system",
     content:
-      "Welcome to Celerex. I'm your AI co-pilot with full context of your workspace — documents, diagrams, agent outputs, and more.\n\nHow can I help?",
+      "Welcome to OmniVyx Agent. I'm your AI co-pilot with full context of your workspace — documents, diagrams, agent outputs, and more.\n\nHow can I help?",
     timestamp: Date.now(),
   },
 ]);

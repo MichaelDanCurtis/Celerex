@@ -332,7 +332,7 @@ export function SettingsPage() {
 
         {/* About */}
         <Section title="About">
-          <Row label="App">Celerex</Row>
+          <Row label="App">OmniVyx Agent</Row>
           <Row label="Version">
             <code
               style={{

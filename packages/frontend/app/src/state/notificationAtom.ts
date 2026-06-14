@@ -14,7 +14,7 @@ const now = Date.now();
 export const notificationsAtom = atom<Notification[]>([
   {
     id: "notif:seed-1",
-    title: "Welcome to Celerex",
+    title: "Welcome to OmniVyx Agent",
     message: "Your workspace is ready. Create a new document to get started.",
     type: "info",
     read: false,
