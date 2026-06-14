@@ -261,7 +261,7 @@ export function SettingsPage() {
           <ProviderKeysSettings />
         </Section>
 
-        {/* Devices (Celerex Design pairing) */}
+        {/* Devices (OmniVyx Design pairing) */}
         <Section title="Devices">
           <ApproveDeviceSettings />
         </Section>
