@@ -1,0 +1,37 @@
+{
+  "name": "OmniVyx Agent",
+  "short_name": "Agent",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#2B2620",
+  "theme_color": "#2B2620",
+  "icons": [
+    {
+      "src": "/icons/png/omnivyx-agent-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/png/omnivyx-agent-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/png/omnivyx-agent-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/png/omnivyx-agent-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/svg/omnivyx-agent-app.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

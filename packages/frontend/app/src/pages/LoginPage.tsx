@@ -92,7 +92,7 @@ export function LoginPage() {
         }}
       >
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, letterSpacing: "-0.02em" }}>Celerex</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, letterSpacing: "-0.02em" }}>OmniVyx Agent</h1>
           <p style={{ fontSize: 13, color: "var(--celerex-text-secondary)", margin: "4px 0 0 0" }}>
             {isSignup ? "Create your account" : "Sign in to your workspace"}
           </p>
@@ -188,7 +188,7 @@ export function LoginPage() {
             padding: 0,
           }}
         >
-          {isSignup ? "Already have an account? Sign in" : "New to Celerex? Create an account"}
+          {isSignup ? "Already have an account? Sign in" : "New to OmniVyx Agent? Create an account"}
         </button>
       </form>
     </div>

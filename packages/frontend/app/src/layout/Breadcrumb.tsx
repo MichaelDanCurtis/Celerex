@@ -16,7 +16,7 @@ export function Breadcrumb() {
   const setActiveView = useSetAtom(activeViewAtom);
 
   const segments: { label: string; onClick?: () => void }[] = [
-    { label: "Celerex", onClick: () => setActiveView("editor") },
+    { label: "OmniVyx Agent", onClick: () => setActiveView("editor") },
   ];
 
   switch (activeView) {

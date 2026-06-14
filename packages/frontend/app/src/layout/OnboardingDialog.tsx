@@ -84,10 +84,10 @@ function StepWelcome() {
           letterSpacing: -1,
         }}
       >
-        Celerex
+        OmniVyx Agent
       </div>
       <h2 style={{ margin: "0 0 12px", fontSize: 24, fontWeight: 700, color: "var(--celerex-text-primary, #1f2937)" }}>
-        Welcome to Celerex
+        Welcome to OmniVyx Agent
       </h2>
       <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, color: "var(--celerex-text-secondary, #6b7280)" }}>
         Your all-in-one workspace for managing projects, collaborating on documents, and working

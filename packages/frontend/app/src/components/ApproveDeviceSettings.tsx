@@ -4,7 +4,7 @@ import { tokenAtom } from "../state/atoms";
 import { approveDevice } from "../api/client";
 
 /**
- * Approve a pending Celerex Design device-pairing request. The Design app shows
+ * Approve a pending OmniVyx Design device-pairing request. The Design app shows
  * the user a short code (XXXX-XXXX) when it asks to connect; entering it here
  * (while signed in to this workspace) approves the pairing server-side. The
  * backend returns the device label on success, or 404 if the code expired.
@@ -32,7 +32,7 @@ export function ApproveDeviceSettings() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ fontSize: 13, color: "var(--celerex-text-secondary)", marginBottom: 2 }}>
-        When Celerex Design asks to connect, it shows a short pairing code. Enter it here to
+        When OmniVyx Design asks to connect, it shows a short pairing code. Enter it here to
         approve the device for this workspace.
       </div>
       <div
