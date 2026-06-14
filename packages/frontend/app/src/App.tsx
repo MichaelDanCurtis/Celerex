@@ -434,14 +434,15 @@ function Toolbar({
 
   return (
     <div
+      className="ov-glass-bar"
       style={{
+        position: "relative",
+        zIndex: 2,
         height: 48,
-        borderBottom: "1px solid var(--celerex-border)",
         display: "flex",
         alignItems: "center",
         padding: "0 16px",
         gap: 8,
-        background: "var(--celerex-bg-primary)",
       }}
     >
       <div style={{ display: "flex", gap: 4 }}>
