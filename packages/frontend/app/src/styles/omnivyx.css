@@ -1,0 +1,36 @@
+/* OmniVyx Liquid Glass utilities. Glass must sit over the bloom backdrop. */
+.ov-glass {
+  background: var(--ov-glass-fill);
+  -webkit-backdrop-filter: blur(var(--ov-glass-blur)) saturate(var(--ov-glass-saturate));
+  backdrop-filter: blur(var(--ov-glass-blur)) saturate(var(--ov-glass-saturate));
+  border: 1px solid var(--ov-glass-border);
+  border-top-color: var(--ov-glass-specular);
+  border-radius: var(--ov-radius-lg);
+}
+.ov-glass-bar {
+  background: var(--ov-glass-fill);
+  -webkit-backdrop-filter: blur(var(--ov-glass-blur)) saturate(var(--ov-glass-saturate));
+  backdrop-filter: blur(var(--ov-glass-blur)) saturate(var(--ov-glass-saturate));
+  border-bottom: 1px solid var(--ov-hairline);
+  box-shadow: inset 0 1px 0 var(--ov-glass-specular);
+}
+.ov-glass-rail {
+  background: var(--ov-glass-fill);
+  -webkit-backdrop-filter: blur(var(--ov-glass-blur)) saturate(var(--ov-glass-saturate));
+  backdrop-filter: blur(var(--ov-glass-blur)) saturate(var(--ov-glass-saturate));
+  border-right: 1px solid var(--ov-hairline);
+}
+.ov-bloom-root {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+  background: var(--ov-bg-deep);
+}
+.ov-bloom {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.5;
+}

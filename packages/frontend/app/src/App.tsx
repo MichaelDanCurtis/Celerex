@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { Sidebar } from "./layout/Sidebar";
+import { BloomBackdrop } from "./components/omnivyx/BloomBackdrop";
 import { EditorArea } from "./layout/EditorArea";
 import { AIPanel } from "./layout/AIPanel";
 import { themeAtom, engagementsAtom, activeDocIdAtom, genId, editorStoreAtom, openDocAtom, activeViewAtom, activeProjectIdAtom, tokenAtom } from "./state/atoms";
@@ -268,9 +269,10 @@ export function App() {
   }
 
   return (
-    <div style={{ display: "flex", height: "100vh", width: "100vw" }}>
+    <div style={{ position: "relative", display: "flex", height: "100vh", width: "100vw", background: "var(--ov-bg)" }}>
+      <BloomBackdrop />
       {!focusModeActive && <Sidebar collapsed={sidebarCollapsed} onToggleCollapse={handleToggleSidebar} />}
-      <main style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <main style={{ position: "relative", zIndex: 1, flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {focusModeActive ? (
           <FocusModeOverlay active={focusModeActive} onExit={handleToggleFocusMode} />
         ) : (
@@ -432,14 +434,15 @@ function Toolbar({
 
   return (
     <div
+      className="ov-glass-bar"
       style={{
+        position: "relative",
+        zIndex: 2,
         height: 48,
-        borderBottom: "1px solid var(--celerex-border)",
         display: "flex",
         alignItems: "center",
         padding: "0 16px",
         gap: 8,
-        background: "var(--celerex-bg-primary)",
       }}
     >
       <div style={{ display: "flex", gap: 4 }}>

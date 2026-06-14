@@ -1,0 +1,6 @@
+/* OmniVyx Agent product theme — the only per-product overrides. */
+:root {
+  --ov-accent-base: #38a8f0;
+  --ov-bloom-1: #38a8f0;
+  --ov-bloom-2: #f25c8a;
+}

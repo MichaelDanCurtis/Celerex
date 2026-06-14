@@ -174,12 +174,13 @@ export function Sidebar({
 
   return (
     <aside
+      className="ov-glass-rail"
       style={{
+        position: "relative",
+        zIndex: 1,
         width: collapsed ? 48 : "var(--celerex-sidebar-width)",
         minWidth: collapsed ? 48 : undefined,
         height: "100%",
-        borderRight: "1px solid var(--celerex-border)",
-        background: "var(--celerex-bg-sidebar)",
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
