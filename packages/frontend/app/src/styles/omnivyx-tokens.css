@@ -1,0 +1,63 @@
+/* OmniVyx design-language token contract — vendored into both products. */
+/* contract version: 1 */
+:root {
+  --ov-bg: #f7f7fb;
+  --ov-bg-deep: #ecebf2;
+  --ov-surface: #ffffff;
+  --ov-surface-2: #f4f4f8;
+  --ov-text: #14151a;
+  --ov-text-muted: #6b7280;
+  --ov-text-faint: #9aa0ab;
+  --ov-hairline: #e6e6ec;
+
+  --ov-glass-fill: rgba(255, 255, 255, 0.55);
+  --ov-glass-fill-strong: rgba(255, 255, 255, 0.72);
+  --ov-glass-border: rgba(255, 255, 255, 0.65);
+  --ov-glass-specular: rgba(255, 255, 255, 0.92);
+  --ov-glass-blur: 20px;
+  --ov-glass-saturate: 1.6;
+
+  --ov-accent: var(--ov-accent-base, #38a8f0);
+  --ov-accent-strong: color-mix(in srgb, var(--ov-accent) 86%, var(--ov-text));
+  --ov-accent-soft: color-mix(in srgb, var(--ov-accent) 22%, var(--ov-surface));
+  --ov-accent-tint: color-mix(in srgb, var(--ov-accent) 12%, var(--ov-surface));
+  --ov-glass-tint: color-mix(in srgb, var(--ov-accent) 24%, transparent);
+
+  --ov-radius-xs: 6px;
+  --ov-radius: 12px;
+  --ov-radius-lg: 16px;
+  --ov-radius-pill: 999px;
+
+  --ov-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  --ov-dur-enter: 200ms;
+  --ov-dur-exit: 140ms;
+  --ov-dur-quick: 120ms;
+
+  --ov-font-display: "Space Grotesk", system-ui, sans-serif;
+  --ov-font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --ov-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+:root[data-theme="dark"] {
+  --ov-bg: #191320;
+  --ov-bg-deep: #120e18;
+  --ov-surface: #201a28;
+  --ov-surface-2: #271f30;
+  --ov-text: #f2eef6;
+  --ov-text-muted: rgba(255, 255, 255, 0.66);
+  --ov-text-faint: rgba(255, 255, 255, 0.40);
+  --ov-hairline: rgba(255, 255, 255, 0.10);
+
+  --ov-glass-fill: rgba(255, 255, 255, 0.10);
+  --ov-glass-fill-strong: rgba(255, 255, 255, 0.16);
+  --ov-glass-border: rgba(255, 255, 255, 0.16);
+  --ov-glass-specular: rgba(255, 255, 255, 0.40);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --ov-glass-fill: var(--ov-surface);
+    --ov-glass-fill-strong: var(--ov-surface);
+    --ov-glass-blur: 0px;
+  }
+}
