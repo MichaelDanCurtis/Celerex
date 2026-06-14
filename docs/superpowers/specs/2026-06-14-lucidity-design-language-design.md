@@ -28,6 +28,15 @@ become fully awake. The whole language is that transition made structural:
 - You move *through* fog (glass chrome) to land on *focus* (flat content). The name is the
   mechanic: **Lucidity = clarity emerging from soft fuzz.**
 
+**Clarity is a spotlight (the focal plane).** The haze is not fixed — it is a *focus dial*.
+To pull the eye, **reduce the glass on the thing that matters**: it resolves out of the fog
+while everything around it stays soft. The UI has a **focal plane** like a camera's — what
+is in focus is sharp, the rest is bokeh. This is the alarm-clock-in-the-morning effect: in a
+blurry waking room, the single crisp, buzzing thing owns your attention. **Attention = the
+inverse of blur.** Focus is therefore expressed two ways that can stack: **de-frosting**
+(clarity) and the **accent** (color event) — the loudest "alarm" is the element that does
+both.
+
 Inherited principles (from Nothing): **subtract don't add; structure is ornament; monochrome
 is the canvas, color is an event; type does the heavy lifting; industrial warmth.**
 
@@ -72,6 +81,18 @@ The source glass skill is SwiftUI-only; Lucidity ships the **web/CSS** recipe:
 `--glass-saturate`, applied via `backdrop-filter: blur() saturate()` to **chrome only**, over
 the **accent bloom** backdrop. `prefers-reduced-transparency` → solid fallback;
 `prefers-reduced-motion` → kill bloom drift.
+
+**Blur is a 3-stop focus dial** (the focal plane, §1) — glassiness encodes attention:
+- `--glass-blur-deep` (~28px) — *recede*: backgrounded / dimmed / out-of-focus regions push
+  further into haze, lower opacity.
+- `--glass-blur` (~18px) — *base chrome*: the resting haze.
+- `--glass-blur-clear` (~4px, → 0 for the sharpest focus) — *resolve*: the focal element
+  de-frosts, with raised opacity + specular so it reads crisp.
+
+State drives the dial: `hover/active/selected/urgent` step **toward clear**;
+`idle/disabled/background` step **toward deep**. The focal element may also take the accent —
+clarity + color = the loudest alarm. Transitions ride the `fog→focus` ease (§4.4): blur
+animates down as an element gains focus, up as it loses it.
 
 ### 4.3 Accent
 Per-product `--lucidity-accent`. The **one color event** — primary action, the single
