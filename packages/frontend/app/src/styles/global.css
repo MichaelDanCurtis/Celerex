@@ -1,25 +1,25 @@
 :root {
-  --celerex-bg-primary: #ffffff;
-  --celerex-bg-secondary: #f5f5f5;
-  --celerex-bg-sidebar: #fbfbfb;
-  --celerex-text-primary: #1a1a1a;
-  --celerex-text-secondary: #6b7280;
-  --celerex-border: #e5e5e5;
-  --celerex-accent: #3b82f6;
-  --celerex-accent-hover: #2563eb;
+  --celerex-bg-primary: var(--ov-bg);
+  --celerex-bg-secondary: var(--ov-surface-2);
+  --celerex-bg-sidebar: var(--ov-surface);
+  --celerex-text-primary: var(--ov-text);
+  --celerex-text-secondary: var(--ov-text-muted);
+  --celerex-border: var(--ov-hairline);
+  --celerex-accent: var(--ov-accent);
+  --celerex-accent-hover: var(--ov-accent-strong);
   --celerex-sidebar-width: 260px;
   --celerex-ai-panel-width: 340px;
 }
 
 :root[data-theme="dark"] {
-  --celerex-bg-primary: #1a1a1a;
-  --celerex-bg-secondary: #2a2a2a;
-  --celerex-bg-sidebar: #1e1e1e;
-  --celerex-text-primary: #e5e5e5;
-  --celerex-text-secondary: #9ca3af;
-  --celerex-border: #333333;
-  --celerex-accent: #60a5fa;
-  --celerex-accent-hover: #3b82f6;
+  --celerex-bg-primary: var(--ov-bg);
+  --celerex-bg-secondary: var(--ov-surface-2);
+  --celerex-bg-sidebar: var(--ov-surface);
+  --celerex-text-primary: var(--ov-text);
+  --celerex-text-secondary: var(--ov-text-muted);
+  --celerex-border: var(--ov-hairline);
+  --celerex-accent: var(--ov-accent);
+  --celerex-accent-hover: var(--ov-accent-strong);
 }
 
 * {
@@ -34,7 +34,7 @@ html, body, #root {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  font-family: var(--ov-font-sans);
   color: var(--celerex-text-primary);
   background: var(--celerex-bg-primary);
   -webkit-font-smoothing: antialiased;
