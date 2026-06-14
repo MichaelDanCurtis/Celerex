@@ -164,12 +164,13 @@ Final decisions beyond the earlier sections:
 - **Atmosphere vs accent:** cool **teal** data-field + warm **beige** light bleed = the
   constant family signature; the warm **per-product accent** (default red-coral `#ff6a4d`;
   Agent `#38a8f0`, Vision `#9b6bf0`) is the single event. Decoupled.
-- **Type:** Space Grotesk + Space Mono (ALL-CAPS instrument labels) + **Uncial Antiqua
-  capitals** (chosen over script cursives — "otherworldly"), applied to display/brand caps via
+- **Type:** Space Grotesk + Space Mono (ALL-CAPS instrument labels) + **Marcellus
+  capitals** (elegant classical Roman caps — chosen over uncial/script, which read too
+  distracting), applied to display/brand caps via
   `unicode-range` (liquid-glass-web.md §5), never to mono labels. Corners **sharp** (3–4px),
   density **compact**.
 - Resolved params: accent default `#ff6a4d`; fonts via Google Fonts CDN for v1, self-hosted
-  woff2 required wherever the `unicode-range` uncial trick is used.
+  woff2 required wherever the `unicode-range` Marcellus trick is used.
 
 ## 11. Out of scope / next
 - Applying Lucidity Design to the actual products (re-skin OmniVyx Design + Agent onto the
