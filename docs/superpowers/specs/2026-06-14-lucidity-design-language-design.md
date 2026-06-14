@@ -147,6 +147,32 @@ how we "make it real" — something to *see*, not just read.
 - The native SwiftUI implementation (noted, not built — no Apple target yet).
 - Reviving Doto/dot-matrix (deliberately dropped).
 
-## 10. Open parameters
-- Exact family-default red hex (AA-verified for white-on-accent) — pin at build.
-- Self-hostable vs CDN for Space Grotesk / Space Mono — CDN (Google Fonts) for v1.
+## 10. Locked visual realization (2026-06-14) — SKILL BUILT
+
+The language was dialed in visually and **codified as the `lucidity-design` skill** at
+`~/.claude/skills/lucidity-design/` (SKILL.md + references/{tokens, components,
+liquid-glass-web, platform-mapping}.md + `showcase.html` — the canonical reference). The skill
+files are now the **source of truth**; this spec is the design record.
+
+Final decisions beyond the earlier sections:
+- **Field = square-bokeh depth-of-field** (replaces the plain "bloom"): squares are pixels /
+  *samples of reality* — small + crisp at the lucid focal center, large + soft into the dream
+  periphery; **blur eases off toward the bottom** (grounded), **color goes glassier toward the
+  top** (dream-glow rises); most squares are *faded shades of the background*, a few warm-beige
+  / cool-glass squares **bloom through**; additive (screen) blend. (Earlier dither approach was
+  rejected — too harsh; bokeh is the right read.) Generator in `liquid-glass-web.md` §3.
+- **Atmosphere vs accent:** cool **teal** data-field + warm **beige** light bleed = the
+  constant family signature; the warm **per-product accent** (default red-coral `#ff6a4d`;
+  Agent `#38a8f0`, Vision `#9b6bf0`) is the single event. Decoupled.
+- **Type:** Space Grotesk + Space Mono (ALL-CAPS instrument labels) + **Uncial Antiqua
+  capitals** (chosen over script cursives — "otherworldly"), applied to display/brand caps via
+  `unicode-range` (liquid-glass-web.md §5), never to mono labels. Corners **sharp** (3–4px),
+  density **compact**.
+- Resolved params: accent default `#ff6a4d`; fonts via Google Fonts CDN for v1, self-hosted
+  woff2 required wherever the `unicode-range` uncial trick is used.
+
+## 11. Out of scope / next
+- Applying Lucidity Design to the actual products (re-skin OmniVyx Design + Agent onto the
+  `lucidity-design` tokens, replacing the interim "OmniVyx Studio" `--ov-*` tokens) — a
+  follow-up per product.
+- Self-hosting the three fonts in each product for the unicode-range capitals.
