@@ -191,12 +191,16 @@ pub async fn create_ritual(
     (StatusCode::CREATED, Json(view_from(&schedule, spec.name))).into_response()
 }
 
+/// Row shape for the Ritual list query: schedule fields plus the member name,
+/// in SELECT order. Kept as an alias so the `query_as` mapping is auditable.
+type RitualRow = (Uuid, Uuid, String, String, chrono::DateTime<chrono::Utc>, Option<chrono::DateTime<chrono::Utc>>, bool, String);
+
 /// `GET /api/design/rituals` — all Rituals for the caller's engagement.
 pub async fn list_rituals(
     DeviceAuth(claims): DeviceAuth,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    let rows = sqlx::query_as::<_, (Uuid, Uuid, String, String, chrono::DateTime<chrono::Utc>, Option<chrono::DateTime<chrono::Utc>>, bool, String)>(
+    let rows = sqlx::query_as::<_, RitualRow>(
         "SELECT s.id, s.project_member_id, s.cron_expr, s.timezone, s.next_fire_at, s.last_fired_at, s.enabled, m.name
          FROM schedules s
          JOIN project_members m ON m.id = s.project_member_id
@@ -264,7 +268,7 @@ pub async fn delete_ritual(
     if let Err(e) = store.delete(schedule.id).await {
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e }))).into_response();
     }
-    let _ = sqlx::query(
+    if let Err(e) = sqlx::query(
         "DELETE FROM project_members m USING projects p
          WHERE m.id = $1 AND m.project_id = p.id
            AND p.engagement_id = $2 AND p.name = 'Rituals'",
@@ -272,6 +276,9 @@ pub async fn delete_ritual(
     .bind(schedule.project_member_id)
     .bind(claims.engagement_id)
     .execute(&state.pool)
-    .await;
+    .await
+    {
+        tracing::warn!(project_member_id = %schedule.project_member_id, error = %e, "ritual member cleanup failed; schedule deleted, member row may be orphaned");
+    }
     StatusCode::NO_CONTENT.into_response()
 }
