@@ -17,7 +17,7 @@ use uuid::Uuid;
 
 use crate::AppState;
 use crate::auth::extractors::DeviceAuth;
-use crate::project_members::run_job::{self, TRIGGERED_BY_SCHEDULED};
+use crate::project_members::run_job::{self, TRIGGERED_BY_MANUAL};
 use crate::scheduler::routes::compute_next_fire_at;
 use crate::scheduler::store::{PgSchedulesStore, Schedule, SchedulesStore};
 
@@ -320,7 +320,7 @@ pub async fn run_ritual_now(
         state.notifiers.clone(),
         schedule.project_member_id,
         claims.engagement_id,
-        TRIGGERED_BY_SCHEDULED,
+        TRIGGERED_BY_MANUAL,
     )
     .await
     {

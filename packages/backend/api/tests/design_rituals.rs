@@ -246,8 +246,14 @@ async fn run_now_enqueues_a_run_visible_in_runs() {
     assert!(!runs.is_empty(), "at least one run must be visible after run-now");
     // Confirm the returned run_id appears in the list.
     let enqueued_run_id = run_body["run_id"].as_str().unwrap();
-    assert!(
-        runs.iter().any(|r| r["run_id"].as_str() == Some(enqueued_run_id)),
-        "the enqueued run_id must appear in the runs list"
+    let matched = runs
+        .iter()
+        .find(|r| r["run_id"].as_str() == Some(enqueued_run_id))
+        .expect("the enqueued run_id must appear in the runs list");
+    // "Run now" is a user-initiated on-demand fire, so it must be recorded as
+    // manual — distinguishable from cron-fired runs in analytics.
+    assert_eq!(
+        matched["triggered_by"], "manual",
+        "an on-demand run-now must record triggered_by=manual"
     );
 }
