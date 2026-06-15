@@ -10,3 +10,7 @@ _reference/
 .superpowers/
 .claude/
 .worktrees/
+
+# k8s: never commit a populated secret
+deploy/k8s/base/secret.yaml
+deploy/k8s/**/secret.local.yaml
