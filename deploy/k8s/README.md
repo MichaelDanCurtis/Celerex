@@ -18,10 +18,20 @@ This generates the `celerex-secrets` Secret (random values — never committed),
 builds the `celerex-agent:dev` image from a staged build context, applies the
 manifests, and waits for both rollouts.
 
+## Host access (port-forward)
+The Agent is exposed via a NodePort (`30001`). On a **single-node** Docker Desktop
+cluster that maps to `http://localhost:30001` directly. On a **multi-node** local
+cluster (kind-style: `desktop-control-plane` + `desktop-worker`), NodePort is NOT
+auto-mapped to localhost — use the port-forward helper instead, left running while
+the daemon is paired:
+```bash
+./deploy/k8s/pf.sh        # forwards http://localhost:30001 -> svc/celerex-agent:3001
+```
+
 ## Verify
 ```bash
 kubectl -n celerex get pods                      # both 1/1 Running
-curl -s http://localhost:30001/api/providers     # HTTP 200 JSON
+curl -s http://localhost:30001/api/providers     # HTTP 200 {"providers":[...]} (with pf.sh running)
 ```
 
 ## Pair the Design app

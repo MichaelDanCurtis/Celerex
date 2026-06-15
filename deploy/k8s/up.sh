@@ -2,7 +2,7 @@
 # Bring up the celerex Agent + Postgres on the local Docker Desktop cluster.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CELEREX_ROOT="$(cd "$HERE/.." && pwd)"
+CELEREX_ROOT="$(cd "$HERE/../.." && pwd)"
 
 kubectl config use-context docker-desktop >/dev/null
 kubectl apply -f "$HERE/base/namespace.yaml"
