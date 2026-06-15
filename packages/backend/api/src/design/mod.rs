@@ -7,6 +7,7 @@
 //! serves a stored asset. See docs/plans/2026-06-12-design-handoff-contract.md.
 
 pub mod proxy;
+pub mod rituals;
 pub mod sanitize;
 pub mod scaffold;
 
