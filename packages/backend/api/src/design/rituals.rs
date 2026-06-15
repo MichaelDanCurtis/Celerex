@@ -6,7 +6,7 @@
 
 use axum::{
     Json,
-    extract::State,
+    extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
 };
@@ -189,4 +189,89 @@ pub async fn create_ritual(
     }
 
     (StatusCode::CREATED, Json(view_from(&schedule, spec.name))).into_response()
+}
+
+/// `GET /api/design/rituals` — all Rituals for the caller's engagement.
+pub async fn list_rituals(
+    DeviceAuth(claims): DeviceAuth,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let rows = sqlx::query_as::<_, (Uuid, Uuid, String, String, chrono::DateTime<chrono::Utc>, Option<chrono::DateTime<chrono::Utc>>, bool, String)>(
+        "SELECT s.id, s.project_member_id, s.cron_expr, s.timezone, s.next_fire_at, s.last_fired_at, s.enabled, m.name
+         FROM schedules s
+         JOIN project_members m ON m.id = s.project_member_id
+         JOIN projects p ON p.id = m.project_id
+         WHERE p.engagement_id = $1
+         ORDER BY s.next_fire_at",
+    )
+    .bind(claims.engagement_id)
+    .fetch_all(&state.pool)
+    .await;
+
+    match rows {
+        Ok(rows) => {
+            let rituals: Vec<RitualView> = rows
+                .into_iter()
+                .map(|r| RitualView {
+                    ritual_id: r.0,
+                    project_member_id: r.1,
+                    cron_expr: r.2,
+                    timezone: r.3,
+                    next_fire_at: r.4,
+                    last_fired_at: r.5,
+                    enabled: r.6,
+                    name: r.7,
+                })
+                .collect();
+            (StatusCode::OK, Json(json!({ "rituals": rituals }))).into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+/// Guard: load a schedule and confirm its member is in the caller's engagement.
+async fn owned_schedule(
+    state: &AppState,
+    engagement_id: Uuid,
+    ritual_id: Uuid,
+) -> Result<Schedule, (StatusCode, Json<Value>)> {
+    let store = PgSchedulesStore::new(state.pool.clone());
+    let schedule = store
+        .get(ritual_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e }))))?
+        .ok_or((StatusCode::NOT_FOUND, Json(json!({ "error": "not found" }))))?;
+    match state.members.engagement_id_for(schedule.project_member_id).await {
+        Ok(eng) if eng == engagement_id => Ok(schedule),
+        Ok(_) => Err((StatusCode::FORBIDDEN, Json(json!({ "error": "forbidden" })))),
+        Err(_) => Err((StatusCode::NOT_FOUND, Json(json!({ "error": "not found" })))),
+    }
+}
+
+/// `DELETE /api/design/rituals/{id}` — remove the schedule; also remove the
+/// member iff it lives in the engagement's "Rituals" project (i.e. we created it
+/// for an agent_run). FlowRef members live in the user's own project and are kept.
+pub async fn delete_ritual(
+    DeviceAuth(claims): DeviceAuth,
+    State(state): State<AppState>,
+    Path(ritual_id): Path<Uuid>,
+) -> impl IntoResponse {
+    let schedule = match owned_schedule(&state, claims.engagement_id, ritual_id).await {
+        Ok(v) => v,
+        Err((s, b)) => return (s, b).into_response(),
+    };
+    let store = PgSchedulesStore::new(state.pool.clone());
+    if let Err(e) = store.delete(schedule.id).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e }))).into_response();
+    }
+    let _ = sqlx::query(
+        "DELETE FROM project_members m USING projects p
+         WHERE m.id = $1 AND m.project_id = p.id
+           AND p.engagement_id = $2 AND p.name = 'Rituals'",
+    )
+    .bind(schedule.project_member_id)
+    .bind(claims.engagement_id)
+    .execute(&state.pool)
+    .await;
+    StatusCode::NO_CONTENT.into_response()
 }

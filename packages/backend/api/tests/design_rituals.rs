@@ -99,3 +99,60 @@ async fn create_ritual_rejects_publish_only_token() {
 
     res.assert_status(axum::http::StatusCode::FORBIDDEN);
 }
+
+// ===========================================================================
+// HTTP integration tests — GET /api/design/rituals, DELETE /api/design/rituals/{id}
+// ===========================================================================
+
+#[tokio::test]
+async fn list_then_delete_ritual_lifecycle() {
+    let (_db, server, _eng, token) = setup().await;
+
+    // 1. Create a ritual.
+    let create_res = server
+        .post("/api/design/rituals")
+        .add_header("authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "name": "Daily digest",
+            "enabled": true,
+            "schedule": { "cron_expr": "0 0 8 * * *", "timezone": "UTC" },
+            "body": { "kind": "agent_run", "prompt": "Send daily digest" }
+        }))
+        .await;
+    create_res.assert_status(axum::http::StatusCode::CREATED);
+    let created: serde_json::Value = create_res.json();
+    let ritual_id = created["ritual_id"].as_str().expect("ritual_id must be a string");
+
+    // 2. GET list → ritual_id appears.
+    let list_res = server
+        .get("/api/design/rituals")
+        .add_header("authorization", format!("Bearer {token}"))
+        .await;
+    list_res.assert_status(axum::http::StatusCode::OK);
+    let list_body: serde_json::Value = list_res.json();
+    let rituals = list_body["rituals"].as_array().expect("rituals must be an array");
+    assert!(
+        rituals.iter().any(|r| r["ritual_id"].as_str() == Some(ritual_id)),
+        "created ritual_id must appear in list"
+    );
+
+    // 3. DELETE → 204.
+    let delete_res = server
+        .delete(&format!("/api/design/rituals/{ritual_id}"))
+        .add_header("authorization", format!("Bearer {token}"))
+        .await;
+    delete_res.assert_status(axum::http::StatusCode::NO_CONTENT);
+
+    // 4. GET list again → ritual_id gone.
+    let list_res2 = server
+        .get("/api/design/rituals")
+        .add_header("authorization", format!("Bearer {token}"))
+        .await;
+    list_res2.assert_status(axum::http::StatusCode::OK);
+    let list_body2: serde_json::Value = list_res2.json();
+    let rituals2 = list_body2["rituals"].as_array().expect("rituals must be an array");
+    assert!(
+        !rituals2.iter().any(|r| r["ritual_id"].as_str() == Some(ritual_id)),
+        "deleted ritual_id must not appear in list"
+    );
+}
