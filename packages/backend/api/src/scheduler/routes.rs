@@ -44,7 +44,7 @@ fn default_enabled() -> bool {
     true
 }
 
-fn compute_next_fire_at(cron_expr: &str, timezone: &str) -> Result<DateTime<Utc>, String> {
+pub fn compute_next_fire_at(cron_expr: &str, timezone: &str) -> Result<DateTime<Utc>, String> {
     let tz: Tz = timezone
         .parse()
         .map_err(|_| format!("invalid timezone: {timezone}"))?;

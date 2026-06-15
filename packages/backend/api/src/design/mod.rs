@@ -7,6 +7,7 @@
 //! serves a stored asset. See docs/plans/2026-06-12-design-handoff-contract.md.
 
 pub mod proxy;
+pub mod rituals;
 pub mod sanitize;
 pub mod scaffold;
 
@@ -223,6 +224,30 @@ async fn design_deliveries_project(
     engagement_id: Uuid,
 ) -> Result<Uuid, (StatusCode, String)> {
     const NAME: &str = "Design Deliveries";
+    if let Some(id) = sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM projects WHERE engagement_id = $1 AND name = $2 ORDER BY created_at LIMIT 1",
+    )
+    .bind(engagement_id)
+    .bind(NAME)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    {
+        return Ok(id);
+    }
+    crate::db::create_project(&state.pool, engagement_id, NAME)
+        .await
+        .map(|p| p.id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+}
+
+/// Resolve the engagement's "Rituals" project, creating it on first use.
+/// Ritual bodies (scheduled project_members) are grouped here.
+pub(crate) async fn rituals_project(
+    state: &AppState,
+    engagement_id: Uuid,
+) -> Result<Uuid, (StatusCode, String)> {
+    const NAME: &str = "Rituals";
     if let Some(id) = sqlx::query_scalar::<_, Uuid>(
         "SELECT id FROM projects WHERE engagement_id = $1 AND name = $2 ORDER BY created_at LIMIT 1",
     )
