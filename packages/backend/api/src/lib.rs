@@ -117,6 +117,7 @@ fn route_chain() -> Router<AppState> {
         .route("/api/design/providers", get(design::list_design_providers))
         .route("/api/design/llm/{provider}/{*rest}", any(design::proxy::proxy))
         .route("/api/design/providers/{id}/key", get(design::copy_provider_key))
+        .route("/api/design/rituals", post(design::rituals::create_ritual))
         .route("/api/design/connectors", get(design::list_design_connectors))
         .route("/api/design/connectors/{id}/credential", get(design::get_connector_credential).put(design::set_connector_credential))
         .route("/api/design/tokens", post(design::mint_token))

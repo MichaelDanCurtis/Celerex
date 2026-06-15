@@ -4,9 +4,21 @@
 //! translates it into the engine's `project_member` graph. See
 //! docs/superpowers/specs/2026-06-14-rituals-via-agent-design.md.
 
+use axum::{
+    Json,
+    extract::State,
+    http::StatusCode,
+    response::IntoResponse,
+};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
+
+use crate::AppState;
+use crate::auth::extractors::DeviceAuth;
+use crate::scheduler::routes::compute_next_fire_at;
+use crate::scheduler::store::{PgSchedulesStore, Schedule, SchedulesStore};
 
 /// The schedule half of a Ritual.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -73,4 +85,108 @@ pub fn build_ritual_graph(body: &RitualBody) -> Value {
         // FlowRef bodies reuse an existing graph; this is never called for them.
         RitualBody::FlowRef { .. } => json!({ "nodes": [], "edges": [] }),
     }
+}
+
+// ===========================================================================
+// HTTP handlers
+// ===========================================================================
+
+/// What we return for a Ritual: the scheduler entry id + the member it fires.
+#[derive(Debug, Serialize)]
+pub struct RitualView {
+    pub ritual_id: Uuid,
+    pub project_member_id: Uuid,
+    pub name: String,
+    pub cron_expr: String,
+    pub timezone: String,
+    pub enabled: bool,
+    pub next_fire_at: DateTime<Utc>,
+    pub last_fired_at: Option<DateTime<Utc>>,
+}
+
+fn view_from(schedule: &Schedule, name: String) -> RitualView {
+    RitualView {
+        ritual_id: schedule.id,
+        project_member_id: schedule.project_member_id,
+        name,
+        cron_expr: schedule.cron_expr.clone(),
+        timezone: schedule.timezone.clone(),
+        enabled: schedule.enabled,
+        next_fire_at: schedule.next_fire_at,
+        last_fired_at: schedule.last_fired_at,
+    }
+}
+
+/// `POST /api/design/rituals` — create a Ritual (member body + scheduler entry).
+pub async fn create_ritual(
+    DeviceAuth(claims): DeviceAuth,
+    State(state): State<AppState>,
+    Json(spec): Json<RitualSpec>,
+) -> impl IntoResponse {
+    let next_fire_at = match compute_next_fire_at(&spec.schedule.cron_expr, &spec.schedule.timezone) {
+        Ok(v) => v,
+        Err(e) => return (StatusCode::BAD_REQUEST, Json(json!({ "error": e }))).into_response(),
+    };
+
+    let member_id = match &spec.body {
+        RitualBody::FlowRef { project_member_id } => {
+            match state.members.engagement_id_for(*project_member_id).await {
+                Ok(eng) if eng == claims.engagement_id => *project_member_id,
+                Ok(_) => {
+                    return (StatusCode::FORBIDDEN, Json(json!({ "error": "forbidden" }))).into_response();
+                }
+                Err(_) => {
+                    return (StatusCode::NOT_FOUND, Json(json!({ "error": "flow not found" }))).into_response();
+                }
+            }
+        }
+        RitualBody::AgentRun { .. } => {
+            let project_id = match super::rituals_project(&state, claims.engagement_id).await {
+                Ok(v) => v,
+                Err((s, e)) => return (s, Json(json!({ "error": e }))).into_response(),
+            };
+            let graph = build_ritual_graph(&spec.body);
+            let provider_config = Value::Object(Default::default());
+            match state
+                .members
+                .create(
+                    project_id,
+                    &spec.name,
+                    "Ritual (scheduled agent run).",
+                    &graph,
+                    &provider_config,
+                    "writer",
+                )
+                .await
+            {
+                Ok(m) => m.id,
+                Err(e) => {
+                    return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e }))).into_response();
+                }
+            }
+        }
+    };
+
+    let schedule = Schedule {
+        id: Uuid::new_v4(),
+        project_member_id: member_id,
+        cron_expr: spec.schedule.cron_expr.clone(),
+        timezone: spec.schedule.timezone.clone(),
+        next_fire_at,
+        last_fired_at: None,
+        enabled: spec.enabled,
+    };
+    let store = PgSchedulesStore::new(state.pool.clone());
+    if let Err(e) = store.create(schedule.clone()).await {
+        // Rollback the project_member we just created for AgentRun bodies.
+        if matches!(spec.body, RitualBody::AgentRun { .. }) {
+            let _ = sqlx::query("DELETE FROM project_members WHERE id = $1")
+                .bind(member_id)
+                .execute(&state.pool)
+                .await;
+        }
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e }))).into_response();
+    }
+
+    (StatusCode::CREATED, Json(view_from(&schedule, spec.name))).into_response()
 }
