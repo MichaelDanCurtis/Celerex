@@ -156,3 +156,98 @@ async fn list_then_delete_ritual_lifecycle() {
         "deleted ritual_id must not appear in list"
     );
 }
+
+// ===========================================================================
+// HTTP integration tests — PUT /api/design/rituals/{id}
+// ===========================================================================
+
+#[tokio::test]
+async fn update_changes_schedule_and_enabled() {
+    let (_db, server, _eng, token) = setup().await;
+
+    // 1. Create a ritual.
+    let create_res = server
+        .post("/api/design/rituals")
+        .add_header("authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "name": "To be updated",
+            "enabled": true,
+            "schedule": { "cron_expr": "0 0 7 * * *", "timezone": "UTC" },
+            "body": { "kind": "agent_run", "prompt": "Initial prompt" }
+        }))
+        .await;
+    create_res.assert_status(axum::http::StatusCode::CREATED);
+    let created: serde_json::Value = create_res.json();
+    let ritual_id = created["ritual_id"].as_str().expect("ritual_id must be a string");
+
+    // 2. PUT with new cron + enabled=false.
+    let update_res = server
+        .put(&format!("/api/design/rituals/{ritual_id}"))
+        .add_header("authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "cron_expr": "0 0 18 * * *",
+            "timezone": "UTC",
+            "enabled": false
+        }))
+        .await;
+    update_res.assert_status(axum::http::StatusCode::OK);
+    let updated: serde_json::Value = update_res.json();
+    assert_eq!(updated["enabled"], false, "enabled must be false after update");
+    assert_eq!(
+        updated["cron_expr"].as_str().expect("cron_expr must be a string"),
+        "0 0 18 * * *",
+        "cron_expr must reflect the new schedule"
+    );
+}
+
+// ===========================================================================
+// HTTP integration tests — POST /api/design/rituals/{id}/run
+//                          GET  /api/design/rituals/{id}/runs
+// ===========================================================================
+
+#[tokio::test]
+async fn run_now_enqueues_a_run_visible_in_runs() {
+    let (_db, server, _eng, token) = setup().await;
+
+    // 1. Create a ritual.
+    let create_res = server
+        .post("/api/design/rituals")
+        .add_header("authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "name": "On-demand ritual",
+            "enabled": true,
+            "schedule": { "cron_expr": "0 0 9 * * *", "timezone": "UTC" },
+            "body": { "kind": "agent_run", "prompt": "Do something now" }
+        }))
+        .await;
+    create_res.assert_status(axum::http::StatusCode::CREATED);
+    let created: serde_json::Value = create_res.json();
+    let ritual_id = created["ritual_id"].as_str().expect("ritual_id must be a string");
+
+    // 2. POST /run → 202 + run_id.
+    // enqueue_run inserts the runs row synchronously (status 'running') before
+    // spawning the async executor task, so run_id is valid immediately.
+    let run_res = server
+        .post(&format!("/api/design/rituals/{ritual_id}/run"))
+        .add_header("authorization", format!("Bearer {token}"))
+        .await;
+    run_res.assert_status(axum::http::StatusCode::ACCEPTED);
+    let run_body: serde_json::Value = run_res.json();
+    assert!(run_body["run_id"].is_string(), "run_id must be present in run-now response");
+
+    // 3. GET /runs → the runs array is non-empty (the row was inserted before enqueue_run returned).
+    let runs_res = server
+        .get(&format!("/api/design/rituals/{ritual_id}/runs"))
+        .add_header("authorization", format!("Bearer {token}"))
+        .await;
+    runs_res.assert_status(axum::http::StatusCode::OK);
+    let runs_body: serde_json::Value = runs_res.json();
+    let runs = runs_body["runs"].as_array().expect("runs must be an array");
+    assert!(!runs.is_empty(), "at least one run must be visible after run-now");
+    // Confirm the returned run_id appears in the list.
+    let enqueued_run_id = run_body["run_id"].as_str().unwrap();
+    assert!(
+        runs.iter().any(|r| r["run_id"].as_str() == Some(enqueued_run_id)),
+        "the enqueued run_id must appear in the runs list"
+    );
+}

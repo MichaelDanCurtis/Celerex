@@ -17,6 +17,7 @@ use uuid::Uuid;
 
 use crate::AppState;
 use crate::auth::extractors::DeviceAuth;
+use crate::project_members::run_job::{self, TRIGGERED_BY_SCHEDULED};
 use crate::scheduler::routes::compute_next_fire_at;
 use crate::scheduler::store::{PgSchedulesStore, Schedule, SchedulesStore};
 
@@ -249,6 +250,111 @@ async fn owned_schedule(
         Ok(eng) if eng == engagement_id => Ok(schedule),
         Ok(_) => Err((StatusCode::FORBIDDEN, Json(json!({ "error": "forbidden" })))),
         Err(_) => Err((StatusCode::NOT_FOUND, Json(json!({ "error": "not found" })))),
+    }
+}
+
+/// Payload for `PUT /api/design/rituals/{id}`.
+#[derive(Debug, Deserialize)]
+pub struct UpdateRitualBody {
+    pub cron_expr: String,
+    pub timezone: String,
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+}
+
+/// `PUT /api/design/rituals/{id}` — update the schedule (cron/tz/enabled).
+pub async fn update_ritual(
+    DeviceAuth(claims): DeviceAuth,
+    State(state): State<AppState>,
+    Path(ritual_id): Path<Uuid>,
+    Json(b): Json<UpdateRitualBody>,
+) -> impl IntoResponse {
+    let schedule = match owned_schedule(&state, claims.engagement_id, ritual_id).await {
+        Ok(v) => v,
+        Err((s, body)) => return (s, body).into_response(),
+    };
+    let next_fire_at = match compute_next_fire_at(&b.cron_expr, &b.timezone) {
+        Ok(v) => v,
+        Err(e) => return (StatusCode::BAD_REQUEST, Json(json!({ "error": e }))).into_response(),
+    };
+    let store = PgSchedulesStore::new(state.pool.clone());
+    if let Err(e) = store.update(ritual_id, &b.cron_expr, &b.timezone, b.enabled, next_fire_at).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e }))).into_response();
+    }
+    let updated = Schedule {
+        cron_expr: b.cron_expr,
+        timezone: b.timezone,
+        enabled: b.enabled,
+        next_fire_at,
+        ..schedule
+    };
+    let name = state
+        .members
+        .get(updated.project_member_id)
+        .await
+        .ok()
+        .flatten()
+        .map(|m| m.name)
+        .unwrap_or_default();
+    (StatusCode::OK, Json(view_from(&updated, name))).into_response()
+}
+
+/// `POST /api/design/rituals/{id}/run` — fire once, off-schedule.
+///
+/// `enqueue_run` inserts the `runs` row (status = `'running'`) synchronously,
+/// before spawning the async executor task, so `run_id` is a live DB reference
+/// the moment we return 202 — the caller can immediately query `/runs`.
+pub async fn run_ritual_now(
+    DeviceAuth(claims): DeviceAuth,
+    State(state): State<AppState>,
+    Path(ritual_id): Path<Uuid>,
+) -> impl IntoResponse {
+    let schedule = match owned_schedule(&state, claims.engagement_id, ritual_id).await {
+        Ok(v) => v,
+        Err((s, b)) => return (s, b).into_response(),
+    };
+    match run_job::enqueue_run(
+        state.pool.clone(),
+        state.members.clone(),
+        state.executor.clone(),
+        state.notifiers.clone(),
+        schedule.project_member_id,
+        claims.engagement_id,
+        TRIGGERED_BY_SCHEDULED,
+    )
+    .await
+    {
+        Ok(run_id) => (StatusCode::ACCEPTED, Json(json!({ "run_id": run_id }))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e }))).into_response(),
+    }
+}
+
+/// `GET /api/design/rituals/{id}/runs` — recent runs for this Ritual's member.
+pub async fn list_ritual_runs(
+    DeviceAuth(claims): DeviceAuth,
+    State(state): State<AppState>,
+    Path(ritual_id): Path<Uuid>,
+) -> impl IntoResponse {
+    let schedule = match owned_schedule(&state, claims.engagement_id, ritual_id).await {
+        Ok(v) => v,
+        Err((s, b)) => return (s, b).into_response(),
+    };
+    let rows = sqlx::query_as::<_, (Uuid, String, String, chrono::DateTime<chrono::Utc>)>(
+        "SELECT id, status, triggered_by, created_at FROM runs
+         WHERE project_member_id = $1 ORDER BY created_at DESC LIMIT 20",
+    )
+    .bind(schedule.project_member_id)
+    .fetch_all(&state.pool)
+    .await;
+    match rows {
+        Ok(rows) => {
+            let runs: Vec<Value> = rows
+                .into_iter()
+                .map(|r| json!({ "run_id": r.0, "status": r.1, "triggered_by": r.2, "created_at": r.3 }))
+                .collect();
+            (StatusCode::OK, Json(json!({ "runs": runs }))).into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
     }
 }
 
