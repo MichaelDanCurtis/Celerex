@@ -102,3 +102,82 @@ async fn runs_rejects_triggered_by_bogus() {
         "INSERT with triggered_by='bogus' must be rejected by the CHECK constraint"
     );
 }
+
+// ---------------------------------------------------------------------------
+// (c) AutomationTriggersStore: due/mark_polled/cursor/list/update/delete
+// ---------------------------------------------------------------------------
+#[tokio::test]
+async fn store_due_filters_by_interval_and_advances_cursor() {
+    let db = common::start_test_db().await;
+    let (eng, _project, member) = seed_member(&db.pool).await;
+
+    use celerex_api::automations::store::{
+        AutomationTrigger, AutomationTriggersStore, PgAutomationTriggersStore,
+    };
+
+    let store = PgAutomationTriggersStore::new(db.pool.clone());
+
+    let id = store
+        .create(AutomationTrigger {
+            id: uuid::Uuid::new_v4(),
+            project_member_id: member,
+            connector_id: "http-api".into(),
+            source_config: json!({"url":"http://x","items_path":"items","id_field":"id"}),
+            filter: None,
+            poll_interval_secs: 300,
+            cursor: None,
+            last_polled_at: None,
+            enabled: true,
+        })
+        .await
+        .unwrap();
+
+    // never-polled trigger is due
+    let due = store.due(chrono::Utc::now()).await.unwrap();
+    assert!(due.iter().any(|t| t.id == id), "never-polled trigger should be due");
+
+    // after mark_polled it is not due within the interval, and the cursor persisted
+    store
+        .mark_polled(id, chrono::Utc::now(), Some("5".into()))
+        .await
+        .unwrap();
+    let due2 = store.due(chrono::Utc::now()).await.unwrap();
+    assert!(
+        !due2.iter().any(|t| t.id == id),
+        "just-polled trigger should not be due again immediately"
+    );
+    let got = store.get(id).await.unwrap().unwrap();
+    assert_eq!(got.cursor.as_deref(), Some("5"));
+
+    // list_for_engagement returns it
+    let listed = store.list_for_engagement(eng).await.unwrap();
+    assert!(listed.iter().any(|t| t.id == id), "list_for_engagement should return the trigger");
+
+    // update -> enabled=false makes it not due even if interval would fire
+    store
+        .update(
+            id,
+            &json!({"url":"http://y","items_path":"items","id_field":"id"}),
+            None,
+            300,
+            false,
+        )
+        .await
+        .unwrap();
+    // reset last_polled_at to NULL so interval-check passes, but enabled=false should exclude it
+    sqlx::query("UPDATE automation_triggers SET last_polled_at=NULL WHERE id=$1")
+        .bind(id)
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    let due3 = store.due(chrono::Utc::now()).await.unwrap();
+    assert!(
+        !due3.iter().any(|t| t.id == id),
+        "disabled trigger should not be due"
+    );
+
+    // delete -> get returns None
+    store.delete(id).await.unwrap();
+    let gone = store.get(id).await.unwrap();
+    assert!(gone.is_none(), "deleted trigger should not be found");
+}
