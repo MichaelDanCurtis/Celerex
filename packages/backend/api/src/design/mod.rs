@@ -497,17 +497,27 @@ struct ConnectorCatalogEntry {
     label: &'static str,
     /// "api_key" | "app_creds" | "internal"
     auth_kind: &'static str,
+    /// "web-host" | "database" | "domain" | "hosting" | "platform" | "data-source"
+    // Used by the Deploy wizard to filter relevant connectors; field will be read there.
+    #[allow(dead_code)]
+    role: &'static str,
     /// (name, description) — all read-only in v1.
     tools: &'static [(&'static str, &'static str)],
 }
 const DESIGN_CONNECTOR_CATALOG: &[ConnectorCatalogEntry] = &[
     ConnectorCatalogEntry { id: "m365", label: "Microsoft 365", auth_kind: "app_creds",
+        role: "data-source",
         tools: &[("list_recent_messages", "List the most recent Outlook messages"),
                  ("list_files", "List recent OneDrive/SharePoint files")] },
     ConnectorCatalogEntry { id: "galvo-memory", label: "Galvo Memory", auth_kind: "internal",
+        role: "data-source",
         tools: &[("search", "Search the engagement's agent memory")] },
     ConnectorCatalogEntry { id: "http-api", label: "Generic API (key)", auth_kind: "api_key",
+        role: "data-source",
         tools: &[("get", "GET a configured JSON HTTP endpoint")] },
+    ConnectorCatalogEntry { id: "vercel", label: "Vercel", auth_kind: "api_key",
+        role: "web-host",
+        tools: &[("deploy", "Deploy a site to Vercel")] },
 ];
 
 #[derive(Serialize, Clone)]
@@ -783,4 +793,19 @@ pub async fn pair_poll(
         return Ok(Json(PairPollResponse { status: "expired".into(), token: None }));
     }
     Ok(Json(PairPollResponse { status, token: None }))
+}
+
+#[cfg(test)]
+mod catalog_tests {
+    use super::*;
+
+    #[test]
+    fn vercel_is_in_catalog_with_web_host_role() {
+        let entry = DESIGN_CONNECTOR_CATALOG
+            .iter()
+            .find(|c| c.id == "vercel")
+            .expect("vercel connector must be in the catalog");
+        assert_eq!(entry.role, "web-host");
+        assert_eq!(entry.auth_kind, "api_key");
+    }
 }
