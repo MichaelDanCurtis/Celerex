@@ -216,11 +216,83 @@ pub async fn get_deploy_status(
     Ok(Json(result))
 }
 
+#[derive(Serialize, Clone)]
+pub struct Recommendation {
+    pub choice: String,
+    pub reason: String,
+}
+
+pub(crate) fn fallback_recommendation(options: &[String]) -> Recommendation {
+    let choice = options.first().cloned().unwrap_or_else(|| "vercel".to_string());
+    Recommendation {
+        choice,
+        reason: "A reliable default that fits most projects.".to_string(),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct RecommendBody {
+    pub project_summary: String,
+    pub options: Vec<String>,
+}
+
+/// POST /api/design/deploy/recommend — one-line "Ask AI" pick among the given options.
+pub async fn recommend(
+    DeviceAuth(claims): DeviceAuth,
+    State(state): State<AppState>,
+    Json(body): Json<RecommendBody>,
+) -> Result<Json<Recommendation>, (StatusCode, String)> {
+    if body.options.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "no options to choose from".to_string()));
+    }
+    let key = match state.provider_keys.get(claims.engagement_id, "anthropic").await {
+        Ok(Some(k)) => k,
+        _ => return Ok(Json(fallback_recommendation(&body.options))),
+    };
+    let prompt = format!(
+        "A non-technical person is choosing where to publish their project. \
+         Project: {}. Options: {}. Reply with ONLY a compact JSON object \
+         {{\"choice\":\"<one option exactly>\",\"reason\":\"<one short plain sentence, no jargon>\"}}.",
+        body.project_summary,
+        body.options.join(", ")
+    );
+    let client = crate::llm::anthropic::AnthropicClient::with_base_url(
+        "https://api.anthropic.com".to_string(),
+        key,
+    );
+    let messages = vec![json!({ "role": "user", "content": prompt })];
+    let value = match client.create_message("claude-haiku-4-5-20251001", messages, vec![]).await {
+        Ok(v) => v,
+        Err(_) => return Ok(Json(fallback_recommendation(&body.options))),
+    };
+    let text = value["content"][0]["text"].as_str().unwrap_or("");
+    let parsed: Option<Recommendation> = serde_json::from_str::<serde_json::Value>(text.trim())
+        .ok()
+        .and_then(|v| {
+            let choice = v["choice"].as_str()?.to_string();
+            let reason = v["reason"].as_str().unwrap_or("").to_string();
+            if body.options.iter().any(|o| o == &choice) {
+                Some(Recommendation { choice, reason })
+            } else {
+                None
+            }
+        });
+    Ok(Json(parsed.unwrap_or_else(|| fallback_recommendation(&body.options))))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    #[test]
+    fn recommend_falls_back_to_first_option_without_a_key() {
+        let options = vec!["vercel".to_string(), "netlify".to_string()];
+        let rec = fallback_recommendation(&options);
+        assert_eq!(rec.choice, "vercel");
+        assert!(!rec.reason.is_empty());
+    }
 
     #[tokio::test]
     async fn create_deployment_posts_files_and_returns_id_and_url() {
