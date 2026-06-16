@@ -14,6 +14,7 @@ use celerex_orchestrator::job::{JobRequest, RunStatus};
 /// Keep in sync with the CHECK constraint in migration 0009_amend_runs.sql.
 pub const TRIGGERED_BY_MANUAL: &str = "manual";
 pub const TRIGGERED_BY_SCHEDULED: &str = "scheduled";
+pub const TRIGGERED_BY_CONNECTOR: &str = "connector";
 
 /// Default model for reasoning members (Project Members — Sonnet-class).
 pub const DEFAULT_REASONING_MODEL: &str = "claude-sonnet-4-6";

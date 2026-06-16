@@ -1,4 +1,5 @@
 pub mod assistant;
+pub mod automations;
 pub mod connectors;
 pub mod db;
 pub mod engagements;
@@ -121,6 +122,10 @@ fn route_chain() -> Router<AppState> {
         .route("/api/design/rituals/{id}", axum::routing::delete(design::rituals::delete_ritual).put(design::rituals::update_ritual))
         .route("/api/design/rituals/{id}/run", post(design::rituals::run_ritual_now))
         .route("/api/design/rituals/{id}/runs", get(design::rituals::list_ritual_runs))
+        .route("/api/design/automations", post(design::automations::create_automation).get(design::automations::list_automations))
+        .route("/api/design/automations/{id}", axum::routing::delete(design::automations::delete_automation).put(design::automations::update_automation))
+        .route("/api/design/automations/{id}/run", post(design::automations::run_automation_now))
+        .route("/api/design/automations/{id}/runs", get(design::automations::list_automation_runs))
         .route("/api/design/connectors", get(design::list_design_connectors))
         .route("/api/design/connectors/{id}/credential", get(design::get_connector_credential).put(design::set_connector_credential))
         .route("/api/design/tokens", post(design::mint_token))
@@ -266,6 +271,8 @@ fn build_app_with_dispatcher_inner(
         Arc::new(notifiers::teams_stub::StubTeamsNotifier::default()),
     ]);
 
+    let provider_keys = build_provider_keys_store(pool.clone());
+
     if spawn_scheduler {
         let schedules: Arc<dyn scheduler::store::SchedulesStore> =
             Arc::new(scheduler::store::PgSchedulesStore::new(pool.clone()));
@@ -317,7 +324,20 @@ fn build_app_with_dispatcher_inner(
         .spawn();
     }
 
-    let provider_keys = build_provider_keys_store(pool.clone());
+    if spawn_scheduler {
+        let triggers: Arc<dyn automations::store::AutomationTriggersStore> =
+            Arc::new(automations::store::PgAutomationTriggersStore::new(pool.clone()));
+        automations::poll::AutomationPollLoop {
+            store: triggers,
+            members: members.clone(),
+            provider_keys: provider_keys.clone(),
+            pool: pool.clone(),
+            executor: executor.clone(),
+            notifiers: notifiers.clone(),
+            tick: std::time::Duration::from_secs(30),
+        }
+        .spawn();
+    }
     // Permissive CORS so the Vite dev frontend (a different origin, :5173) can
     // call the API (:3001). Auth is Bearer-token (not cookies), so `Any` origin
     // is safe — there are no ambient credentials to leak cross-site.
