@@ -1,4 +1,5 @@
 pub mod assistant;
+pub mod automations;
 pub mod connectors;
 pub mod db;
 pub mod engagements;
