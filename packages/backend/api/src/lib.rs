@@ -271,6 +271,8 @@ fn build_app_with_dispatcher_inner(
         Arc::new(notifiers::teams_stub::StubTeamsNotifier::default()),
     ]);
 
+    let provider_keys = build_provider_keys_store(pool.clone());
+
     if spawn_scheduler {
         let schedules: Arc<dyn scheduler::store::SchedulesStore> =
             Arc::new(scheduler::store::PgSchedulesStore::new(pool.clone()));
@@ -322,7 +324,20 @@ fn build_app_with_dispatcher_inner(
         .spawn();
     }
 
-    let provider_keys = build_provider_keys_store(pool.clone());
+    if spawn_scheduler {
+        let triggers: Arc<dyn automations::store::AutomationTriggersStore> =
+            Arc::new(automations::store::PgAutomationTriggersStore::new(pool.clone()));
+        automations::poll::AutomationPollLoop {
+            store: triggers,
+            members: members.clone(),
+            provider_keys: provider_keys.clone(),
+            pool: pool.clone(),
+            executor: executor.clone(),
+            notifiers: notifiers.clone(),
+            tick: std::time::Duration::from_secs(30),
+        }
+        .spawn();
+    }
     // Permissive CORS so the Vite dev frontend (a different origin, :5173) can
     // call the API (:3001). Auth is Bearer-token (not cookies), so `Any` origin
     // is safe — there are no ambient credentials to leak cross-site.
