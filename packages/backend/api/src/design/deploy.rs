@@ -1,3 +1,8 @@
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
+use axum::Json;
+use crate::auth::extractors::DeviceAuth;
+use crate::AppState;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -101,6 +106,57 @@ impl VercelClient {
             status: normalize_ready_state(value["readyState"].as_str().unwrap_or("QUEUED")).to_string(),
         })
     }
+}
+
+/// v1 supports a single target. Maps a wizard target id → the vault provider id.
+fn vault_provider_for(target: &str) -> Option<&'static str> {
+    match target {
+        "vercel" => Some("vercel"),
+        _ => None,
+    }
+}
+
+#[derive(Deserialize)]
+pub struct SetDeployCredentialBody {
+    pub target: String,
+    pub token: String,
+}
+
+/// PUT /api/design/deploy/credential — store the user's host token in the vault.
+pub async fn set_deploy_credential(
+    DeviceAuth(claims): DeviceAuth,
+    State(state): State<AppState>,
+    Json(body): Json<SetDeployCredentialBody>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let provider = vault_provider_for(&body.target)
+        .ok_or((StatusCode::BAD_REQUEST, "unsupported deploy target".to_string()))?;
+    if body.token.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "token is required".to_string()));
+    }
+    state
+        .provider_keys
+        .set(claims.engagement_id, provider, body.token.trim())
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    Ok(Json(json!({ "connected": true })))
+}
+
+/// GET /api/design/deploy/credential/{target} — report whether a token is stored
+/// (never returns the token itself).
+pub async fn get_deploy_credential_status(
+    DeviceAuth(claims): DeviceAuth,
+    State(state): State<AppState>,
+    Path(target): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let provider = vault_provider_for(&target)
+        .ok_or((StatusCode::BAD_REQUEST, "unsupported deploy target".to_string()))?;
+    let connected = state
+        .provider_keys
+        .get(claims.engagement_id, provider)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
+        .is_some();
+    Ok(Json(json!({ "connected": connected })))
 }
 
 #[cfg(test)]
