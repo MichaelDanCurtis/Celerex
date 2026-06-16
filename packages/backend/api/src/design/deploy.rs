@@ -70,9 +70,13 @@ impl VercelClient {
             let msg = value["error"]["message"].as_str().unwrap_or("unknown error");
             return Err(format!("vercel rejected the deploy: {msg}"));
         }
+        let deployment_id = value["id"].as_str().filter(|s| !s.is_empty())
+            .ok_or_else(|| format!("vercel response missing id: {value}"))?.to_string();
+        let url = value["url"].as_str().filter(|s| !s.is_empty())
+            .ok_or_else(|| format!("vercel response missing url: {value}"))?;
         Ok(DeployResult {
-            deployment_id: value["id"].as_str().unwrap_or_default().to_string(),
-            url: with_scheme(value["url"].as_str().unwrap_or_default()),
+            deployment_id,
+            url: with_scheme(url),
             status: normalize_ready_state(value["readyState"].as_str().unwrap_or("QUEUED")).to_string(),
         })
     }
@@ -85,7 +89,12 @@ impl VercelClient {
             .send()
             .await
             .map_err(|e| format!("vercel request failed: {e}"))?;
+        let status = res.status();
         let value: serde_json::Value = res.json().await.map_err(|e| format!("vercel response not json: {e}"))?;
+        if !status.is_success() {
+            let msg = value["error"]["message"].as_str().unwrap_or("unknown error");
+            return Err(format!("vercel get_status failed: {msg}"));
+        }
         Ok(DeployResult {
             deployment_id: value["id"].as_str().unwrap_or(deployment_id).to_string(),
             url: with_scheme(value["url"].as_str().unwrap_or_default()),
@@ -141,5 +150,20 @@ mod tests {
         let res = client.get_status("dpl_123").await.unwrap();
         assert_eq!(res.status, "ready");
         assert_eq!(res.url, "https://my-site-abc.vercel.app");
+    }
+
+    #[tokio::test]
+    async fn get_status_errors_on_non_success() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v13/deployments/dpl_x"))
+            .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
+                "error": { "message": "not found" }
+            })))
+            .mount(&server)
+            .await;
+
+        let client = VercelClient::with_base_url(server.uri(), "tok_test".to_string());
+        assert!(client.get_status("dpl_x").await.is_err());
     }
 }
