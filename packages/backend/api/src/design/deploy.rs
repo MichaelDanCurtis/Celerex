@@ -1,4 +1,4 @@
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
 use crate::auth::extractors::DeviceAuth;
@@ -157,6 +157,63 @@ pub async fn get_deploy_credential_status(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
         .is_some();
     Ok(Json(json!({ "connected": connected })))
+}
+
+#[derive(Deserialize)]
+pub struct DeployRequestBody {
+    pub target: String,
+    pub project_name: String,
+    pub files: Vec<DeployFile>,
+}
+
+/// POST /api/design/deploy — deploy an uploaded bundle to the target using the vaulted token.
+pub async fn create_deploy(
+    DeviceAuth(claims): DeviceAuth,
+    State(state): State<AppState>,
+    Json(body): Json<DeployRequestBody>,
+) -> Result<Json<DeployResult>, (StatusCode, String)> {
+    let provider = vault_provider_for(&body.target)
+        .ok_or((StatusCode::BAD_REQUEST, "unsupported deploy target".to_string()))?;
+    if body.files.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "nothing to deploy".to_string()));
+    }
+    let token = state
+        .provider_keys
+        .get(claims.engagement_id, provider)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
+        .ok_or((StatusCode::CONFLICT, "no login stored for this host".to_string()))?;
+    let client = VercelClient::new(token);
+    let result = client
+        .create_deployment(&body.project_name, &body.files)
+        .await
+        .map_err(|e| (StatusCode::BAD_GATEWAY, e))?;
+    Ok(Json(result))
+}
+
+#[derive(Deserialize)]
+pub struct DeployStatusQuery {
+    pub target: String,
+}
+
+/// GET /api/design/deploy/status/{deployment_id}?target=vercel — poll the deployment.
+pub async fn get_deploy_status(
+    DeviceAuth(claims): DeviceAuth,
+    State(state): State<AppState>,
+    Path(deployment_id): Path<String>,
+    Query(q): Query<DeployStatusQuery>,
+) -> Result<Json<DeployResult>, (StatusCode, String)> {
+    let provider = vault_provider_for(&q.target)
+        .ok_or((StatusCode::BAD_REQUEST, "unsupported deploy target".to_string()))?;
+    let token = state
+        .provider_keys
+        .get(claims.engagement_id, provider)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
+        .ok_or((StatusCode::CONFLICT, "no login stored for this host".to_string()))?;
+    let client = VercelClient::new(token);
+    let result = client.get_status(&deployment_id).await.map_err(|e| (StatusCode::BAD_GATEWAY, e))?;
+    Ok(Json(result))
 }
 
 #[cfg(test)]
