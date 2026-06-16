@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: celerex-postgres
+  namespace: celerex
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celerex-postgres
+  namespace: celerex
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: celerex-postgres }
+  template:
+    metadata:
+      labels: { app: celerex-postgres }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17-alpine
+          ports: [{ containerPort: 5432 }]
+          env:
+            - { name: POSTGRES_DB, value: celerex }
+            - { name: POSTGRES_USER, value: celerex }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: celerex-secrets, key: POSTGRES_PASSWORD } }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "celerex", "-d", "celerex"] }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: celerex-postgres }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: celerex-postgres
+  namespace: celerex
+spec:
+  selector: { app: celerex-postgres }
+  ports: [{ port: 5432, targetPort: 5432 }]
