@@ -28,6 +28,13 @@ pub async fn list_engagements(pool: &PgPool) -> sqlx::Result<Vec<Engagement>> {
     ).fetch_all(pool).await
 }
 
+/// Fetch a single engagement by id. Used to scope the list endpoint to the
+/// caller's own tenant.
+pub async fn get_engagement(pool: &PgPool, id: Uuid) -> sqlx::Result<Option<Engagement>> {
+    sqlx::query_as::<_, Engagement>("SELECT id, name, created_at FROM engagements WHERE id = $1")
+        .bind(id).fetch_optional(pool).await
+}
+
 /// Case-insensitive lookup by name. Returns `Ok(None)` if no match.
 pub async fn find_engagement_by_name(
     pool: &PgPool,
