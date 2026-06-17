@@ -256,3 +256,45 @@ pub async fn upsert_credentials(
     ).bind(install).bind(direction).bind(ct).bind(nonce).execute(pool).await?;
     Ok(())
 }
+
+// ---- Engagement ownership resolvers (multi-user hardening) ---------------
+// Called by route handlers to verify that a resource belongs to the
+// authenticated user's engagement before allowing read/write access.
+
+/// Engagement that owns a document, resolved from one of its blocks (for block-level checks).
+#[allow(dead_code)]
+pub async fn engagement_for_block(pool: &PgPool, block_id: Uuid) -> sqlx::Result<Option<Uuid>> {
+    sqlx::query_scalar::<_, Uuid>(
+        "SELECT d.engagement_id FROM doc_blocks b JOIN documents d ON d.id = b.document_id WHERE b.id = $1",
+    )
+    .bind(block_id)
+    .fetch_optional(pool)
+    .await
+}
+
+/// Engagement that owns a project.
+#[allow(dead_code)]
+pub async fn engagement_for_project(pool: &PgPool, project_id: Uuid) -> sqlx::Result<Option<Uuid>> {
+    sqlx::query_scalar::<_, Uuid>("SELECT engagement_id FROM projects WHERE id = $1")
+        .bind(project_id)
+        .fetch_optional(pool)
+        .await
+}
+
+/// Engagement that owns a plugin install.
+#[allow(dead_code)]
+pub async fn engagement_for_install(pool: &PgPool, install_id: Uuid) -> sqlx::Result<Option<Uuid>> {
+    sqlx::query_scalar::<_, Uuid>("SELECT engagement_id FROM plugin_installs WHERE id = $1")
+        .bind(install_id)
+        .fetch_optional(pool)
+        .await
+}
+
+/// Engagement that owns a run.
+#[allow(dead_code)]
+pub async fn engagement_for_run(pool: &PgPool, run_id: Uuid) -> sqlx::Result<Option<Uuid>> {
+    sqlx::query_scalar::<_, Uuid>("SELECT engagement_id FROM runs WHERE id = $1")
+        .bind(run_id)
+        .fetch_optional(pool)
+        .await
+}
