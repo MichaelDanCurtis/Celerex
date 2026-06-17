@@ -147,7 +147,6 @@ impl CopilotOAuthClient {
 }
 
 /// A per-engagement Copilot LLM provider built from the vaulted `ghu_` token.
-#[allow(dead_code)]
 pub struct CopilotProvider {
     ghu: String,
     client: CopilotOAuthClient,
@@ -157,7 +156,6 @@ pub struct CopilotProvider {
 }
 
 impl CopilotProvider {
-    #[allow(dead_code)]
     pub fn new(ghu: String) -> Self {
         Self {
             ghu,
