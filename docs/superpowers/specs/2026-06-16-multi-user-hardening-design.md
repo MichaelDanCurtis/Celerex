@@ -17,6 +17,8 @@ OmniVyx is becoming a **public, multi-user site**: many independent accounts, on
 - **Defense-in-depth:** push `engagement_id` into the unscoped store queries so a forgotten handler check can't leak. **Postgres RLS is deferred** (a later belt-and-suspenders).
 - **Connector secrets (M365/Galvo) + the shared galvo-memory scope + webhook tenant-attribution are a FAST-FOLLOW** (sub-project A2), not in this pass — they only matter once those connectors/inbound paths are used, and keeping A focused on the login-exposed surface ships safety sooner.
 - **Boot safety:** the server must refuse to start without a real `CELEREX_JWT_SECRET` (no `"test-secret"` fallback).
+- **CORS:** replace the current `allow_origin(Any)` (`lib.rs`) with an allowlist of the configured web origin(s) — `designer.ailuxis.com` in production, the dev origin in dev (env-configurable). Public sites must not be `Any`.
+- **Auth context (decided after the audit):** identity is moving to **WorkOS** (managed auth) in sub-project B, and the homegrown `/api/auth/*` will be **retired** there. So A does **not** invest in hardening the homegrown login (no login rate-limiting — login leaves our endpoint), and the **signup workspace-collision fix moves to B** (provision a unique engagement on first WorkOS login). A's ownership/house-key fixes are **auth-source-agnostic** — they key off `claims.engagement_id` regardless of whether the JWT was minted by the homegrown login (today, for tests) or WorkOS (B). **A has no WorkOS dependency and can proceed now.**
 
 ## 3. Key facts from the audit (ground truth — file:line)
 
@@ -68,6 +70,9 @@ A small reusable guard plus per-handler application.
 ### Unit 5 — Boot safety
 - **`auth/jwt.rs`** — require `CELEREX_JWT_SECRET`; if unset, **fail to start** (or return a hard error) rather than signing/verifying with `"test-secret"`. Keep a test-only override gated behind `#[cfg(test)]` so the test suite still runs.
 
+### Unit 6 — CORS allowlist
+- Replace `CorsLayer::new().allow_origin(Any)` (`lib.rs`) with an **env-configurable allowlist** of permitted web origins (default to the dev origin; production = `https://designer.ailuxis.com`). Read from an env var (e.g. `CELEREX_ALLOWED_ORIGINS`, comma-separated). Keep `allow_credentials` compatible with the chosen origin set (no `Any` + credentials). This both hardens the public surface and sets up the browser→Agent calls for sub-project B.
+
 ## 5. Testing strategy
 
 Each fix becomes a **cross-tenant denial test** (turning a hole into a regression guard). Using the existing testcontainers + auth test harness (`tests/auth.rs` pattern — signup two engagements, get two tokens):
@@ -87,10 +92,10 @@ All tests use stubs/test Postgres; no external provider calls.
 - **Per-engagement galvo-memory scope** — replace the single shared `CELEREX_MEMORY_SCOPE` (`connectors/memory.rs:25`).
 - **Webhook tenant attribution** — `plugin_installs WHERE plugin_id=$1 LIMIT 1` (`webhooks/mod.rs:34`) misattributes across engagements; route by install id / per-engagement token.
 - **Postgres RLS** on the `project_members→projects→engagements` chain.
-- **Web login + per-user settings store** — that's **sub-project B** (next), not here.
+- **Web login (WorkOS) + per-user settings store** — that's **sub-project B** (next), not here. B integrates **WorkOS AuthKit** (free ≤1M MAU; social incl. Sign-in-with-Microsoft/Google/GitHub), validates the WorkOS session → maps to an engagement, **provisions a unique workspace per user on first login** (this absorbs the homegrown signup-collision footgun), retires `/api/auth/*`, and builds the per-user server-side settings store (theme follows you). Email-verify / password-reset / logout / SSO come free from WorkOS. Enterprise SAML SSO ($125/connection) is deferred + customer-funded. Identity (WorkOS) stays separate from AI/Copilot credentials (our vault) and the M365 connector (data access).
 
 ## 7. Build order
 
-Subagent-driven, branch + PR + merge per stage, every task spec-and-quality reviewed (the pattern used for 2h). Suggested ordering: **Unit 5 (boot safety, trivial) → Unit 4 (store scoping, enables 1) → Unit 1 (ownership checks) → Unit 2 (run identity) → Unit 3 (house-key policy)**, each landing with its cross-tenant denial tests. Then sub-project B (web login + settings), then Copilot.
+Subagent-driven, branch + PR + merge per stage, every task spec-and-quality reviewed (the pattern used for 2h). Suggested ordering: **Unit 5 (boot safety, trivial) → Unit 6 (CORS allowlist, trivial) → Unit 4 (store scoping, enables 1) → Unit 1 (ownership checks) → Unit 2 (run identity) → Unit 3 (house-key policy)**, each landing with its cross-tenant denial tests. Then sub-project B (WorkOS login + per-user settings), then Copilot. A has **no WorkOS dependency** — it proceeds now, in parallel with the user setting up the WorkOS account.
 
 See memory `celerex-multitenancy-audit`, `omnivyx-architecture` (web-vs-desktop + state-location), `celerex-design-handoff`.
