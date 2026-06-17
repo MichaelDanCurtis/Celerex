@@ -43,10 +43,24 @@ pub struct UpdateBody {
 }
 
 pub async fn create(
-    _a: AuthClaims,
+    a: AuthClaims,
     State(s): State<AppState>,
     Json(b): Json<CreateBody>,
 ) -> impl IntoResponse {
+    let owner = match crate::db::engagement_for_project(&s.pool, b.project_id).await {
+        Ok(Some(v)) => v,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response();
+        }
+    };
+    if owner != a.0.engagement_id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"}))).into_response();
+    }
     if let Err(e) = graph::validate(&b.graph_json) {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response();
     }
@@ -75,11 +89,18 @@ pub async fn create(
 }
 
 pub async fn update(
-    _a: AuthClaims,
+    a: AuthClaims,
     State(s): State<AppState>,
     Path(id): Path<Uuid>,
     Json(b): Json<UpdateBody>,
 ) -> impl IntoResponse {
+    let engagement_id = match s.members.engagement_id_for(id).await {
+        Ok(v) => v,
+        Err(_) => return StatusCode::NOT_FOUND.into_response(),
+    };
+    if engagement_id != a.0.engagement_id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"}))).into_response();
+    }
     if let Err(e) = graph::validate(&b.graph_json) {
         return (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response();
     }
@@ -108,10 +129,17 @@ pub async fn update(
 }
 
 pub async fn get(
-    _a: AuthClaims,
+    a: AuthClaims,
     State(s): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
+    let engagement_id = match s.members.engagement_id_for(id).await {
+        Ok(v) => v,
+        Err(_) => return StatusCode::NOT_FOUND.into_response(),
+    };
+    if engagement_id != a.0.engagement_id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"}))).into_response();
+    }
     match s.members.get(id).await {
         Ok(Some(m)) => (StatusCode::OK, Json(m)).into_response(),
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
@@ -124,10 +152,24 @@ pub async fn get(
 }
 
 pub async fn list(
-    _a: AuthClaims,
+    a: AuthClaims,
     State(s): State<AppState>,
     Path(project_id): Path<Uuid>,
 ) -> impl IntoResponse {
+    let owner = match crate::db::engagement_for_project(&s.pool, project_id).await {
+        Ok(Some(v)) => v,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": e.to_string()})),
+            )
+                .into_response();
+        }
+    };
+    if owner != a.0.engagement_id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"}))).into_response();
+    }
     match s.members.list_for_project(project_id).await {
         Ok(rows) => (StatusCode::OK, Json(rows)).into_response(),
         Err(e) => (

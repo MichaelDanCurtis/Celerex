@@ -28,6 +28,13 @@ pub async fn list_engagements(pool: &PgPool) -> sqlx::Result<Vec<Engagement>> {
     ).fetch_all(pool).await
 }
 
+/// Fetch a single engagement by id. Used to scope the list endpoint to the
+/// caller's own tenant.
+pub async fn get_engagement(pool: &PgPool, id: Uuid) -> sqlx::Result<Option<Engagement>> {
+    sqlx::query_as::<_, Engagement>("SELECT id, name, created_at FROM engagements WHERE id = $1")
+        .bind(id).fetch_optional(pool).await
+}
+
 /// Case-insensitive lookup by name. Returns `Ok(None)` if no match.
 pub async fn find_engagement_by_name(
     pool: &PgPool,
@@ -262,7 +269,6 @@ pub async fn upsert_credentials(
 // authenticated user's engagement before allowing read/write access.
 
 /// Engagement that owns a document, resolved from one of its blocks (for block-level checks).
-#[allow(dead_code)]
 pub async fn engagement_for_block(pool: &PgPool, block_id: Uuid) -> sqlx::Result<Option<Uuid>> {
     sqlx::query_scalar::<_, Uuid>(
         "SELECT d.engagement_id FROM doc_blocks b JOIN documents d ON d.id = b.document_id WHERE b.id = $1",
@@ -273,7 +279,6 @@ pub async fn engagement_for_block(pool: &PgPool, block_id: Uuid) -> sqlx::Result
 }
 
 /// Engagement that owns a project.
-#[allow(dead_code)]
 pub async fn engagement_for_project(pool: &PgPool, project_id: Uuid) -> sqlx::Result<Option<Uuid>> {
     sqlx::query_scalar::<_, Uuid>("SELECT engagement_id FROM projects WHERE id = $1")
         .bind(project_id)
@@ -282,7 +287,6 @@ pub async fn engagement_for_project(pool: &PgPool, project_id: Uuid) -> sqlx::Re
 }
 
 /// Engagement that owns a plugin install.
-#[allow(dead_code)]
 pub async fn engagement_for_install(pool: &PgPool, install_id: Uuid) -> sqlx::Result<Option<Uuid>> {
     sqlx::query_scalar::<_, Uuid>("SELECT engagement_id FROM plugin_installs WHERE id = $1")
         .bind(install_id)
@@ -291,7 +295,6 @@ pub async fn engagement_for_install(pool: &PgPool, install_id: Uuid) -> sqlx::Re
 }
 
 /// Engagement that owns a run.
-#[allow(dead_code)]
 pub async fn engagement_for_run(pool: &PgPool, run_id: Uuid) -> sqlx::Result<Option<Uuid>> {
     sqlx::query_scalar::<_, Uuid>("SELECT engagement_id FROM runs WHERE id = $1")
         .bind(run_id)
