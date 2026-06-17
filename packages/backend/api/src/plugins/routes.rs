@@ -16,8 +16,12 @@ pub async fn install(
     Json(b): Json<InstallBody>,
 ) -> impl IntoResponse {
     let manifest_json = serde_json::to_value(&b.manifest).unwrap();
-    match db::install_plugin(&s.pool, auth.0.engagement_id, &b.manifest.id, &manifest_json).await {
-        Ok(id) => (StatusCode::CREATED, Json(serde_json::json!({ "id": id }))).into_response(),
+    match db::install_plugin_full(&s.pool, auth.0.engagement_id, &b.manifest.id, &manifest_json).await {
+        Ok((id, webhook_token)) => (
+            StatusCode::CREATED,
+            Json(serde_json::json!({ "id": id, "webhook_token": webhook_token })),
+        )
+            .into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     }
 }

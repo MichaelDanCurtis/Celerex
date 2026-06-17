@@ -87,6 +87,7 @@ fn build_state(pool: PgPool, provider_keys: Arc<dyn ProviderKeysStore>) -> AppSt
         providers: Arc::new(Vec::new()),
         providers_registry: Arc::new(ProviderRegistry::new()),
         provider_keys,
+        hub_admin_engagements: Default::default(),
     }
 }
 

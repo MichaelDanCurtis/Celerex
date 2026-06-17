@@ -48,10 +48,13 @@ pub struct RegisterBody {
 
 /// `POST /api/galvo/hub/register` — register Celerex as an org/agent + persist creds.
 pub async fn register(
-    _a: AuthClaims,
-    State(_s): State<AppState>,
+    AuthClaims(claims): AuthClaims,
+    State(s): State<AppState>,
     Json(b): Json<RegisterBody>,
 ) -> impl IntoResponse {
+    if !s.hub_admin_engagements.contains(&claims.engagement_id) {
+        return (StatusCode::FORBIDDEN, "hub admin access required").into_response();
+    }
     let ca = match read_ca(&b.ca_path, &b.ca_cert_pem) {
         Ok(c) => c,
         Err(e) => return (StatusCode::BAD_REQUEST, Json(json!({ "error": e }))).into_response(),
@@ -94,7 +97,10 @@ pub async fn register(
 }
 
 /// `GET /api/galvo/hub/status` — is this Celerex registered, and as whom?
-pub async fn status(_a: AuthClaims, State(_s): State<AppState>) -> impl IntoResponse {
+pub async fn status(AuthClaims(claims): AuthClaims, State(s): State<AppState>) -> impl IntoResponse {
+    if !s.hub_admin_engagements.contains(&claims.engagement_id) {
+        return (StatusCode::FORBIDDEN, "hub admin access required").into_response();
+    }
     match galvo_hub::HubKeystore::load(&galvo_hub::keystore_path()) {
         Ok(ks) => Json(json!({
             "registered": true,
@@ -117,10 +123,13 @@ pub struct InvokeBody {
 
 /// `POST /api/galvo/hub/invoke` — invoke a remote agent over the Hub relay.
 pub async fn invoke(
-    _a: AuthClaims,
-    State(_s): State<AppState>,
+    AuthClaims(claims): AuthClaims,
+    State(s): State<AppState>,
     Json(b): Json<InvokeBody>,
 ) -> impl IntoResponse {
+    if !s.hub_admin_engagements.contains(&claims.engagement_id) {
+        return (StatusCode::FORBIDDEN, "hub admin access required").into_response();
+    }
     let ks = match galvo_hub::HubKeystore::load(&galvo_hub::keystore_path()) {
         Ok(ks) => ks,
         Err(_) => {
