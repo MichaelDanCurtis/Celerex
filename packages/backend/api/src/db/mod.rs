@@ -280,7 +280,6 @@ pub async fn engagement_for_project(pool: &PgPool, project_id: Uuid) -> sqlx::Re
 }
 
 /// Engagement that owns a plugin install.
-#[allow(dead_code)]
 pub async fn engagement_for_install(pool: &PgPool, install_id: Uuid) -> sqlx::Result<Option<Uuid>> {
     sqlx::query_scalar::<_, Uuid>("SELECT engagement_id FROM plugin_installs WHERE id = $1")
         .bind(install_id)

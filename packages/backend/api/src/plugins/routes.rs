@@ -39,11 +39,19 @@ pub struct CredBody {
 }
 
 pub async fn upsert_credentials(
-    _a: AuthClaims,
+    a: AuthClaims,
     State(s): State<AppState>,
     Path(install): Path<Uuid>,
     Json(b): Json<CredBody>,
 ) -> impl IntoResponse {
+    let owner = match crate::db::engagement_for_install(&s.pool, install).await {
+        Ok(Some(v)) => v,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    };
+    if owner != a.0.engagement_id {
+        return (StatusCode::FORBIDDEN, "forbidden").into_response();
+    }
     let pt = serde_json::to_vec(&b.payload).unwrap();
     let blob = match s.credentials.seal(&pt).await {
         Ok(b) => b,
