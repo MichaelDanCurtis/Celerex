@@ -34,6 +34,24 @@ pub fn verify(token: &str, secret: &str) -> Result<Claims, jsonwebtoken::errors:
     Ok(data.claims)
 }
 
+/// The HS256 signing/verifying secret. Required in production; tests fall back
+/// to a fixed value so the lib's own unit tests need no env setup.
+pub(crate) fn jwt_secret() -> String {
+    if let Ok(s) = std::env::var("CELEREX_JWT_SECRET") {
+        if !s.is_empty() {
+            return s;
+        }
+    }
+    #[cfg(test)]
+    {
+        "test-secret".to_string()
+    }
+    #[cfg(not(test))]
+    {
+        panic!("CELEREX_JWT_SECRET must be set (refusing to start with an insecure default)");
+    }
+}
+
 /// Mint a session JWT for a real authenticated user. `sub` is the user's email;
 /// `engagement_id` is the tenant key the rest of the API authorizes against.
 pub fn mint(engagement_id: Uuid, sub: &str, ttl_secs: i64) -> String {
@@ -43,7 +61,7 @@ pub fn mint(engagement_id: Uuid, sub: &str, ttl_secs: i64) -> String {
         "engagement_id": engagement_id,
         "exp": (chrono::Utc::now().timestamp() + ttl_secs),
     });
-    let key = std::env::var("CELEREX_JWT_SECRET").unwrap_or_else(|_| "test-secret".into());
+    let key = jwt_secret();
     encode(&Header::default(), &claims, &EncodingKey::from_secret(key.as_bytes())).unwrap()
 }
 
@@ -59,11 +77,26 @@ pub fn mint_scoped(engagement_id: Uuid, sub: &str, scope: &str, ttl_secs: i64) -
         "scope": scope,
         "exp": (chrono::Utc::now().timestamp() + ttl_secs),
     });
-    let key = std::env::var("CELEREX_JWT_SECRET").unwrap_or_else(|_| "test-secret".into());
+    let key = jwt_secret();
     encode(&Header::default(), &claims, &EncodingKey::from_secret(key.as_bytes())).unwrap()
 }
 
 #[doc(hidden)]
 pub fn mint_for_tests(engagement_id: Uuid) -> String {
     mint(engagement_id, "test-user", 3600)
+}
+
+#[cfg(test)]
+mod secret_tests {
+    use super::*;
+
+    #[test]
+    fn mint_then_verify_roundtrips_with_env_secret() {
+        // SAFETY: single-threaded unit test; no other threads read this var.
+        unsafe { std::env::set_var("CELEREX_JWT_SECRET", "unit-secret"); }
+        let eng = Uuid::new_v4();
+        let t = mint(eng, "u@x.test", 3600);
+        let claims = verify(&t, &jwt_secret()).unwrap();
+        assert_eq!(claims.engagement_id, eng);
+    }
 }

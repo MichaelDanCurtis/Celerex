@@ -15,8 +15,7 @@ fn claims_from_parts(parts: &Parts) -> Result<Claims, (StatusCode, &'static str)
     let token = header
         .strip_prefix("Bearer ")
         .ok_or((StatusCode::UNAUTHORIZED, "expected Bearer scheme"))?;
-    let secret = std::env::var("CELEREX_JWT_SECRET")
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "JWT secret unset"))?;
+    let secret = crate::auth::jwt::jwt_secret();
     verify(token, &secret).map_err(|_| (StatusCode::UNAUTHORIZED, "invalid token"))
 }
 
