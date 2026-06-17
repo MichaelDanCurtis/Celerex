@@ -80,9 +80,10 @@ pub fn apply_agent_type_defaults(graph: &mut serde_json::Value, agent_type: &str
 ///
 /// Handlers only see node `config` + `inputs` (not run context). `doc` create
 /// ops need the tenant id to place the document; `llm` nodes need it so the
-/// engagement-aware handler can resolve a per-engagement provider key. The id
-/// is security-relevant: we ALWAYS overwrite it with the run's true engagement
-/// so a flow author can't pin a foreign engagement_id and cross tenants.
+/// engagement-aware handler can resolve a per-engagement provider key; `memory`
+/// nodes need it to scope store/search to the tenant (no cross-tenant recall).
+/// The id is security-relevant: we ALWAYS overwrite it with the run's true
+/// engagement so a flow author can't pin a foreign engagement_id and cross tenants.
 pub fn apply_doc_engagement(graph: &mut serde_json::Value, engagement_id: Uuid) {
     let Some(nodes) = graph.get_mut("nodes").and_then(|n| n.as_array_mut()) else {
         return;
@@ -92,7 +93,7 @@ pub fn apply_doc_engagement(graph: &mut serde_json::Value, engagement_id: Uuid) 
             .get("config")
             .and_then(|c| c.get("execution"))
             .and_then(|e| e.as_str());
-        if exec != Some("doc") && exec != Some("llm") {
+        if exec != Some("doc") && exec != Some("llm") && exec != Some("memory") {
             continue;
         }
         let Some(cfg) = node.get_mut("config").and_then(|c| c.as_object_mut()) else {
