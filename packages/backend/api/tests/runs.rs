@@ -46,6 +46,7 @@ fn build_router(pool: PgPool) -> Router {
         providers: Arc::new(Vec::new()),
         providers_registry: Arc::new(celerex_orchestrator::llm::ProviderRegistry::new()),
         provider_keys,
+        hub_admin_engagements: Default::default(),
     };
     Router::new()
         .route("/api/runs", get(celerex_api::runs::routes::list))

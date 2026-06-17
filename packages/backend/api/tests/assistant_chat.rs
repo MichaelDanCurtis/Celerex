@@ -83,6 +83,7 @@ fn build_state(pool: PgPool, registry: Arc<ProviderRegistry>, provider_ids: Vec<
         providers: Arc::new(provider_ids),
         providers_registry: registry,
         provider_keys,
+        hub_admin_engagements: Default::default(),
     }
 }
 

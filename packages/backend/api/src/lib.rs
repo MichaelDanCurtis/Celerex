@@ -55,6 +55,10 @@ pub struct AppState {
     /// + retrieval. Actual override-at-call-time wiring into the LlmHandler
     /// is a follow-up.
     pub provider_keys: Arc<dyn ProviderKeysStore>,
+    /// Engagements permitted to drive Galvo Hub federation (register/invoke/
+    /// status). Parsed once at boot from `CELEREX_HUB_ADMIN_ENGAGEMENTS`;
+    /// empty/unset = deny all.
+    pub hub_admin_engagements: std::collections::HashSet<uuid::Uuid>,
 }
 
 async fn list_providers(State(state): State<AppState>) -> Json<serde_json::Value> {
@@ -371,6 +375,7 @@ fn build_app_with_dispatcher_inner(
             providers: Arc::new(provider_ids),
             providers_registry,
             provider_keys,
+            hub_admin_engagements: hub_admin_engagements(),
         })
         .layer(cors)
 }
@@ -387,6 +392,25 @@ fn allowed_origins() -> Vec<axum::http::HeaderValue> {
         list
     };
     chosen.iter().filter_map(|o| o.parse::<axum::http::HeaderValue>().ok()).collect()
+}
+
+/// Parse CELEREX_HUB_ADMIN_ENGAGEMENTS (comma-separated engagement UUIDs) into
+/// the set of engagements allowed to drive Galvo Hub federation. Malformed
+/// entries are skipped with a warning. Empty/unset → empty set → deny all.
+fn hub_admin_engagements() -> std::collections::HashSet<uuid::Uuid> {
+    std::env::var("CELEREX_HUB_ADMIN_ENGAGEMENTS")
+        .unwrap_or_default()
+        .split(',')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .filter_map(|s| match uuid::Uuid::parse_str(s) {
+            Ok(u) => Some(u),
+            Err(_) => {
+                tracing::warn!(value = %s, "ignoring malformed CELEREX_HUB_ADMIN_ENGAGEMENTS entry");
+                None
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]

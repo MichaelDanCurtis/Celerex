@@ -61,6 +61,7 @@ fn build_router(pool: PgPool, provider_ids: Vec<String>) -> Router {
         providers: Arc::new(provider_ids),
         providers_registry: Arc::new(ProviderRegistry::new()),
         provider_keys,
+        hub_admin_engagements: Default::default(),
     };
     Router::new()
         .route("/api/metrics/summary", get(celerex_api::metrics::summary))

@@ -91,6 +91,7 @@ fn build_app(pool: PgPool, dispatcher: Arc<Dispatcher>) -> Router {
         providers: Arc::new(vec![]),
         providers_registry: Arc::new(ProviderRegistry::new()),
         provider_keys,
+        hub_admin_engagements: Default::default(),
     };
     Router::new()
         .route("/api/projects", post(celerex_api::projects::create))

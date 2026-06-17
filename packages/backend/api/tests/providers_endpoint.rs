@@ -49,6 +49,7 @@ fn build_state(pool: PgPool, provider_ids: Vec<String>) -> AppState {
         providers: Arc::new(provider_ids),
         providers_registry: Arc::new(ProviderRegistry::new()),
         provider_keys,
+        hub_admin_engagements: Default::default(),
     }
 }
 

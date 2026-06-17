@@ -134,6 +134,7 @@ fn build_app(
         providers: Arc::new(provider_ids),
         providers_registry: registry,
         provider_keys,
+        hub_admin_engagements: Default::default(),
     };
     Router::new()
         .route(
