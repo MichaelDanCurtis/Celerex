@@ -44,7 +44,6 @@ pub fn verify_with_jwks(token: &str, jwks: &JwkSet) -> Result<WorkosClaims, Stri
 }
 
 /// Fetch JWKS then verify. (Per-call fetch is fine for slice 1; caching is a later optimization.)
-#[allow(dead_code)]
 pub async fn verify_access_token(http: &reqwest::Client, token: &str) -> Result<WorkosClaims, String> {
     let jwks = fetch_jwks(http).await?;
     verify_with_jwks(token, &jwks)

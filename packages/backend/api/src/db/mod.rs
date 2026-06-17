@@ -219,7 +219,6 @@ pub async fn find_user_for_login(pool: &PgPool, email: &str) -> sqlx::Result<Opt
 }
 
 /// Engagement (id+name) owned by the user with this WorkOS id, if provisioned.
-#[allow(dead_code)]
 pub async fn find_engagement_by_workos_user(
     pool: &PgPool,
     workos_user_id: &str,
@@ -235,7 +234,6 @@ pub async fn find_engagement_by_workos_user(
 }
 
 /// Create a WorkOS-backed user (no local password) in a fresh engagement.
-#[allow(dead_code)]
 pub async fn create_workos_user(
     pool: &PgPool,
     email: &str,
