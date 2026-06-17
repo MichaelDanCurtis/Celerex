@@ -161,6 +161,8 @@ fn route_chain() -> Router<AppState> {
 }
 
 pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>) -> Router {
+    // Fail fast at boot: panics with a clear message if CELEREX_JWT_SECRET is unset/empty in production.
+    let _ = crate::auth::jwt::jwt_secret();
     let mut dispatcher = Dispatcher::new();
     let mut registry = ProviderRegistry::new();
     let mut provider_ids: Vec<String> = Vec::new();
@@ -343,11 +345,12 @@ fn build_app_with_dispatcher_inner(
         }
         .spawn();
     }
-    // Permissive CORS so the Vite dev frontend (a different origin, :5173) can
-    // call the API (:3001). Auth is Bearer-token (not cookies), so `Any` origin
-    // is safe — there are no ambient credentials to leak cross-site.
+    // CORS allowlist: origins are read from CELEREX_ALLOWED_ORIGINS (comma-separated).
+    // Falls back to localhost dev defaults when the var is unset/empty.
+    // `allow_methods`/`allow_headers` stay permissive — auth is Bearer (no
+    // ambient credentials), so only the origin requires explicit enumeration.
     let cors = CorsLayer::new()
-        .allow_origin(Any)
+        .allow_origin(tower_http::cors::AllowOrigin::list(allowed_origins()))
         .allow_methods(Any)
         .allow_headers(Any);
     route_chain()
@@ -363,4 +366,33 @@ fn build_app_with_dispatcher_inner(
             provider_keys,
         })
         .layer(cors)
+}
+
+/// Parse CELEREX_ALLOWED_ORIGINS (comma-separated) into explicit origins.
+/// Empty/unset → dev defaults. Never returns `Any` (public sites must not be open).
+fn allowed_origins() -> Vec<axum::http::HeaderValue> {
+    let raw = std::env::var("CELEREX_ALLOWED_ORIGINS").unwrap_or_default();
+    let list: Vec<String> = raw.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+    let defaults = ["http://localhost:5173", "http://localhost:3001"];
+    let chosen: Vec<String> = if list.is_empty() {
+        defaults.iter().map(|s| s.to_string()).collect()
+    } else {
+        list
+    };
+    chosen.iter().filter_map(|o| o.parse::<axum::http::HeaderValue>().ok()).collect()
+}
+
+#[cfg(test)]
+mod cors_tests {
+    use super::*;
+    #[test]
+    fn parses_comma_list_and_defaults() {
+        // SAFETY: single-process test.
+        unsafe { std::env::set_var("CELEREX_ALLOWED_ORIGINS", "https://designer.ailuxis.com, https://x.test"); }
+        let v = allowed_origins();
+        assert_eq!(v.len(), 2);
+        assert!(v.iter().any(|h| h.to_str().unwrap() == "https://designer.ailuxis.com"));
+        unsafe { std::env::set_var("CELEREX_ALLOWED_ORIGINS", ""); }
+        assert_eq!(allowed_origins().len(), 2); // dev defaults
+    }
 }
