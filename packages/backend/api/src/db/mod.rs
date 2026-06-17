@@ -272,7 +272,6 @@ pub async fn engagement_for_block(pool: &PgPool, block_id: Uuid) -> sqlx::Result
 }
 
 /// Engagement that owns a project.
-#[allow(dead_code)]
 pub async fn engagement_for_project(pool: &PgPool, project_id: Uuid) -> sqlx::Result<Option<Uuid>> {
     sqlx::query_scalar::<_, Uuid>("SELECT engagement_id FROM projects WHERE id = $1")
         .bind(project_id)
