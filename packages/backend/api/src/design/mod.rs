@@ -7,6 +7,7 @@
 //! serves a stored asset. See docs/plans/2026-06-12-design-handoff-contract.md.
 
 pub mod automations;
+pub mod copilot;
 pub mod deploy;
 pub mod proxy;
 pub mod rituals;

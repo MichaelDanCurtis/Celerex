@@ -89,6 +89,7 @@ impl EngagementLlmHandler {
                 self.bases.gemini.clone(),
                 key,
             ))),
+            "copilot" => Some(Arc::new(crate::llm::copilot::CopilotProvider::new(key))),
             _ => None,
         }
     }

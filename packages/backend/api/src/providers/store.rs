@@ -26,7 +26,7 @@ use uuid::Uuid;
 
 /// Provider ids we currently support per-engagement keys for. Anything not in
 /// this list is rejected at the route layer with 400.
-pub const SUPPORTED_PROVIDERS: &[&str] = &["anthropic", "openai", "kimi", "gemini"];
+pub const SUPPORTED_PROVIDERS: &[&str] = &["anthropic", "openai", "kimi", "gemini", "copilot"];
 
 /// Safe-to-render metadata about a stored provider key. The plaintext key is
 /// intentionally not part of this struct.

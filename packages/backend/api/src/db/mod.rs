@@ -359,3 +359,51 @@ pub async fn upsert_settings(pool: &PgPool, engagement_id: Uuid, settings: &serd
     .await?;
     Ok(())
 }
+
+pub async fn upsert_copilot_login(
+    pool: &PgPool,
+    engagement_id: Uuid,
+    device_code: &str,
+    user_code: &str,
+    verification_uri: &str,
+    expires_at: DateTime<Utc>,
+) -> sqlx::Result<()> {
+    sqlx::query(
+        "INSERT INTO copilot_logins (engagement_id, device_code, user_code, verification_uri, status, expires_at)
+         VALUES ($1,$2,$3,$4,'pending',$5)
+         ON CONFLICT (engagement_id) DO UPDATE SET device_code=$2, user_code=$3, verification_uri=$4, status='pending', expires_at=$5, updated_at=NOW()",
+    )
+    .bind(engagement_id)
+    .bind(device_code)
+    .bind(user_code)
+    .bind(verification_uri)
+    .bind(expires_at)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn set_copilot_login_status(
+    pool: &PgPool,
+    engagement_id: Uuid,
+    status: &str,
+) -> sqlx::Result<()> {
+    sqlx::query("UPDATE copilot_logins SET status=$2, updated_at=NOW() WHERE engagement_id=$1")
+        .bind(engagement_id)
+        .bind(status)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+pub async fn get_copilot_login(
+    pool: &PgPool,
+    engagement_id: Uuid,
+) -> sqlx::Result<Option<(String, String, String)>> {
+    sqlx::query_as::<_, (String, String, String)>(
+        "SELECT user_code, verification_uri, status FROM copilot_logins WHERE engagement_id=$1",
+    )
+    .bind(engagement_id)
+    .fetch_optional(pool)
+    .await
+}

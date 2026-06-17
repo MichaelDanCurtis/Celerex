@@ -47,6 +47,7 @@ fn build_engagement_provider(provider_id: &str, key: String) -> Option<Arc<dyn P
             "https://generativelanguage.googleapis.com".to_string(),
             key,
         ))),
+        "copilot" => Some(Arc::new(crate::llm::copilot::CopilotProvider::new(key))),
         _ => None,
     }
 }
