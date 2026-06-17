@@ -218,6 +218,41 @@ pub async fn find_user_for_login(pool: &PgPool, email: &str) -> sqlx::Result<Opt
     }))
 }
 
+/// Engagement (id+name) owned by the user with this WorkOS id, if provisioned.
+#[allow(dead_code)]
+pub async fn find_engagement_by_workos_user(
+    pool: &PgPool,
+    workos_user_id: &str,
+) -> sqlx::Result<Option<(Uuid, String)>> {
+    sqlx::query_as::<_, (Uuid, String)>(
+        "SELECT e.id, e.name
+         FROM users u JOIN engagements e ON e.id = u.engagement_id
+         WHERE u.workos_user_id = $1",
+    )
+    .bind(workos_user_id)
+    .fetch_optional(pool)
+    .await
+}
+
+/// Create a WorkOS-backed user (no local password) in a fresh engagement.
+#[allow(dead_code)]
+pub async fn create_workos_user(
+    pool: &PgPool,
+    email: &str,
+    workos_user_id: &str,
+    engagement_id: Uuid,
+) -> sqlx::Result<Uuid> {
+    sqlx::query_scalar::<_, Uuid>(
+        "INSERT INTO users (email, password_hash, workos_user_id, engagement_id)
+         VALUES ($1, NULL, $2, $3) RETURNING id",
+    )
+    .bind(email)
+    .bind(workos_user_id)
+    .bind(engagement_id)
+    .fetch_one(pool)
+    .await
+}
+
 pub async fn install_plugin(
     pool: &PgPool,
     eng: Uuid,
