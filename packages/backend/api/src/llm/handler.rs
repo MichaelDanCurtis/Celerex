@@ -52,7 +52,11 @@ pub struct EngagementLlmHandler {
 
 impl EngagementLlmHandler {
     pub fn new(registry: Arc<ProviderRegistry>, keys: Arc<dyn ProviderKeysStore>) -> Self {
-        Self { registry, keys, bases: ProviderBases::default() }
+        Self {
+            registry,
+            keys,
+            bases: ProviderBases::default(),
+        }
     }
 
     pub fn with_bases(
@@ -60,15 +64,31 @@ impl EngagementLlmHandler {
         keys: Arc<dyn ProviderKeysStore>,
         bases: ProviderBases,
     ) -> Self {
-        Self { registry, keys, bases }
+        Self {
+            registry,
+            keys,
+            bases,
+        }
     }
 
     fn build_provider(&self, provider_id: &str, key: String) -> Option<Arc<dyn Provider>> {
         match provider_id {
-            "anthropic" => Some(Arc::new(AnthropicClient::with_base_url(self.bases.anthropic.clone(), key))),
-            "openai" => Some(Arc::new(OpenAiProvider::with_base_url(self.bases.openai.clone(), key))),
-            "kimi" => Some(Arc::new(KimiProvider::with_base_url(self.bases.kimi.clone(), key))),
-            "gemini" => Some(Arc::new(GeminiProvider::with_base_url(self.bases.gemini.clone(), key))),
+            "anthropic" => Some(Arc::new(AnthropicClient::with_base_url(
+                self.bases.anthropic.clone(),
+                key,
+            ))),
+            "openai" => Some(Arc::new(OpenAiProvider::with_base_url(
+                self.bases.openai.clone(),
+                key,
+            ))),
+            "kimi" => Some(Arc::new(KimiProvider::with_base_url(
+                self.bases.kimi.clone(),
+                key,
+            ))),
+            "gemini" => Some(Arc::new(GeminiProvider::with_base_url(
+                self.bases.gemini.clone(),
+                key,
+            ))),
             _ => None,
         }
     }
@@ -77,10 +97,19 @@ impl EngagementLlmHandler {
 #[async_trait]
 impl Handler for EngagementLlmHandler {
     async fn invoke(&self, config: Value, inputs: Value) -> Result<Value, DispatchError> {
-        let provider_id = config.get("provider_id").and_then(|v| v.as_str()).unwrap_or("default");
-        let model = config.get("model").and_then(|v| v.as_str()).unwrap_or("claude-sonnet-4-6");
+        let provider_id = config
+            .get("provider_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("default");
+        let model = config
+            .get("model")
+            .and_then(|v| v.as_str())
+            .unwrap_or("claude-sonnet-4-6");
         let tools = config.get("tools").cloned().unwrap_or(Value::Array(vec![]));
-        let messages = inputs.get("messages").cloned().unwrap_or(Value::Array(vec![]));
+        let messages = inputs
+            .get("messages")
+            .cloned()
+            .unwrap_or(Value::Array(vec![]));
         let mut last_err: Option<String> = None;
 
         // 1. Per-engagement key — only for an explicitly named real provider.
@@ -107,11 +136,26 @@ impl Handler for EngagementLlmHandler {
             }
         }
 
-        // 2. House registry fallback + explicit fallback chain (original behaviour).
+        // 2. House registry fallback + explicit fallback chain (original behaviour),
+        // gated behind CELEREX_HOUSE_MODE (default OFF). With house mode off, a call
+        // that found no per-engagement key fails closed instead of silently spending
+        // the operator's shared env key (cross-tenant billing).
+        let house_mode = std::env::var("CELEREX_HOUSE_MODE")
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
+        if !house_mode {
+            return Err(DispatchError::Handler(last_err.unwrap_or_else(|| {
+                format!("no key configured for provider '{provider_id}'")
+            })));
+        }
         let fallback_ids: Vec<String> = config
             .get("provider_fallback_ids")
             .and_then(|v| v.as_array())
-            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
         let mut chain = vec![provider_id.to_string()];
         chain.extend(fallback_ids);
@@ -148,14 +192,25 @@ mod tests {
     struct MemKeys(Mutex<HashMap<(Uuid, String), String>>);
     #[async_trait]
     impl ProviderKeysStore for MemKeys {
-        async fn set(&self, e: Uuid, p: &str, k: &str) -> Result<crate::providers::store::ProviderKeyMeta, String> {
-            self.0.lock().unwrap().insert((e, p.to_string()), k.to_string());
+        async fn set(
+            &self,
+            e: Uuid,
+            p: &str,
+            k: &str,
+        ) -> Result<crate::providers::store::ProviderKeyMeta, String> {
+            self.0
+                .lock()
+                .unwrap()
+                .insert((e, p.to_string()), k.to_string());
             Err("unused in tests".into())
         }
         async fn get(&self, e: Uuid, p: &str) -> Result<Option<String>, String> {
             Ok(self.0.lock().unwrap().get(&(e, p.to_string())).cloned())
         }
-        async fn list_for_engagement(&self, _e: Uuid) -> Result<Vec<crate::providers::store::ProviderKeyMeta>, String> {
+        async fn list_for_engagement(
+            &self,
+            _e: Uuid,
+        ) -> Result<Vec<crate::providers::store::ProviderKeyMeta>, String> {
             Ok(vec![])
         }
         async fn delete(&self, _e: Uuid, _p: &str) -> Result<bool, String> {
@@ -167,7 +222,9 @@ mod tests {
     #[async_trait]
     impl Provider for StubProvider {
         async fn complete(&self, _m: &str, _msgs: Value, _t: Value) -> Result<Completion, String> {
-            Ok(Completion { raw: json!({ "source": "house-registry" }) })
+            Ok(Completion {
+                raw: json!({ "source": "house-registry" }),
+            })
         }
     }
 
@@ -185,10 +242,14 @@ mod tests {
             .await;
 
         let eng = Uuid::new_v4();
-        let keys = MemKeys(Mutex::new(HashMap::from([
-            ((eng, "anthropic".to_string()), "sk-engagement-anthropic".to_string()),
-        ])));
-        let bases = ProviderBases { anthropic: server.uri(), ..Default::default() };
+        let keys = MemKeys(Mutex::new(HashMap::from([(
+            (eng, "anthropic".to_string()),
+            "sk-engagement-anthropic".to_string(),
+        )])));
+        let bases = ProviderBases {
+            anthropic: server.uri(),
+            ..Default::default()
+        };
         let handler = EngagementLlmHandler::with_bases(
             Arc::new(ProviderRegistry::new()),
             Arc::new(keys),
@@ -207,6 +268,11 @@ mod tests {
 
     #[tokio::test]
     async fn falls_back_to_house_registry_without_engagement_key() {
+        // House fallback is gated behind CELEREX_HOUSE_MODE (default off).
+        // SAFETY: set before the handler reads it; test asserts the house path.
+        unsafe {
+            std::env::set_var("CELEREX_HOUSE_MODE", "true");
+        }
         let mut registry = ProviderRegistry::new();
         registry.register("default", Arc::new(StubProvider));
         let handler = EngagementLlmHandler::new(
@@ -228,6 +294,11 @@ mod tests {
     async fn named_provider_without_stored_key_falls_back_to_house() {
         // provider_id "anthropic" but no engagement key stored AND it's also
         // registered in the house registry → uses house, no error.
+        // House fallback requires CELEREX_HOUSE_MODE on.
+        // SAFETY: set before the handler reads it; test asserts the house path.
+        unsafe {
+            std::env::set_var("CELEREX_HOUSE_MODE", "true");
+        }
         let mut registry = ProviderRegistry::new();
         registry.register("anthropic", Arc::new(StubProvider));
         let handler = EngagementLlmHandler::new(
