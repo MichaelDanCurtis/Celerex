@@ -291,7 +291,6 @@ pub async fn engagement_for_install(pool: &PgPool, install_id: Uuid) -> sqlx::Re
 }
 
 /// Engagement that owns a run.
-#[allow(dead_code)]
 pub async fn engagement_for_run(pool: &PgPool, run_id: Uuid) -> sqlx::Result<Option<Uuid>> {
     sqlx::query_scalar::<_, Uuid>("SELECT engagement_id FROM runs WHERE id = $1")
         .bind(run_id)
