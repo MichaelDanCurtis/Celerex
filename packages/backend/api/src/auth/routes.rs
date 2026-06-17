@@ -100,3 +100,54 @@ pub async fn login(
         engagement: LoginEngagement { id: user.engagement_id, name: user.engagement_name },
     }))
 }
+
+#[derive(Deserialize)]
+pub struct WorkosLoginRequest {
+    /// Display email from the WorkOS user object (identity is the validated token `sub`).
+    pub email: String,
+}
+
+/// `POST /api/auth/workos` — PUBLIC. Validate a WorkOS access token (Bearer),
+/// find-or-provision the personal engagement keyed to the WorkOS user id, then
+/// mint the EXISTING HS256 session JWT so existing protected routes accept it.
+/// Identity is the validated token `sub`; the body `email` is a display label only.
+pub async fn workos_login(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+    Json(body): Json<WorkosLoginRequest>,
+) -> Result<Json<LoginResponse>, (StatusCode, String)> {
+    let token = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .ok_or((StatusCode::UNAUTHORIZED, "missing bearer token".to_string()))?;
+
+    let http = reqwest::Client::new();
+    let claims = crate::auth::workos::verify_access_token(&http, token)
+        .await
+        .map_err(|e| (StatusCode::UNAUTHORIZED, e))?;
+
+    let (engagement_id, engagement_name) =
+        match db::find_engagement_by_workos_user(&state.pool, &claims.sub)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        {
+            Some(found) => found,
+            None => {
+                let name = format!("{}'s workspace", body.email.trim());
+                let eng = db::create_engagement(&state.pool, &name)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                db::create_workos_user(&state.pool, body.email.trim(), &claims.sub, eng.id)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                (eng.id, eng.name)
+            }
+        };
+
+    let token = jwt::mint(engagement_id, &claims.sub, SESSION_TTL_SECS);
+    Ok(Json(LoginResponse {
+        token,
+        engagement: LoginEngagement { id: engagement_id, name: engagement_name },
+    }))
+}

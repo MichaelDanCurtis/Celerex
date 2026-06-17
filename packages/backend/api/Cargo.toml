@@ -52,6 +52,8 @@ serde_json = "1"
 axum-test = "17"
 async-trait = { workspace = true }
 wiremock = "0.6"
+rsa = "0.9"
+rand = "0.8"
 celerex-orchestrator = { path = "../agent-orchestrator", features = ["test-support"] }
 # Run the real Galvo Hub in-process for the mTLS A2A federation round-trip test.
 galvo-hub = { path = "../../../../lucidity/Galvo/engine/galvo-hub" }
