@@ -90,6 +90,9 @@ impl EngagementLlmHandler {
                 key,
             ))),
             "copilot" => Some(Arc::new(crate::llm::copilot::CopilotProvider::new(key))),
+            "codex" => crate::llm::codex::CodexProvider::from_blob(&key)
+                .ok()
+                .map(|p| Arc::new(p) as Arc<dyn Provider>),
             _ => None,
         }
     }
