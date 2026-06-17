@@ -257,10 +257,25 @@ pub async fn install_plugin(
     plugin_id: &str,
     manifest: &serde_json::Value,
 ) -> sqlx::Result<Uuid> {
-    let row: (Uuid,) = sqlx::query_as(
-        "INSERT INTO plugin_installs (engagement_id, plugin_id, manifest) VALUES ($1, $2, $3) RETURNING id"
-    ).bind(eng).bind(plugin_id).bind(manifest).fetch_one(pool).await?;
-    Ok(row.0)
+    let (id, _token) = install_plugin_full(pool, eng, plugin_id, manifest).await?;
+    Ok(id)
+}
+
+/// Like [`install_plugin`] but also returns the generated `webhook_token` so the create API
+/// can surface it to the owner (who needs it to build the inbound webhook URL). The token is
+/// the per-install inbound secret used to route webhooks to the correct engagement; it is
+/// generated app-side (explicit, not relying on the SQL DEFAULT) and treated as a credential.
+pub async fn install_plugin_full(
+    pool: &PgPool,
+    eng: Uuid,
+    plugin_id: &str,
+    manifest: &serde_json::Value,
+) -> sqlx::Result<(Uuid, String)> {
+    let webhook_token = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
+    let row: (Uuid, String) = sqlx::query_as(
+        "INSERT INTO plugin_installs (engagement_id, plugin_id, manifest, webhook_token) VALUES ($1, $2, $3, $4) RETURNING id, webhook_token"
+    ).bind(eng).bind(plugin_id).bind(manifest).bind(&webhook_token).fetch_one(pool).await?;
+    Ok(row)
 }
 
 #[derive(sqlx::FromRow, Serialize, Clone)]
@@ -270,11 +285,14 @@ pub struct PluginInstall {
     pub plugin_id: String,
     pub manifest: serde_json::Value,
     pub installed_at: DateTime<Utc>,
+    /// Per-install inbound webhook secret. Surfaced only on engagement-scoped authenticated
+    /// reads so the owner can build the webhook URL; never broadcast or logged.
+    pub webhook_token: String,
 }
 
 pub async fn list_plugins(pool: &PgPool, eng: Uuid) -> sqlx::Result<Vec<PluginInstall>> {
     sqlx::query_as::<_, PluginInstall>(
-        "SELECT id, engagement_id, plugin_id, manifest, installed_at FROM plugin_installs
+        "SELECT id, engagement_id, plugin_id, manifest, installed_at, webhook_token FROM plugin_installs
          WHERE engagement_id = $1 ORDER BY installed_at DESC"
     ).bind(eng).fetch_all(pool).await
 }

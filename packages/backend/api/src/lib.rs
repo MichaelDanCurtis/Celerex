@@ -97,7 +97,7 @@ fn route_chain() -> Router<AppState> {
         .route("/api/docs/{doc_id}/blocks/{block_id}", patch(docs::replace_block))
         .route("/api/plugins", get(plugins::routes::list).post(plugins::routes::install))
         .route("/api/plugins/{id}/credentials", put(plugins::routes::upsert_credentials))
-        .route("/api/webhooks/{plugin_id}/{event}", post(webhooks::ingest))
+        .route("/api/webhooks/{token}/{event}", post(webhooks::ingest))
         .route("/api/project_members", post(project_members::routes::create))
         .route(
             "/api/project_members/fleet",
