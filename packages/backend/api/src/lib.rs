@@ -18,6 +18,7 @@ pub mod llm;
 pub mod scheduler;
 pub mod project_members;
 pub mod notifiers;
+pub mod settings;
 
 use std::sync::Arc;
 use axum::{Router, routing::{any, get, patch, post, put}, Json, extract::State};
@@ -159,6 +160,7 @@ fn route_chain() -> Router<AppState> {
         .route("/api/assistant/chat", post(assistant::chat))
         .route("/api/assistant/chat/stream", post(assistant::chat_stream))
         .route("/api/metrics/summary", get(metrics::summary))
+        .route("/api/settings", get(settings::get_settings).put(settings::put_settings))
 }
 
 pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>) -> Router {

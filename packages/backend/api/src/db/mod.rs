@@ -338,7 +338,6 @@ pub async fn engagement_for_run(pool: &PgPool, run_id: Uuid) -> sqlx::Result<Opt
 // ---- Per-engagement settings (0019) -------------------------------------
 
 /// The settings blob for an engagement (defaults to `{}` when no row exists).
-#[allow(dead_code)]
 pub async fn get_settings(pool: &PgPool, engagement_id: Uuid) -> sqlx::Result<serde_json::Value> {
     let row: Option<(serde_json::Value,)> =
         sqlx::query_as("SELECT settings FROM engagement_settings WHERE engagement_id = $1")
@@ -349,7 +348,6 @@ pub async fn get_settings(pool: &PgPool, engagement_id: Uuid) -> sqlx::Result<se
 }
 
 /// Upsert the settings blob for an engagement.
-#[allow(dead_code)]
 pub async fn upsert_settings(pool: &PgPool, engagement_id: Uuid, settings: &serde_json::Value) -> sqlx::Result<()> {
     sqlx::query(
         "INSERT INTO engagement_settings (engagement_id, settings) VALUES ($1, $2)
