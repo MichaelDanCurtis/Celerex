@@ -19,7 +19,39 @@ use celerex_orchestrator::{
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use tower::util::ServiceExt;
+use uuid::Uuid;
 use wiremock::{Mock, MockServer, ResponseTemplate, matchers::{method, path}};
+
+#[derive(serde::Serialize)]
+struct TestClaims {
+    sub: String,
+    engagement_id: String,
+    project_id: Option<String>,
+    exp: usize,
+}
+
+// SAFETY: tests run single-threaded at setup; JWT secret matches start_test_db().
+// The assistant is now authenticated + engagement-scoped, so every request needs
+// a bearer token. These tests exercise the house-registry path, so they also flip
+// CELEREX_HOUSE_MODE on.
+fn token(eng: Uuid) -> String {
+    unsafe {
+        std::env::set_var("CELEREX_JWT_SECRET", "test-secret");
+        std::env::set_var("CELEREX_HOUSE_MODE", "true");
+    }
+    let c = TestClaims {
+        sub: "u".into(),
+        engagement_id: eng.to_string(),
+        project_id: None,
+        exp: (chrono::Utc::now().timestamp() + 3600) as usize,
+    };
+    jsonwebtoken::encode(
+        &jsonwebtoken::Header::default(),
+        &c,
+        &jsonwebtoken::EncodingKey::from_secret(b"test-secret"),
+    )
+    .unwrap()
+}
 
 fn build_state(pool: PgPool, registry: Arc<ProviderRegistry>, provider_ids: Vec<String>) -> AppState {
     let dispatcher = Arc::new(Dispatcher::new());
@@ -116,6 +148,7 @@ async fn assistant_chat_routes_to_default_provider() {
                 .method("POST")
                 .uri("/api/assistant/chat")
                 .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {}", token(Uuid::new_v4())))
                 .body(Body::from(
                     json!({
                         "messages": [{"role": "user", "content": "hi"}]
@@ -129,7 +162,9 @@ async fn assistant_chat_routes_to_default_provider() {
 
     assert_eq!(res.status(), StatusCode::OK);
     let body = body_json(res).await;
-    assert_eq!(body["provider_id"], "default");
+    // Default provider_id is now "anthropic" (a supported real provider). With no
+    // vaulted engagement key and house mode on, it resolves via the house registry.
+    assert_eq!(body["provider_id"], "anthropic");
     assert_eq!(body["model"], "claude-sonnet-4-6");
     assert_eq!(body["raw"]["stop_reason"], "end_turn");
     assert_eq!(body["raw"]["content"][0]["text"], "hello from default");
@@ -181,6 +216,7 @@ async fn assistant_chat_routes_to_explicit_provider() {
                 .method("POST")
                 .uri("/api/assistant/chat")
                 .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {}", token(Uuid::new_v4())))
                 .body(Body::from(
                     json!({
                         "provider_id": "alpha",
@@ -205,6 +241,7 @@ async fn assistant_chat_routes_to_explicit_provider() {
                 .method("POST")
                 .uri("/api/assistant/chat")
                 .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {}", token(Uuid::new_v4())))
                 .body(Body::from(
                     json!({
                         "provider_id": "beta",
@@ -237,6 +274,7 @@ async fn assistant_chat_missing_provider_returns_400() {
                 .method("POST")
                 .uri("/api/assistant/chat")
                 .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {}", token(Uuid::new_v4())))
                 .body(Body::from(
                     json!({
                         "provider_id": "nonexistent",
@@ -286,8 +324,10 @@ async fn assistant_chat_propagates_provider_error() {
                 .method("POST")
                 .uri("/api/assistant/chat")
                 .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {}", token(Uuid::new_v4())))
                 .body(Body::from(
                     json!({
+                        "provider_id": "default",
                         "messages": [{"role": "user", "content": "hi"}]
                     })
                     .to_string(),
@@ -349,8 +389,10 @@ async fn chat_stream_yields_delta_then_done() {
                 .method("POST")
                 .uri("/api/assistant/chat/stream")
                 .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {}", token(Uuid::new_v4())))
                 .body(Body::from(
                     json!({
+                        "provider_id": "default",
                         "messages": [{"role": "user", "content": "hi"}]
                     })
                     .to_string(),

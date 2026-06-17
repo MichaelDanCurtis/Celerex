@@ -234,6 +234,12 @@ async fn body_json(res: axum::response::Response) -> Value {
 
 #[tokio::test]
 async fn e2e_demo_flow_engagement_to_doc() {
+    // The assistant chat step routes through the house registry (provider_id
+    // "default"), so enable house mode for this demo flow.
+    // SAFETY: env set at test start before any handler reads it.
+    unsafe {
+        std::env::set_var("CELEREX_HOUSE_MODE", "true");
+    }
     let db = common::start_test_db().await;
 
     // -- Build the dispatcher: script tick, mock-backed LLM, local doc writer.
@@ -266,11 +272,12 @@ async fn e2e_demo_flow_engagement_to_doc() {
     // engagement's id is what the handler closes over.
 
     // We need the dispatcher to know about the engagement_id at construction
-    // time, so create the demo engagement via HTTP *first*, then build the
-    // dispatcher around its id. We'll wire a temporary app just for the
-    // bootstrap HTTP create — the docs/handler app gets the real engagement.
+    // time. Engagement creation now requires auth (T8 hardening) and the token
+    // itself carries the engagement_id claim — a chicken-and-egg for the very
+    // first engagement — so we seed the demo engagement directly via SQL (the
+    // same pattern the other hardening tests use) and mint a token for it.
 
-    // Step 1: temporary app for engagement+project creation (no LLM needed).
+    // Step 1: temporary app for project creation (no LLM needed).
     let temp_app = build_app(
         db.pool.clone(),
         Arc::new(Dispatcher::new()),
@@ -278,24 +285,14 @@ async fn e2e_demo_flow_engagement_to_doc() {
         vec![],
     );
 
-    let res = temp_app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/engagements")
-                .header("content-type", "application/json")
-                .body(Body::from(json!({"name": "Demo Flow"}).to_string()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(res.status(), StatusCode::CREATED, "create engagement");
-    let body = body_json(res).await;
-    let eng: Uuid = body["id"].as_str().unwrap().parse().unwrap();
-
-    // Mint the token NOW — projects/plugins/members all require auth and
-    // the engagement_id claim is what governs access control.
+    // Seed the demo engagement and mint a token scoped to it. Everything
+    // downstream (projects/plugins/members/runs/docs/assistant) authenticates
+    // with this token; the engagement_id claim governs access control.
+    let eng: Uuid =
+        sqlx::query_scalar("INSERT INTO engagements (name) VALUES ('Demo Flow') RETURNING id")
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
     let token = celerex_api::auth::jwt::mint_for_tests(eng);
 
     let res = temp_app
@@ -566,8 +563,13 @@ async fn e2e_demo_flow_engagement_to_doc() {
                 .method("POST")
                 .uri("/api/assistant/chat")
                 .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {token}"))
                 .body(Body::from(
                     json!({
+                        // "default" is not a real provider id, so the assistant
+                        // skips the per-engagement vault and uses the house
+                        // registry (house mode enabled below).
+                        "provider_id": "default",
                         "messages": [{"role": "user", "content": "demo flow check"}]
                     })
                     .to_string(),
