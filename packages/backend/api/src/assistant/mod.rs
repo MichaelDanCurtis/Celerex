@@ -48,6 +48,9 @@ fn build_engagement_provider(provider_id: &str, key: String) -> Option<Arc<dyn P
             key,
         ))),
         "copilot" => Some(Arc::new(crate::llm::copilot::CopilotProvider::new(key))),
+        "codex" => crate::llm::codex::CodexProvider::from_blob(&key)
+            .ok()
+            .map(|p| Arc::new(p) as Arc<dyn Provider>),
         _ => None,
     }
 }

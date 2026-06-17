@@ -4,7 +4,6 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::sync::Mutex;
 
-#[allow(dead_code)]
 pub const CODEX_CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
 pub const DEFAULT_CODEX_MODEL: &str = "gpt-5.4-mini";
 
