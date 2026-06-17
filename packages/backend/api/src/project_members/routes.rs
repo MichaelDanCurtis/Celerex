@@ -215,6 +215,17 @@ pub async fn run_manual(
     State(s): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
+    // Resolve the member's TRUE owning engagement and run under it — never the
+    // caller's. A caller in a different engagement must not be able to run this
+    // flow (that would execute the owner's graph but stamp/key it to the caller).
+    let owner = match s.members.engagement_id_for(id).await {
+        Ok(v) => v,
+        Err(_) => return StatusCode::NOT_FOUND.into_response(),
+    };
+    if owner != a.0.engagement_id {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"}))).into_response();
+    }
+
     // Pre-validate the graph before the helper tries to compile it, so callers
     // get 400 on a malformed graph instead of 500.
     match s.members.get(id).await {
@@ -239,7 +250,7 @@ pub async fn run_manual(
         s.executor.clone(),
         s.notifiers.clone(),
         id,
-        a.0.engagement_id,
+        owner,
         TRIGGERED_BY_MANUAL,
     )
     .await
