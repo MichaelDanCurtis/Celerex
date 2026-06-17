@@ -334,3 +334,28 @@ pub async fn engagement_for_run(pool: &PgPool, run_id: Uuid) -> sqlx::Result<Opt
         .fetch_optional(pool)
         .await
 }
+
+// ---- Per-engagement settings (0019) -------------------------------------
+
+/// The settings blob for an engagement (defaults to `{}` when no row exists).
+pub async fn get_settings(pool: &PgPool, engagement_id: Uuid) -> sqlx::Result<serde_json::Value> {
+    let row: Option<(serde_json::Value,)> =
+        sqlx::query_as("SELECT settings FROM engagement_settings WHERE engagement_id = $1")
+            .bind(engagement_id)
+            .fetch_optional(pool)
+            .await?;
+    Ok(row.map(|r| r.0).unwrap_or_else(|| serde_json::json!({})))
+}
+
+/// Upsert the settings blob for an engagement.
+pub async fn upsert_settings(pool: &PgPool, engagement_id: Uuid, settings: &serde_json::Value) -> sqlx::Result<()> {
+    sqlx::query(
+        "INSERT INTO engagement_settings (engagement_id, settings) VALUES ($1, $2)
+         ON CONFLICT (engagement_id) DO UPDATE SET settings = $2, updated_at = NOW()",
+    )
+    .bind(engagement_id)
+    .bind(settings)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
