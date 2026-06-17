@@ -262,7 +262,6 @@ pub async fn upsert_credentials(
 // authenticated user's engagement before allowing read/write access.
 
 /// Engagement that owns a document, resolved from one of its blocks (for block-level checks).
-#[allow(dead_code)]
 pub async fn engagement_for_block(pool: &PgPool, block_id: Uuid) -> sqlx::Result<Option<Uuid>> {
     sqlx::query_scalar::<_, Uuid>(
         "SELECT d.engagement_id FROM doc_blocks b JOIN documents d ON d.id = b.document_id WHERE b.id = $1",
