@@ -76,7 +76,7 @@ async fn settings_are_per_engagement_and_isolated() {
         .await;
     assert_eq!(gb.json::<serde_json::Value>()["settings"], serde_json::json!({}));
 
-    // unauthenticated → not 200
+    // unauthenticated → 401 (AuthClaims extractor rejection)
     let anon = server.get("/api/settings").await;
-    assert_ne!(anon.status_code(), axum::http::StatusCode::OK);
+    assert_eq!(anon.status_code(), axum::http::StatusCode::UNAUTHORIZED);
 }

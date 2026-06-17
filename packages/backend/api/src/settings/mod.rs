@@ -1,10 +1,10 @@
+use crate::auth::extractors::AuthClaims;
+use crate::{AppState, db};
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
-use axum::Json;
 use serde::Deserialize;
-use serde_json::{json, Value};
-use crate::auth::extractors::AuthClaims;
-use crate::{db, AppState};
+use serde_json::{Value, json};
 
 pub async fn get_settings(
     a: AuthClaims,
