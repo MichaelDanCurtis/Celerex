@@ -161,6 +161,8 @@ fn route_chain() -> Router<AppState> {
 }
 
 pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>) -> Router {
+    // Fail fast at boot: panics with a clear message if CELEREX_JWT_SECRET is unset/empty in production.
+    let _ = crate::auth::jwt::jwt_secret();
     let mut dispatcher = Dispatcher::new();
     let mut registry = ProviderRegistry::new();
     let mut provider_ids: Vec<String> = Vec::new();
