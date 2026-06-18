@@ -142,6 +142,7 @@ fn route_chain() -> Router<AppState> {
         .route("/api/design/templates/{template_id}/slots/{slot}/fill", post(design::living::fill_slot))
         .route("/api/design/templates/{template_id}/fill", post(design::living::fill_all))
         .route("/api/design/templates/{template_id}/render", get(design::living::render))
+        .route("/api/design/templates/{template_id}/schedule", post(design::living::schedule))
         .route("/api/design/connectors", get(design::list_design_connectors))
         .route("/api/design/connectors/{id}/credential", get(design::get_connector_credential).put(design::set_connector_credential))
         .route("/api/design/copilot/login/start", post(design::copilot::start))

@@ -22,6 +22,8 @@ use crate::AppState;
 use crate::auth::extractors::DeviceAuth;
 use crate::design::slot_fills;
 use crate::providers::store::ProviderKeysStore;
+use crate::scheduler::routes::compute_next_fire_at;
+use crate::scheduler::store::{PgSchedulesStore, Schedule, SchedulesStore};
 
 /// Verify the template exists AND belongs to the caller's engagement.
 /// Returns 404 for both "no such template" and "cross-tenant" so a caller can't
@@ -320,4 +322,93 @@ pub async fn render(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     let html = substitute_slots(&template_html, &fills);
     Ok(Json(json!({ "html": html })))
+}
+
+/// Body for `POST /api/design/templates/{template_id}/schedule`.
+#[derive(Deserialize)]
+pub struct ScheduleBody {
+    pub cron: String,
+    pub timezone: String,
+}
+
+/// `POST /api/design/templates/{template_id}/schedule` — attach a recurring
+/// Ritual to a live template's existing publish flow member, so the scaffold
+/// fills + publishes on a cadence.
+///
+/// Engagement-scoped via v1's `own_template` (404 cross-tenant/non-existent).
+/// 409 if the template has no live publish flow (`flow_member_id` is NULL) —
+/// "publish it live first". Reuses the rituals/scheduler create path:
+/// `compute_next_fire_at` does the cron+timezone validation (400 on a bad cron),
+/// and `PgSchedulesStore` persists the `schedules` row — no cron parsing here.
+///
+/// v2 = ONE schedule per template's flow member: if a schedule already exists on
+/// the member, its cron/timezone are updated (upsert) rather than creating a
+/// duplicate. Returns `{ ritual_id, next_fire_at }`.
+pub async fn schedule(
+    DeviceAuth(claims): DeviceAuth,
+    State(state): State<AppState>,
+    Path(template_id): Path<Uuid>,
+    Json(b): Json<ScheduleBody>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    own_template(&state, claims.engagement_id, template_id).await?;
+
+    let flow_member_id: Option<Uuid> = sqlx::query_scalar::<_, Option<Uuid>>(
+        "SELECT flow_member_id FROM design_templates WHERE id = $1",
+    )
+    .bind(template_id)
+    .fetch_one(&state.pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let member_id = flow_member_id.ok_or((
+        StatusCode::CONFLICT,
+        "template has no live publish flow; publish it live first".into(),
+    ))?;
+
+    // Cron/timezone validation lives in the rituals/scheduler path; reuse it so we
+    // never duplicate cron parsing. A bad cron/timezone → 400.
+    let next_fire_at =
+        compute_next_fire_at(&b.cron, &b.timezone).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+
+    let store = PgSchedulesStore::new(state.pool.clone());
+
+    // One schedule per template's flow member (upsert). Cross-tenant safety is
+    // already guaranteed by `own_template`; we look up the member's schedules
+    // engagement-scoped for consistency with the rest of the scheduler store.
+    let existing = store
+        .list_for_project_member(member_id, claims.engagement_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+
+    let ritual_id = if let Some(existing) = existing.into_iter().next() {
+        store
+            .update(
+                existing.id,
+                claims.engagement_id,
+                &b.cron,
+                &b.timezone,
+                true,
+                next_fire_at,
+            )
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+        existing.id
+    } else {
+        let schedule = Schedule {
+            id: Uuid::new_v4(),
+            project_member_id: member_id,
+            cron_expr: b.cron.clone(),
+            timezone: b.timezone.clone(),
+            next_fire_at,
+            last_fired_at: None,
+            enabled: true,
+        };
+        store
+            .create(schedule)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
+    };
+
+    Ok(Json(
+        json!({ "ritual_id": ritual_id, "next_fire_at": next_fire_at }),
+    ))
 }
