@@ -168,7 +168,7 @@ pub async fn submit_review(
     // 3. Recompile the member's graph into steps (same pipeline as enqueue_run).
     let member = state
         .members
-        .get(member_id)
+        .get(member_id, engagement_id)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
         .ok_or((StatusCode::NOT_FOUND, "member not found".into()))?;

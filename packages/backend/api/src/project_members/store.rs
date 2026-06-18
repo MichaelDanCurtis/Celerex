@@ -46,11 +46,17 @@ pub trait MembersStore: Send + Sync {
         provider_config: &Value,
         agent_type: &str,
     ) -> Result<Member, String>;
-    async fn get(&self, id: Uuid) -> Result<Option<Member>, String>;
-    async fn list_for_project(&self, project_id: Uuid) -> Result<Vec<Member>, String>;
+    async fn get(&self, id: Uuid, engagement_id: Uuid) -> Result<Option<Member>, String>;
+    async fn list_for_project(
+        &self,
+        project_id: Uuid,
+        engagement_id: Uuid,
+    ) -> Result<Vec<Member>, String>;
+    #[allow(clippy::too_many_arguments)] // engagement_id added for tenant-scoping; param-struct refactor deferred
     async fn update(
         &self,
         id: Uuid,
+        engagement_id: Uuid,
         name: &str,
         description: &str,
         graph: &Value,
@@ -135,12 +141,15 @@ impl MembersStore for PgMembersStore {
         })
     }
 
-    async fn get(&self, id: Uuid) -> Result<Option<Member>, String> {
+    async fn get(&self, id: Uuid, engagement_id: Uuid) -> Result<Option<Member>, String> {
         sqlx::query_as::<_, (Uuid, Uuid, String, String, Value, Value, i32, String)>(
             "SELECT id, project_id, name, description, graph_json, provider_config_json, version, agent_type
-             FROM project_members WHERE id = $1",
+             FROM project_members
+             WHERE id = $1
+               AND EXISTS (SELECT 1 FROM projects p WHERE p.id = project_members.project_id AND p.engagement_id = $2)",
         )
         .bind(id)
+        .bind(engagement_id)
         .fetch_optional(&self.pool)
         .await
         .map_err(|e| e.to_string())
@@ -158,12 +167,20 @@ impl MembersStore for PgMembersStore {
         })
     }
 
-    async fn list_for_project(&self, project_id: Uuid) -> Result<Vec<Member>, String> {
+    async fn list_for_project(
+        &self,
+        project_id: Uuid,
+        engagement_id: Uuid,
+    ) -> Result<Vec<Member>, String> {
         sqlx::query_as::<_, (Uuid, Uuid, String, String, Value, Value, i32, String)>(
             "SELECT id, project_id, name, description, graph_json, provider_config_json, version, agent_type
-             FROM project_members WHERE project_id = $1 ORDER BY created_at",
+             FROM project_members
+             WHERE project_id = $1
+               AND EXISTS (SELECT 1 FROM projects p WHERE p.id = $1 AND p.engagement_id = $2)
+             ORDER BY created_at",
         )
         .bind(project_id)
+        .bind(engagement_id)
         .fetch_all(&self.pool)
         .await
         .map_err(|e| e.to_string())
@@ -183,9 +200,11 @@ impl MembersStore for PgMembersStore {
         })
     }
 
+    #[allow(clippy::too_many_arguments)] // engagement_id added for tenant-scoping; param-struct refactor deferred
     async fn update(
         &self,
         id: Uuid,
+        engagement_id: Uuid,
         name: &str,
         description: &str,
         graph: &Value,
@@ -194,27 +213,37 @@ impl MembersStore for PgMembersStore {
     ) -> Result<Member, String> {
         let agent_type = validate_agent_type(agent_type)?;
         let mut tx = self.pool.begin().await.map_err(|e| e.to_string())?;
-        let new_version: i32 = sqlx::query_scalar(
+        // Scope the mutation to the caller's engagement. If the RETURNING yields
+        // no row (cross-tenant id / no match), surface the store's not-found
+        // error instead of silently succeeding or a generic sqlx error.
+        let new_version: Option<i32> = sqlx::query_scalar(
             "UPDATE project_members
-               SET name = $2, description = $3, graph_json = $4,
-                   provider_config_json = $5, agent_type = $6,
+               SET name = $3, description = $4, graph_json = $5,
+                   provider_config_json = $6, agent_type = $7,
                    version = version + 1, updated_at = NOW()
-             WHERE id = $1 RETURNING version",
+             WHERE id = $1
+               AND EXISTS (SELECT 1 FROM projects p WHERE p.id = project_members.project_id AND p.engagement_id = $2)
+             RETURNING version",
         )
         .bind(id)
+        .bind(engagement_id)
         .bind(name)
         .bind(description)
         .bind(graph)
         .bind(provider_config)
         .bind(agent_type)
-        .fetch_one(&mut *tx)
+        .fetch_optional(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
+        let new_version = new_version.ok_or_else(|| "not found".to_string())?;
         let _ = self
             .write_snapshot(&mut tx, id, new_version, graph, provider_config)
             .await?;
         tx.commit().await.map_err(|e| e.to_string())?;
-        let member = self.get(id).await?.ok_or("member vanished")?;
+        let member = self
+            .get(id, engagement_id)
+            .await?
+            .ok_or("member vanished")?;
         Ok(member)
     }
 

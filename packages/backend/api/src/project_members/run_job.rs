@@ -121,8 +121,13 @@ pub async fn enqueue_run(
     engagement_id: Uuid,
     triggered_by: &'static str,
 ) -> Result<Uuid, String> {
+    // `engagement_id` here is the member's TRUE owning engagement, already
+    // resolved by every caller (manual route resolves via engagement_id_for and
+    // passes it; the scheduler/automation background ticks resolve per-row and
+    // pass it). Scoping the read to it is correct for both request and sweep
+    // paths — it never narrows to a wrong engagement.
     let member = members
-        .get(member_id)
+        .get(member_id, engagement_id)
         .await?
         .ok_or_else(|| format!("member {member_id} not found"))?;
     // A member created out-of-band (seeded directly, imported, etc.) may have no

@@ -311,13 +311,13 @@ async fn ensure_delivery_flow(
 
     // Refresh the existing flow if it still exists (re-publish path).
     if let Some(member_id) = existing_flow {
-        if state.members.get(member_id).await
+        if state.members.get(member_id, engagement_id).await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
             .is_some()
         {
             state
                 .members
-                .update(member_id, &name, "Auto-scaffolded by Celerex Design publish.", &graph, &provider_config, "writer")
+                .update(member_id, engagement_id, &name, "Auto-scaffolded by Celerex Design publish.", &graph, &provider_config, "writer")
                 .await
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
             return Ok(member_id);

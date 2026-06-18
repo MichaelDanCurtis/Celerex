@@ -278,7 +278,7 @@ pub async fn update_automation(
     };
     let name = state
         .members
-        .get(updated.project_member_id)
+        .get(updated.project_member_id, claims.engagement_id)
         .await
         .ok()
         .flatten()
