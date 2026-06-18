@@ -14,6 +14,7 @@ pub mod proxy;
 pub mod rituals;
 pub mod sanitize;
 pub mod scaffold;
+pub mod slot_fills;
 
 use axum::{
     Json,
