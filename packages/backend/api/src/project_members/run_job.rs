@@ -56,17 +56,11 @@ pub fn apply_agent_type_defaults(graph: &mut serde_json::Value, agent_type: &str
         let Some(cfg) = node.get_mut("config").and_then(|c| c.as_object_mut()) else {
             continue;
         };
-        let needs_model = cfg
-            .get("model")
-            .map(|v| v.is_null())
-            .unwrap_or(true);
+        let needs_model = cfg.get("model").map(|v| v.is_null()).unwrap_or(true);
         if needs_model {
             cfg.insert("model".to_string(), serde_json::json!(default_model));
         }
-        let needs_provider = cfg
-            .get("provider_id")
-            .map(|v| v.is_null())
-            .unwrap_or(true);
+        let needs_provider = cfg.get("provider_id").map(|v| v.is_null()).unwrap_or(true);
         if needs_provider {
             cfg.insert(
                 "provider_id".to_string(),
@@ -93,7 +87,11 @@ pub fn apply_doc_engagement(graph: &mut serde_json::Value, engagement_id: Uuid) 
             .get("config")
             .and_then(|c| c.get("execution"))
             .and_then(|e| e.as_str());
-        if exec != Some("doc") && exec != Some("llm") && exec != Some("memory") {
+        if exec != Some("doc")
+            && exec != Some("llm")
+            && exec != Some("memory")
+            && exec != Some("slot_fill")
+        {
             continue;
         }
         let Some(cfg) = node.get_mut("config").and_then(|c| c.as_object_mut()) else {
@@ -105,6 +103,43 @@ pub fn apply_doc_engagement(graph: &mut serde_json::Value, engagement_id: Uuid) 
             "engagement_id".to_string(),
             json!(engagement_id.to_string()),
         );
+    }
+}
+
+/// Auto-approve review nodes on scheduler-triggered runs.
+///
+/// An unattended weekly run has no human at the review gate, so a `review` node
+/// would pause the run forever (`awaiting_review`). For scheduled runs we set
+/// `auto_approve: true` on every `execution:"review"` node; the executor then
+/// passes the reviewed content through as approved and the run completes through
+/// deliver. For manual/interactive runs (any `triggered_by != scheduled`) the
+/// flag is NEVER set, so the human gate is preserved EXACTLY as before.
+///
+/// Security note: this only relaxes the *human review* gate for runs the
+/// scheduler itself initiated — it does not touch tenant scoping or any other
+/// node. A request-supplied `auto_approve` in a manual run's graph is harmless
+/// here because manual runs are gated regardless; but to avoid a flow author
+/// pinning `auto_approve` to bypass review on manual runs, manual runs clear it.
+pub fn apply_scheduled_auto_approve(graph: &mut serde_json::Value, triggered_by: &str) {
+    let scheduled = triggered_by == TRIGGERED_BY_SCHEDULED;
+    let Some(nodes) = graph.get_mut("nodes").and_then(|n| n.as_array_mut()) else {
+        return;
+    };
+    for node in nodes {
+        let is_review = node
+            .get("config")
+            .and_then(|c| c.get("execution"))
+            .and_then(|e| e.as_str())
+            == Some("review");
+        if !is_review {
+            continue;
+        }
+        let Some(cfg) = node.get_mut("config").and_then(|c| c.as_object_mut()) else {
+            continue;
+        };
+        // Scheduled → grant auto-approve; otherwise force it off so a flow author
+        // can't pin `auto_approve:true` to weaken the manual human gate.
+        cfg.insert("auto_approve".to_string(), json!(scheduled));
     }
 }
 
@@ -138,6 +173,9 @@ pub async fn enqueue_run(
     let mut graph = member.graph_json.clone();
     apply_agent_type_defaults(&mut graph, &member.agent_type);
     apply_doc_engagement(&mut graph, engagement_id);
+    // Scheduler-triggered runs auto-approve their review gates so unattended runs
+    // complete through deliver; manual/connector runs keep the human gate.
+    apply_scheduled_auto_approve(&mut graph, triggered_by);
     let steps = graph::compile(&graph)?;
 
     let run_id = Uuid::new_v4();

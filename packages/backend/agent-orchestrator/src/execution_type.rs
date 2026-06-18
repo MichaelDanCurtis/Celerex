@@ -21,4 +21,10 @@ pub enum ExecutionType {
     /// Server-side design-template slot substitution — fills a Celerex Design
     /// template's `{{slot:name}}` placeholders with flow data (see render.rs).
     Render,
+    /// Living Documents: fill a design template's Living-Doc slots by running each
+    /// slot's server-held instruction as a one-shot completion, persisting the
+    /// `last_value`, and emitting a flat `{slot: value}` object the downstream
+    /// `render` node consumes as its `data`. Spelled `slot_fill` on the wire.
+    #[serde(rename = "slot_fill")]
+    SlotFill,
 }

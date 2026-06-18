@@ -40,9 +40,17 @@ pub enum StepKind {
     /// the (possibly edited) approved content flows downstream as this step's
     /// `outputs.content`. Approve = gate open (downstream runs); reject = gate
     /// closed (downstream skipped), same semantics as `Filter`.
+    ///
+    /// `auto_approve` short-circuits the human gate: when true and the step has
+    /// no seeded decision, the executor approves the resolved `content` and the
+    /// run continues without pausing. Set ONLY for scheduler-triggered runs (see
+    /// `apply_scheduled_auto_approve`); manual/interactive runs leave it false
+    /// and keep the human gate.
     Review {
         prompt: String,
         content: serde_json::Value,
+        #[serde(default)]
+        auto_approve: bool,
     },
 }
 

@@ -6,16 +6,24 @@
 //! not own returns 404 (mirroring `design::get_template`) — never leaking its
 //! existence or its slot instructions/values.
 
+use std::sync::Arc;
+
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use serde::Deserialize;
 use serde_json::{Value, json};
+use sqlx::PgPool;
 use uuid::Uuid;
+
+use celerex_orchestrator::llm::ProviderRegistry;
 
 use crate::AppState;
 use crate::auth::extractors::DeviceAuth;
 use crate::design::slot_fills;
+use crate::providers::store::ProviderKeysStore;
+use crate::scheduler::routes::compute_next_fire_at;
+use crate::scheduler::store::{PgSchedulesStore, Schedule, SchedulesStore};
 
 /// Verify the template exists AND belongs to the caller's engagement.
 /// Returns 404 for both "no such template" and "cross-tenant" so a caller can't
@@ -111,7 +119,8 @@ fn extract_completion_text(raw: &Value) -> String {
 /// the house registry only when `CELEREX_HOUSE_MODE` is on, else 409 (no key).
 /// A provider/transport error maps to 502 — never a panic.
 async fn run_fill(
-    state: &AppState,
+    provider_keys: &Arc<dyn ProviderKeysStore>,
+    registry: &Arc<ProviderRegistry>,
     engagement_id: Uuid,
     instruction: &str,
     slot_type: &str,
@@ -121,20 +130,24 @@ async fn run_fill(
     let pid = provider_id.unwrap_or(DEFAULT_PROVIDER_ID).to_string();
     let model = model.unwrap_or(DEFAULT_MODEL).to_string();
 
-    let provider =
-        match crate::assistant::resolve_engagement_provider(state, engagement_id, &pid).await? {
-            Some(provider) => provider,
-            None if crate::assistant::house_mode_enabled() => state
-                .providers_registry
-                .get(&pid)
-                .ok_or((StatusCode::BAD_REQUEST, format!("no provider '{pid}'")))?,
-            None => {
-                return Err((
-                    StatusCode::CONFLICT,
-                    format!("no key configured for provider '{pid}'"),
-                ));
-            }
-        };
+    let provider = match crate::assistant::resolve_engagement_provider_with(
+        provider_keys,
+        engagement_id,
+        &pid,
+    )
+    .await?
+    {
+        Some(provider) => provider,
+        None if crate::assistant::house_mode_enabled() => registry
+            .get(&pid)
+            .ok_or((StatusCode::BAD_REQUEST, format!("no provider '{pid}'")))?,
+        None => {
+            return Err((
+                StatusCode::CONFLICT,
+                format!("no key configured for provider '{pid}'"),
+            ));
+        }
+    };
 
     let sys = format!(
         "You fill a document slot of type '{slot_type}'. Return ONLY the slot \
@@ -154,11 +167,11 @@ async fn run_fill(
 
 /// Look up a slot's declared type from `design_templates.slots` (a JSONB array of
 /// `{ name, type, required }`). Defaults to "text" when absent/unparseable.
-async fn slot_type(state: &AppState, template_id: Uuid, slot: &str) -> String {
+async fn slot_type(pool: &PgPool, template_id: Uuid, slot: &str) -> String {
     let slots: Option<Value> =
         sqlx::query_scalar::<_, Value>("SELECT slots FROM design_templates WHERE id = $1")
             .bind(template_id)
-            .fetch_optional(&state.pool)
+            .fetch_optional(pool)
             .await
             .ok()
             .flatten();
@@ -199,9 +212,10 @@ pub async fn fill_slot(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
         .ok_or((StatusCode::CONFLICT, "slot has no instruction".into()))?;
-    let stype = slot_type(&state, template_id, &slot).await;
+    let stype = slot_type(&state.pool, template_id, &slot).await;
     let value = run_fill(
-        &state,
+        &state.provider_keys,
+        &state.providers_registry,
         claims.engagement_id,
         &fill.instruction,
         &stype,
@@ -215,6 +229,55 @@ pub async fn fill_slot(
     Ok(Json(json!({ "value": value })))
 }
 
+/// Fill every instruction'd slot of a template and persist each `last_value`.
+///
+/// The DRY core shared by the v1 HTTP endpoint (`fill_all`) and the v2 executor
+/// (`SlotFillHandler`): lists the template's slot fills, runs each slot's
+/// server-held instruction as a one-shot completion (the v1 `run_fill` policy —
+/// engagement key first, house fallback when enabled), persists the result via
+/// `slot_fills::set_value`, and returns the `(slot_name, value)` pairs in stable
+/// (slot-name) order.
+///
+/// Takes only the collaborators an executor can hold — `pool`, `provider_keys`,
+/// `registry` — never `&AppState`. Errors are stringified (the executor maps them
+/// to `DispatchError`; the HTTP endpoint maps them to a 500-class response).
+pub(crate) async fn fill_template_slots(
+    pool: &PgPool,
+    provider_keys: &Arc<dyn ProviderKeysStore>,
+    registry: &Arc<ProviderRegistry>,
+    engagement_id: Uuid,
+    template_id: Uuid,
+) -> Result<Vec<(String, String)>, String> {
+    // Ownership gate (self-contained — the executor path reads `template_id` from
+    // node config, so this fn cannot trust the caller to have verified it). A
+    // template the run's engagement does not own — or one that doesn't exist —
+    // both resolve to "not found" so we never disclose a foreign template's slot
+    // instructions/values or overwrite them. Absent here = cross-tenant IDOR.
+    match slot_fills::template_engagement(pool, template_id).await? {
+        Some(owner) if owner == engagement_id => {}
+        _ => return Err("template not found".into()),
+    }
+    let fills = slot_fills::list_slot_fills(pool, template_id).await?;
+    let mut out = Vec::with_capacity(fills.len());
+    for f in fills {
+        let stype = slot_type(pool, template_id, &f.slot_name).await;
+        let value = run_fill(
+            provider_keys,
+            registry,
+            engagement_id,
+            &f.instruction,
+            &stype,
+            f.provider_id.as_deref(),
+            f.model.as_deref(),
+        )
+        .await
+        .map_err(|(_, msg)| msg)?;
+        slot_fills::set_value(pool, template_id, &f.slot_name, &value).await?;
+        out.push((f.slot_name, value));
+    }
+    Ok(out)
+}
+
 /// `POST /api/design/templates/{template_id}/fill` — fill every slot that has an
 /// instruction. Each row in `list_slot_fills` has a NOT NULL instruction, so all
 /// listed slots are fillable.
@@ -224,26 +287,19 @@ pub async fn fill_all(
     Path(template_id): Path<Uuid>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
     own_template(&state, claims.engagement_id, template_id).await?;
-    let fills = slot_fills::list_slot_fills(&state.pool, template_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-    let mut filled = Vec::with_capacity(fills.len());
-    for f in fills {
-        let stype = slot_type(&state, template_id, &f.slot_name).await;
-        let value = run_fill(
-            &state,
-            claims.engagement_id,
-            &f.instruction,
-            &stype,
-            f.provider_id.as_deref(),
-            f.model.as_deref(),
-        )
-        .await?;
-        slot_fills::set_value(&state.pool, template_id, &f.slot_name, &value)
-            .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-        filled.push(json!({ "slot": f.slot_name, "value": value }));
-    }
+    let pairs = fill_template_slots(
+        &state.pool,
+        &state.provider_keys,
+        &state.providers_registry,
+        claims.engagement_id,
+        template_id,
+    )
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let filled: Vec<Value> = pairs
+        .into_iter()
+        .map(|(slot, value)| json!({ "slot": slot, "value": value }))
+        .collect();
     Ok(Json(json!({ "filled": filled })))
 }
 
@@ -266,4 +322,93 @@ pub async fn render(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
     let html = substitute_slots(&template_html, &fills);
     Ok(Json(json!({ "html": html })))
+}
+
+/// Body for `POST /api/design/templates/{template_id}/schedule`.
+#[derive(Deserialize)]
+pub struct ScheduleBody {
+    pub cron: String,
+    pub timezone: String,
+}
+
+/// `POST /api/design/templates/{template_id}/schedule` — attach a recurring
+/// Ritual to a live template's existing publish flow member, so the scaffold
+/// fills + publishes on a cadence.
+///
+/// Engagement-scoped via v1's `own_template` (404 cross-tenant/non-existent).
+/// 409 if the template has no live publish flow (`flow_member_id` is NULL) —
+/// "publish it live first". Reuses the rituals/scheduler create path:
+/// `compute_next_fire_at` does the cron+timezone validation (400 on a bad cron),
+/// and `PgSchedulesStore` persists the `schedules` row — no cron parsing here.
+///
+/// v2 = ONE schedule per template's flow member: if a schedule already exists on
+/// the member, its cron/timezone are updated (upsert) rather than creating a
+/// duplicate. Returns `{ ritual_id, next_fire_at }`.
+pub async fn schedule(
+    DeviceAuth(claims): DeviceAuth,
+    State(state): State<AppState>,
+    Path(template_id): Path<Uuid>,
+    Json(b): Json<ScheduleBody>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    own_template(&state, claims.engagement_id, template_id).await?;
+
+    let flow_member_id: Option<Uuid> = sqlx::query_scalar::<_, Option<Uuid>>(
+        "SELECT flow_member_id FROM design_templates WHERE id = $1",
+    )
+    .bind(template_id)
+    .fetch_one(&state.pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let member_id = flow_member_id.ok_or((
+        StatusCode::CONFLICT,
+        "template has no live publish flow; publish it live first".into(),
+    ))?;
+
+    // Cron/timezone validation lives in the rituals/scheduler path; reuse it so we
+    // never duplicate cron parsing. A bad cron/timezone → 400.
+    let next_fire_at =
+        compute_next_fire_at(&b.cron, &b.timezone).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+
+    let store = PgSchedulesStore::new(state.pool.clone());
+
+    // One schedule per template's flow member (upsert). Cross-tenant safety is
+    // already guaranteed by `own_template`; we look up the member's schedules
+    // engagement-scoped for consistency with the rest of the scheduler store.
+    let existing = store
+        .list_for_project_member(member_id, claims.engagement_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+
+    let ritual_id = if let Some(existing) = existing.into_iter().next() {
+        store
+            .update(
+                existing.id,
+                claims.engagement_id,
+                &b.cron,
+                &b.timezone,
+                true,
+                next_fire_at,
+            )
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+        existing.id
+    } else {
+        let schedule = Schedule {
+            id: Uuid::new_v4(),
+            project_member_id: member_id,
+            cron_expr: b.cron.clone(),
+            timezone: b.timezone.clone(),
+            next_fire_at,
+            last_fired_at: None,
+            enabled: true,
+        };
+        store
+            .create(schedule)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
+    };
+
+    Ok(Json(
+        json!({ "ritual_id": ritual_id, "next_fire_at": next_fire_at }),
+    ))
 }

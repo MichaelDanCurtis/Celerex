@@ -15,6 +15,7 @@ pub mod proxy;
 pub mod rituals;
 pub mod sanitize;
 pub mod scaffold;
+pub mod slot_fill_handler;
 pub mod slot_fills;
 
 use axum::{
@@ -307,7 +308,7 @@ async fn ensure_delivery_flow(
     template_html: &str,
     slots: &Value,
 ) -> Result<Uuid, (StatusCode, String)> {
-    let graph = scaffold::scaffold_live_flow(title, engine, template_html, slots);
+    let graph = scaffold::scaffold_live_flow(template_id, title, engine, template_html, slots);
     let name = format!("{title} — delivery");
     let provider_config = Value::Object(Default::default());
 

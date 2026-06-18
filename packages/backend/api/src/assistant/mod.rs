@@ -65,10 +65,22 @@ pub(crate) async fn resolve_engagement_provider(
     engagement_id: Uuid,
     provider_id: &str,
 ) -> Result<Option<Arc<dyn Provider>>, (StatusCode, String)> {
+    resolve_engagement_provider_with(&state.provider_keys, engagement_id, provider_id).await
+}
+
+/// AppState-free core of `resolve_engagement_provider`: resolve the per-engagement
+/// vaulted key for `provider_id` against any `ProviderKeysStore`. Lets executors
+/// (which only hold the key store + registry, not the full `AppState`) reuse the
+/// exact engagement-key acquisition policy.
+pub(crate) async fn resolve_engagement_provider_with(
+    provider_keys: &Arc<dyn crate::providers::store::ProviderKeysStore>,
+    engagement_id: Uuid,
+    provider_id: &str,
+) -> Result<Option<Arc<dyn Provider>>, (StatusCode, String)> {
     if !SUPPORTED_PROVIDERS.contains(&provider_id) {
         return Ok(None);
     }
-    match state.provider_keys.get(engagement_id, provider_id).await {
+    match provider_keys.get(engagement_id, provider_id).await {
         Ok(Some(key)) => Ok(build_engagement_provider(provider_id, key)),
         Ok(None) => Ok(None),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e)),

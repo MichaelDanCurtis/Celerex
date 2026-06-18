@@ -73,6 +73,13 @@ pub fn compile(graph: &Value) -> Result<Vec<Step>, String> {
                         .unwrap_or("Review and approve this draft")
                         .into(),
                     content: config.get("content").cloned().unwrap_or(Value::Null),
+                    // Scheduler-triggered runs have `auto_approve` injected into
+                    // the node config (see `run_job::apply_scheduled_auto_approve`).
+                    // Absent/false on manual runs keeps the human gate.
+                    auto_approve: config
+                        .get("auto_approve")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false),
                 }
             }
             "filter" => StepKind::Filter {
@@ -111,6 +118,7 @@ fn execution_from(config: &Value) -> Result<ExecutionType, String> {
         "galvo" => Ok(ExecutionType::Galvo),
         "m365" => Ok(ExecutionType::M365),
         "render" => Ok(ExecutionType::Render),
+        "slot_fill" => Ok(ExecutionType::SlotFill),
         other => Err(format!("unknown execution type: {other}")),
     }
 }
@@ -153,9 +161,14 @@ mod tests {
         });
         let steps = compile(&g).unwrap();
         match &steps[0].kind {
-            StepKind::Review { prompt, content } => {
+            StepKind::Review {
+                prompt,
+                content,
+                auto_approve,
+            } => {
                 assert_eq!(prompt, "Approve it");
                 assert_eq!(content, &json!("{{steps.x.outputs.text}}"));
+                assert!(!auto_approve, "no auto_approve in config → false");
             }
             other => panic!("expected Review, got {other:?}"),
         }
