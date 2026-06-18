@@ -93,7 +93,11 @@ pub fn apply_doc_engagement(graph: &mut serde_json::Value, engagement_id: Uuid) 
             .get("config")
             .and_then(|c| c.get("execution"))
             .and_then(|e| e.as_str());
-        if exec != Some("doc") && exec != Some("llm") && exec != Some("memory") {
+        if exec != Some("doc")
+            && exec != Some("llm")
+            && exec != Some("memory")
+            && exec != Some("slot_fill")
+        {
             continue;
         }
         let Some(cfg) = node.get_mut("config").and_then(|c| c.as_object_mut()) else {

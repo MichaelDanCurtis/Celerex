@@ -19,11 +19,20 @@
 //! node is the one seam the user is expected to rewire.
 
 use serde_json::{json, Value};
+use uuid::Uuid;
 
 /// Build the starter delivery graph for a live template. `slots` is the
 /// template's slot schema array; it is embedded into the Render node so the
-/// node renders without a round-trip to the Design Library.
-pub fn scaffold_live_flow(title: &str, engine: &str, template_html: &str, slots: &Value) -> Value {
+/// node renders without a round-trip to the Design Library. `template_id` is
+/// baked into the `fill` node so the `slot_fill` executor knows which template's
+/// Living-Doc slots to fill.
+pub fn scaffold_live_flow(
+    template_id: Uuid,
+    title: &str,
+    engine: &str,
+    template_html: &str,
+    slots: &Value,
+) -> Value {
     let slots = if slots.is_array() { slots.clone() } else { json!([]) };
     json!({
         "nodes": [
@@ -33,12 +42,15 @@ pub fn scaffold_live_flow(title: &str, engine: &str, template_html: &str, slots:
                 "config": { "execution": "input" }
             },
             {
-                // Replace with your real data source (agent, HTTP pull, connector).
+                // The Living-Doc fill: runs each slot's server-held instruction as
+                // a one-shot completion and emits a flat `{slot: value}` object the
+                // Render node consumes as its `data`. The engagement_id is injected
+                // by `apply_doc_engagement` at run time (never trusted from here).
                 "id": "fill",
                 "type": "action",
                 "config": {
-                    "execution": "input",
-                    "inputs": "{{steps.trigger.outputs}}"
+                    "execution": "slot_fill",
+                    "template_id": template_id.to_string()
                 }
             },
             {
@@ -88,7 +100,8 @@ mod tests {
     #[test]
     fn scaffolded_flow_compiles() {
         let slots = json!([{ "name": "headline", "type": "text", "required": true }]);
-        let g = scaffold_live_flow("Weekly Digest", "mjml", "<h1>{{slot:headline}}</h1>", &slots);
+        let tid = Uuid::new_v4();
+        let g = scaffold_live_flow(tid, "Weekly Digest", "mjml", "<h1>{{slot:headline}}</h1>", &slots);
         // It must satisfy the real graph schema + compile to executable steps.
         graph::validate(&g).expect("scaffold must be a valid graph");
         let steps = graph::compile(&g).expect("scaffold must compile to steps");
@@ -102,8 +115,23 @@ mod tests {
     }
 
     #[test]
+    fn fill_node_is_slot_fill_carrying_template_id() {
+        let tid = Uuid::new_v4();
+        let g = scaffold_live_flow(tid, "X", "html", "<p>{{slot:body}}</p>", &json!([]));
+        let fill = g["nodes"].as_array().unwrap()
+            .iter().find(|n| n["id"] == "fill").unwrap();
+        assert_eq!(fill["config"]["execution"], "slot_fill");
+        assert_eq!(fill["config"]["template_id"], tid.to_string());
+        // The render node reads the fill node's whole output as its `data`, which
+        // the slot_fill handler emits as a flat `{slot: value}` object.
+        let render = g["nodes"].as_array().unwrap()
+            .iter().find(|n| n["id"] == "render").unwrap();
+        assert_eq!(render["config"]["inputs"]["data"], "{{steps.fill.outputs}}");
+    }
+
+    #[test]
     fn review_gate_precedes_delivery() {
-        let g = scaffold_live_flow("X", "html", "<p>{{slot:body}}</p>", &json!([]));
+        let g = scaffold_live_flow(Uuid::new_v4(), "X", "html", "<p>{{slot:body}}</p>", &json!([]));
         let edges = g["edges"].as_array().unwrap();
         // deliver depends on review (no path that ships before a human approves).
         assert!(edges.iter().any(|e| e["from"] == "review" && e["to"] == "deliver"));
@@ -112,7 +140,7 @@ mod tests {
 
     #[test]
     fn non_array_slots_default_empty() {
-        let g = scaffold_live_flow("X", "html", "<p>x</p>", &Value::Null);
+        let g = scaffold_live_flow(Uuid::new_v4(), "X", "html", "<p>x</p>", &Value::Null);
         let render = g["nodes"].as_array().unwrap()
             .iter().find(|n| n["id"] == "render").unwrap();
         assert_eq!(render["config"]["slots"], json!([]));

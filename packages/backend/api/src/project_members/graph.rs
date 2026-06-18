@@ -111,6 +111,7 @@ fn execution_from(config: &Value) -> Result<ExecutionType, String> {
         "galvo" => Ok(ExecutionType::Galvo),
         "m365" => Ok(ExecutionType::M365),
         "render" => Ok(ExecutionType::Render),
+        "slot_fill" => Ok(ExecutionType::SlotFill),
         other => Err(format!("unknown execution type: {other}")),
     }
 }

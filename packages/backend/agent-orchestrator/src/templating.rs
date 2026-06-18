@@ -76,6 +76,12 @@ pub fn resolve(value: &Value, ctx: &StepContext) -> Result<Value, TemplateError>
 fn resolve_string(s: &str, ctx: &StepContext) -> Result<Value, TemplateError> {
     let trimmed = s.trim();
     if let Some(inner) = whole_template(trimmed) {
+        // `{{slot:name}}` is the Render handler's own substitution syntax, not a
+        // flow step reference — leave it for the handler. A whole-string slot
+        // marker passes through verbatim (the original, untrimmed string).
+        if is_slot_marker(inner) {
+            return Ok(Value::String(s.to_string()));
+        }
         return lookup(inner.trim(), ctx);
     }
     if !s.contains("{{") {
@@ -90,15 +96,27 @@ fn resolve_string(s: &str, ctx: &StepContext) -> Result<Value, TemplateError> {
             .find("}}")
             .ok_or_else(|| TemplateError::BadPath(s.to_string()))?;
         let expr = after_open[..close].trim();
-        let v = lookup(expr, ctx)?;
-        match v {
-            Value::String(inner) => out.push_str(&inner),
-            other => out.push_str(&other.to_string()),
+        if is_slot_marker(expr) {
+            // Preserve `{{slot:name}}` markers verbatim for the Render handler.
+            out.push_str(&rest[open..open + 2 + close + 2]);
+        } else {
+            let v = lookup(expr, ctx)?;
+            match v {
+                Value::String(inner) => out.push_str(&inner),
+                other => out.push_str(&other.to_string()),
+            }
         }
         rest = &after_open[close + 2..];
     }
     out.push_str(rest);
     Ok(Value::String(out))
+}
+
+/// `{{slot:name}}` is Render-handler substitution syntax (see `render.rs`), not a
+/// flow step template. The flow resolver leaves these markers untouched so a
+/// template carried inline through a Render node survives to the handler.
+fn is_slot_marker(expr: &str) -> bool {
+    expr.trim().starts_with("slot:")
 }
 
 fn whole_template(s: &str) -> Option<&str> {
@@ -208,5 +226,25 @@ mod tests {
     fn bad_path_shape_is_error() {
         let err = resolve(&json!("{{foo.bar}}"), &ctx()).unwrap_err();
         assert!(matches!(err, TemplateError::BadPath(_)));
+    }
+
+    #[test]
+    fn slot_marker_passes_through_untouched() {
+        // `{{slot:name}}` is Render-handler syntax, not a flow step ref — the
+        // resolver must leave it verbatim (whole-string and embedded forms),
+        // even with no matching step, so an inline template survives to Render.
+        let whole = resolve(&json!("{{slot:headline}}"), &ctx()).unwrap();
+        assert_eq!(whole, json!("{{slot:headline}}"));
+
+        let embedded = resolve(&json!("<h1>{{slot:headline}}</h1>"), &ctx()).unwrap();
+        assert_eq!(embedded, json!("<h1>{{slot:headline}}</h1>"));
+
+        // A slot marker alongside a real step template: each resolves per its kind.
+        let mixed = resolve(
+            &json!("{{slot:title}} — {{steps.galvo.outputs.meta.status}}"),
+            &ctx(),
+        )
+        .unwrap();
+        assert_eq!(mixed, json!("{{slot:title}} — success"));
     }
 }

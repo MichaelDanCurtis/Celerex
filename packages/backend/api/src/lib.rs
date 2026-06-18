@@ -250,6 +250,21 @@ pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>)
         ExecutionType::Render,
         Arc::new(celerex_orchestrator::handlers::render::RenderHandler),
     );
+    // Living Documents v2: the scaffold's `fill` node fills a template's
+    // Living-Doc slots (engagement-key aware, like the v1 fill endpoint). Only
+    // registered when the key store builds (needs CELEREX_CRED_KEY); without it
+    // a `slot_fill` node errors as "no handler", same posture as the LLM handler.
+    if let Ok(keys) = crate::providers::store::PgProviderKeysStore::from_env(pool.clone()) {
+        let provider_keys: Arc<dyn crate::providers::store::ProviderKeysStore> = Arc::new(keys);
+        dispatcher.register(
+            ExecutionType::SlotFill,
+            Arc::new(crate::design::slot_fill_handler::SlotFillHandler::new(
+                pool.clone(),
+                provider_keys,
+                registry_arc.clone(),
+            )),
+        );
+    }
     build_app_with_dispatcher_inner(
         pool,
         credentials,
