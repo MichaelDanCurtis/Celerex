@@ -165,7 +165,7 @@ fn replace_paired(s: &str, marker: &str, open: &str, close: &str) -> String {
         out.push_str(part);
     }
     // Odd number of markers → trailing unmatched marker; restore it literally.
-    if parts.len() % 2 == 0 {
+    if parts.len().is_multiple_of(2) {
         out.push_str(marker);
     }
     out
@@ -179,7 +179,7 @@ fn render_table(v: &Value) -> String {
             let cols: Vec<String> = o
                 .get("columns")
                 .and_then(|c| c.as_array())
-                .map(|a| a.iter().map(|c| value_to_plain(c)).collect())
+                .map(|a| a.iter().map(value_to_plain).collect())
                 .unwrap_or_default();
             let rows: Vec<Vec<String>> = o
                 .get("rows")
