@@ -72,19 +72,44 @@ async fn engagement_for_member(
         })
 }
 
+/// Load a schedule by id WITHOUT engagement scoping. The scheduler request
+/// handlers (`update`/`delete`/`fire`) deliberately load unscoped, then run an
+/// explicit `engagement_for_member` 403 gate, so a cross-tenant caller gets a
+/// 403 (not a 404) — the established route contract. Defense-in-depth at the
+/// store layer comes from the engagement-scoped `update`/`delete` mutations,
+/// which only execute after that 403 gate passes. The store's `get` is
+/// engagement-scoped for callers wanting not-found semantics (`design/rituals.rs`).
 async fn load_schedule_pg(
     s: &AppState,
     id: Uuid,
 ) -> Result<Schedule, (StatusCode, axum::Json<serde_json::Value>)> {
-    let store = crate::scheduler::store::PgSchedulesStore::new(s.pool.clone());
-    use crate::scheduler::store::SchedulesStore;
-    match store.get(id).await {
-        Ok(Some(sc)) => Ok(sc),
-        Ok(None) => Err((StatusCode::NOT_FOUND, Json(json!({"error": "not found"})))),
-        Err(e) => Err((
+    let row = sqlx::query_as::<
+        _,
+        (Uuid, Uuid, String, String, DateTime<Utc>, Option<DateTime<Utc>>, bool),
+    >(
+        "SELECT id, project_member_id, cron_expr, timezone, next_fire_at, last_fired_at, enabled
+         FROM schedules WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&s.pool)
+    .await
+    .map_err(|e| {
+        (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": e})),
-        )),
+            Json(json!({"error": e.to_string()})),
+        )
+    })?;
+    match row {
+        Some(r) => Ok(Schedule {
+            id: r.0,
+            project_member_id: r.1,
+            cron_expr: r.2,
+            timezone: r.3,
+            next_fire_at: r.4,
+            last_fired_at: r.5,
+            enabled: r.6,
+        }),
+        None => Err((StatusCode::NOT_FOUND, Json(json!({"error": "not found"})))),
     }
 }
 
@@ -139,7 +164,10 @@ pub async fn list(
     }
     let store = crate::scheduler::store::PgSchedulesStore::new(s.pool.clone());
     use crate::scheduler::store::SchedulesStore;
-    match store.list_for_project_member(q.project_member_id).await {
+    match store
+        .list_for_project_member(q.project_member_id, a.0.engagement_id)
+        .await
+    {
         Ok(rows) => (StatusCode::OK, Json(rows)).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -173,7 +201,14 @@ pub async fn update(
     let store = crate::scheduler::store::PgSchedulesStore::new(s.pool.clone());
     use crate::scheduler::store::SchedulesStore;
     if let Err(e) = store
-        .update(id, &b.cron_expr, &b.timezone, b.enabled, next_fire_at)
+        .update(
+            id,
+            a.0.engagement_id,
+            &b.cron_expr,
+            &b.timezone,
+            b.enabled,
+            next_fire_at,
+        )
         .await
     {
         return (
@@ -212,7 +247,7 @@ pub async fn delete(
     }
     let store = crate::scheduler::store::PgSchedulesStore::new(s.pool.clone());
     use crate::scheduler::store::SchedulesStore;
-    match store.delete(id).await {
+    match store.delete(id, a.0.engagement_id).await {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
