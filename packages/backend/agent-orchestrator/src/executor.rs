@@ -74,7 +74,8 @@ impl Executor {
     }
 
     pub async fn run(&self, req: JobRequest) -> Result<RunStatus, ExecError> {
-        self.execute(&req, StepContext::new(), &HashSet::new()).await
+        self.execute(&req, StepContext::new(), &HashSet::new())
+            .await
     }
 
     /// Resume a paused run after a human review decision.
@@ -153,7 +154,36 @@ impl Executor {
             // (resume path) resolves the gate; without one (fresh run) it PAUSES
             // the whole run — persist an `AwaitingReview` marker carrying the
             // draft and return without marking the run terminal.
-            if let StepKind::Review { prompt, content } = &step.kind {
+            if let StepKind::Review {
+                prompt,
+                content,
+                auto_approve,
+            } = &step.kind
+            {
+                // Scheduler-triggered runs auto-approve: synthesize the same
+                // approved decision a human resume would produce so downstream
+                // `{{steps.<id>.outputs.content}}` resolves to the reviewed
+                // content and the run continues to completion. Only applies on a
+                // fresh hit (no seeded decision) — a seeded decision always wins.
+                if *auto_approve && ctx.output(&step.id).is_none() {
+                    let approved_content =
+                        templating::resolve(content, &ctx).unwrap_or(Value::Null);
+                    let decision = serde_json::json!({
+                        "approved": true,
+                        "content": approved_content,
+                    });
+                    self.store.started(req.run_id, &step.id);
+                    self.store.record(StepRecord {
+                        run_id: req.run_id,
+                        step_id: step.id.clone(),
+                        status: RunStatus::Succeeded,
+                        inputs: serde_json::json!({ "prompt": prompt, "auto_approved": true }),
+                        outputs: Some(decision.clone()),
+                        error: None,
+                    });
+                    ctx.set(&step.id, decision);
+                    continue;
+                }
                 match ctx.output(&step.id).cloned() {
                     Some(decision) => {
                         let approved = decision
@@ -362,10 +392,7 @@ fn eval_str_expr(s: &str) -> Option<bool> {
 }
 
 fn strip_quotes(s: &str) -> String {
-    s.trim()
-        .trim_matches('"')
-        .trim_matches('\'')
-        .to_string()
+    s.trim().trim_matches('"').trim_matches('\'').to_string()
 }
 
 fn compare(lhs: &str, rhs: &str, op: &str) -> bool {

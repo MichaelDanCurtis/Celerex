@@ -1,5 +1,5 @@
-//! Living Documents v2 — Task 1: the publish scaffold runs unattended on a
-//! scheduled trigger, up to the review gate.
+//! Living Documents v2 — the publish scaffold runs unattended on a scheduled
+//! trigger, end-to-end THROUGH deliver.
 //!
 //! Mirrors `tests/scheduler_dispatch.rs`: seed a live template + its scaffold
 //! member (whose `fill` node is a real `slot_fill`), then fire the shared
@@ -7,12 +7,12 @@
 //! would. The slot_fill handler is wiremock-backed (house mode), like
 //! `tests/living_docs_fill.rs`.
 //!
-//! NOTE — T1 scope: the scaffold's `review` node pauses the run (human gate). The
-//! review auto-approve for scheduled runs is Task 2; until it lands, a scheduled
-//! run cannot proceed THROUGH `deliver`. So this test asserts the run progresses
-//! `fill → render` correctly (the slot value is filled, persisted, and
-//! substituted into the rendered HTML) and then lands `awaiting_review`. The
-//! end-to-end through-deliver assertion is deferred to after Task 2.
+//! With Task 2's review auto-approve in place, a scheduled run no longer pauses
+//! at the `review` gate — it auto-approves and runs through `deliver`. This test
+//! asserts the full chain: the slot fills + persists, the render substitutes it
+//! into the template HTML, review auto-approves, and `deliver` produces a
+//! document whose markdown is the filled+rendered HTML. The run completes
+//! (`succeeded`), never sitting at `awaiting_review`.
 
 mod common;
 
@@ -40,20 +40,25 @@ use wiremock::{
     matchers::{method, path},
 };
 
-/// A doc outbound handler that records the markdown it was handed (so a later
-/// through-deliver assertion, post-T2, can verify the delivered content).
+/// A doc outbound handler that records the markdown it was handed so the
+/// through-deliver assertion can verify the filled+rendered content shipped.
 struct DocCreateHandler {
     pool: PgPool,
     engagement_id: Uuid,
+    last_markdown: Arc<std::sync::Mutex<Option<String>>>,
 }
 
 #[async_trait]
 impl Handler for DocCreateHandler {
-    async fn invoke(&self, config: Value, _inputs: Value) -> Result<Value, DispatchError> {
+    async fn invoke(&self, config: Value, inputs: Value) -> Result<Value, DispatchError> {
         let title = config
             .get("title")
             .and_then(|v| v.as_str())
             .unwrap_or("Untitled");
+        *self.last_markdown.lock().unwrap() = inputs
+            .get("markdown")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
         let doc_id: Uuid = sqlx::query_scalar(
             "INSERT INTO documents (engagement_id, title) VALUES ($1, $2) RETURNING id",
         )
@@ -75,7 +80,7 @@ fn anthropic_text_response(text: &str) -> Value {
 }
 
 #[tokio::test]
-async fn scheduled_publish_flow_fills_and_renders_up_to_review_gate() {
+async fn scheduled_publish_flow_completes_through_deliver() {
     // SAFETY: tests set process env at setup before any handler reads it.
     unsafe {
         std::env::set_var("CELEREX_HOUSE_MODE", "true");
@@ -161,11 +166,13 @@ async fn scheduled_publish_flow_fills_and_renders_up_to_review_gate() {
         ExecutionType::Render,
         Arc::new(celerex_orchestrator::handlers::render::RenderHandler),
     );
+    let delivered_markdown = Arc::new(std::sync::Mutex::new(None));
     dispatcher.register(
         ExecutionType::Doc,
         Arc::new(DocCreateHandler {
             pool: db.pool.clone(),
             engagement_id: eng,
+            last_markdown: delivered_markdown.clone(),
         }),
     );
     let dispatcher = Arc::new(dispatcher);
@@ -260,8 +267,9 @@ async fn scheduled_publish_flow_fills_and_renders_up_to_review_gate() {
             .unwrap();
     assert_eq!(render_out["html"], "<h1>Big News Today</h1>");
 
-    // T1 scope: the run pauses at the human review gate (auto-approve = Task 2).
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    // Task 2: the scheduled run auto-approves the review gate and completes
+    // THROUGH deliver — it never sits at awaiting_review.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     let mut status = String::new();
     while std::time::Instant::now() < deadline {
         status = sqlx::query_scalar("SELECT status FROM runs WHERE id = $1")
@@ -269,13 +277,38 @@ async fn scheduled_publish_flow_fills_and_renders_up_to_review_gate() {
             .fetch_one(&db.pool)
             .await
             .unwrap();
-        if status == "awaiting_review" {
+        if status == "succeeded" {
             break;
         }
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
     assert_eq!(
-        status, "awaiting_review",
-        "scheduled run pauses at the review gate until Task 2's auto-approve lands"
+        status, "succeeded",
+        "scheduled run auto-approves review and completes through deliver"
     );
+
+    // The review step auto-approved the rendered HTML.
+    let review_out: Value =
+        sqlx::query_scalar("SELECT outputs FROM run_steps WHERE run_id=$1 AND step_id='review'")
+            .bind(run_id)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+    assert_eq!(review_out["approved"], json!(true));
+    assert_eq!(review_out["content"], json!("<h1>Big News Today</h1>"));
+
+    // Deliver received the filled+rendered HTML (flowed through the approved gate)
+    // and produced exactly one document.
+    assert_eq!(
+        delivered_markdown.lock().unwrap().as_deref(),
+        Some("<h1>Big News Today</h1>"),
+        "the filled+rendered content flowed through review to deliver"
+    );
+    let delivered: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM documents WHERE engagement_id=$1")
+            .bind(eng)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+    assert_eq!(delivered, 1, "scheduled run delivered exactly one document");
 }
