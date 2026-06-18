@@ -2,6 +2,7 @@ use crate::llm::provider::Provider;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+#[derive(Default)]
 pub struct ProviderRegistry {
     providers: HashMap<String, Arc<dyn Provider>>,
 }
