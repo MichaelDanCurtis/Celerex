@@ -20,7 +20,7 @@ use uuid::Uuid;
 
 /// True when the operator's shared "house" env key may be used as a fallback for
 /// engagements that have no vaulted key. Default OFF — fail closed.
-fn house_mode_enabled() -> bool {
+pub(crate) fn house_mode_enabled() -> bool {
     std::env::var("CELEREX_HOUSE_MODE")
         .map(|v| v == "true" || v == "1")
         .unwrap_or(false)
@@ -60,7 +60,7 @@ fn build_engagement_provider(provider_id: &str, key: String) -> Option<Arc<dyn P
 /// - `Ok(Some(provider))` — engagement key found and a client was built.
 /// - `Ok(None)` — no engagement key (caller decides: house fallback or 409).
 /// - `Err(..)` — key store failure.
-async fn resolve_engagement_provider(
+pub(crate) async fn resolve_engagement_provider(
     state: &crate::AppState,
     engagement_id: Uuid,
     provider_id: &str,
