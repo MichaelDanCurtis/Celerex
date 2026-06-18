@@ -134,6 +134,13 @@ impl CopilotOAuthClient {
             ))
             .header("authorization", format!("token {ghu}"))
             .header("accept", "application/json")
+            // GitHub's copilot_internal/v2/token requires a recognized editor identity;
+            // a missing/unknown editor User-Agent / Editor-Version → 403 even for a
+            // Copilot-licensed account (found in live verification 2026-06-18).
+            .header("editor-version", "vscode/1.95.0")
+            .header("editor-plugin-version", "copilot-chat/0.22.0")
+            .header("user-agent", "GitHubCopilotChat/0.22.0")
+            .header("copilot-integration-id", "vscode-chat")
             .send()
             .await
             .map_err(|e| format!("copilot token exchange failed: {e}"))?;
@@ -222,9 +229,9 @@ impl Provider for CopilotProvider {
             ))
             .header("authorization", format!("Bearer {copilot_token}"))
             .header("copilot-integration-id", "vscode-chat")
-            .header("editor-version", "OmniVyx/1.0")
-            .header("editor-plugin-version", "OmniVyx/1.0")
-            .header("user-agent", "OmniVyx/1.0")
+            .header("editor-version", "vscode/1.95.0")
+            .header("editor-plugin-version", "copilot-chat/0.22.0")
+            .header("user-agent", "GitHubCopilotChat/0.22.0")
             .json(&body)
             .send()
             .await
@@ -281,6 +288,9 @@ mod tests {
         Mock::given(method("GET"))
             .and(path("/copilot_internal/v2/token"))
             .and(header("authorization", "token ghu_abc"))
+            // The exchange MUST carry a recognized editor identity or GitHub 403s.
+            .and(header("editor-version", "vscode/1.95.0"))
+            .and(header("user-agent", "GitHubCopilotChat/0.22.0"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "token":"cop_tok","expires_at": (chrono::Utc::now().timestamp()+1800),
                 "endpoints": { "api": chat.uri() }
@@ -290,6 +300,7 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/chat/completions"))
             .and(header("authorization", "Bearer cop_tok"))
+            .and(header("editor-version", "vscode/1.95.0"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "choices":[{"message":{"role":"assistant","content":"hi from copilot"}}]
             })))
