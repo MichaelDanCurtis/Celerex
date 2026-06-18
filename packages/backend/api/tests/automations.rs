@@ -135,7 +135,10 @@ async fn store_due_filters_by_interval_and_advances_cursor() {
 
     // never-polled trigger is due
     let due = store.due(chrono::Utc::now()).await.unwrap();
-    assert!(due.iter().any(|t| t.id == id), "never-polled trigger should be due");
+    assert!(
+        due.iter().any(|t| t.id == id),
+        "never-polled trigger should be due"
+    );
 
     // after mark_polled it is not due within the interval, and the cursor persisted
     store
@@ -147,17 +150,21 @@ async fn store_due_filters_by_interval_and_advances_cursor() {
         !due2.iter().any(|t| t.id == id),
         "just-polled trigger should not be due again immediately"
     );
-    let got = store.get(id).await.unwrap().unwrap();
+    let got = store.get(id, eng).await.unwrap().unwrap();
     assert_eq!(got.cursor.as_deref(), Some("5"));
 
     // list_for_engagement returns it
     let listed = store.list_for_engagement(eng).await.unwrap();
-    assert!(listed.iter().any(|t| t.id == id), "list_for_engagement should return the trigger");
+    assert!(
+        listed.iter().any(|t| t.id == id),
+        "list_for_engagement should return the trigger"
+    );
 
     // update -> enabled=false makes it not due even if interval would fire
     store
         .update(
             id,
+            eng,
             &json!({"url":"http://y","items_path":"items","id_field":"id"}),
             None,
             300,
@@ -178,8 +185,8 @@ async fn store_due_filters_by_interval_and_advances_cursor() {
     );
 
     // delete -> get returns None
-    store.delete(id).await.unwrap();
-    let gone = store.get(id).await.unwrap();
+    store.delete(id, eng).await.unwrap();
+    let gone = store.get(id, eng).await.unwrap();
     assert!(gone.is_none(), "deleted trigger should not be found");
 }
 
@@ -236,7 +243,9 @@ impl celerex_orchestrator::tool_dispatch::Handler for NoopHandler {
 #[tokio::test]
 async fn poll_one_fires_connector_run_and_advances_cursor() {
     use celerex_api::automations::poll::AutomationPollLoop;
-    use celerex_api::automations::store::{AutomationTrigger, AutomationTriggersStore, PgAutomationTriggersStore};
+    use celerex_api::automations::store::{
+        AutomationTrigger, AutomationTriggersStore, PgAutomationTriggersStore,
+    };
     use celerex_api::project_members::store::{MembersStore, PgMembersStore};
     use celerex_api::runs::PgRunStore;
     use celerex_api::runs::bus::RunBus;
@@ -244,13 +253,13 @@ async fn poll_one_fires_connector_run_and_advances_cursor() {
     use celerex_orchestrator::executor::Executor;
     use celerex_orchestrator::tool_dispatch::Dispatcher;
     use std::sync::Arc;
-    use wiremock::{Mock, MockServer, ResponseTemplate};
     use wiremock::matchers::method;
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     let db = common::start_test_db().await;
 
     // ---- Seed a member with an empty graph -----------------------------------
-    let (_eng, _project, member_id) = seed_member(&db.pool).await;
+    let (eng, _project, member_id) = seed_member(&db.pool).await;
 
     // ---- Wiremock: 2 items --------------------------------------------------
     let server = MockServer::start().await;
@@ -304,8 +313,9 @@ async fn poll_one_fires_connector_run_and_advances_cursor() {
 
     // ---- Build the remaining collaborators ----------------------------------
     let members: Arc<dyn MembersStore> = Arc::new(PgMembersStore::new(db.pool.clone()));
-    let notifiers: Arc<Vec<Arc<dyn celerex_api::notifiers::Notifier>>> =
-        Arc::new(vec![Arc::new(celerex_api::notifiers::console::ConsoleNotifier)]);
+    let notifiers: Arc<Vec<Arc<dyn celerex_api::notifiers::Notifier>>> = Arc::new(vec![Arc::new(
+        celerex_api::notifiers::console::ConsoleNotifier,
+    )]);
     let provider_keys: Arc<dyn celerex_api::providers::store::ProviderKeysStore> =
         Arc::new(NoopProviderKeys);
 
@@ -320,7 +330,7 @@ async fn poll_one_fires_connector_run_and_advances_cursor() {
         tick: std::time::Duration::from_secs(60), // not used; we call poll_one directly
     };
 
-    let trigger = poll_loop.store.get(trigger_id).await.unwrap().unwrap();
+    let trigger = poll_loop.store.get(trigger_id, eng).await.unwrap().unwrap();
     let now = chrono::Utc::now();
     poll_loop.poll_one(&trigger, now).await;
 
@@ -341,15 +351,21 @@ async fn poll_one_fires_connector_run_and_advances_cursor() {
         }
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
-    assert_eq!(run_count, 2, "2 connector runs must be enqueued (one per item)");
+    assert_eq!(
+        run_count, 2,
+        "2 connector runs must be enqueued (one per item)"
+    );
 
     // ---- Assert: cursor advanced to '2' (max item id) -----------------------
-    let cursor: Option<String> = sqlx::query_scalar(
-        "SELECT cursor FROM automation_triggers WHERE id = $1",
-    )
-    .bind(trigger_id)
-    .fetch_one(&db.pool)
-    .await
-    .unwrap();
-    assert_eq!(cursor.as_deref(), Some("2"), "cursor must advance to the max item id");
+    let cursor: Option<String> =
+        sqlx::query_scalar("SELECT cursor FROM automation_triggers WHERE id = $1")
+            .bind(trigger_id)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        cursor.as_deref(),
+        Some("2"),
+        "cursor must advance to the max item id"
+    );
 }

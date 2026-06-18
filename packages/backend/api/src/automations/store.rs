@@ -21,14 +21,17 @@ pub struct AutomationTrigger {
 #[async_trait]
 pub trait AutomationTriggersStore: Send + Sync {
     async fn create(&self, t: AutomationTrigger) -> Result<Uuid, String>;
+    // intentional: system-wide sweep, resolves engagement per-row
     async fn due(&self, now: DateTime<Utc>) -> Result<Vec<AutomationTrigger>, String>;
+    // intentional: system-wide sweep, resolves engagement per-row
     async fn mark_polled(
         &self,
         id: Uuid,
         at: DateTime<Utc>,
         cursor: Option<String>,
     ) -> Result<(), String>;
-    async fn get(&self, id: Uuid) -> Result<Option<AutomationTrigger>, String>;
+    async fn get(&self, id: Uuid, engagement_id: Uuid)
+    -> Result<Option<AutomationTrigger>, String>;
     async fn list_for_engagement(
         &self,
         engagement_id: Uuid,
@@ -36,12 +39,13 @@ pub trait AutomationTriggersStore: Send + Sync {
     async fn update(
         &self,
         id: Uuid,
+        engagement_id: Uuid,
         source_config: &Value,
         filter: Option<&Value>,
         poll_interval_secs: i32,
         enabled: bool,
     ) -> Result<(), String>;
-    async fn delete(&self, id: Uuid) -> Result<(), String>;
+    async fn delete(&self, id: Uuid, engagement_id: Uuid) -> Result<(), String>;
 }
 
 pub struct PgAutomationTriggersStore {
@@ -101,6 +105,7 @@ impl AutomationTriggersStore for PgAutomationTriggersStore {
         .map_err(|e| e.to_string())
     }
 
+    // intentional: system-wide sweep, resolves engagement per-row
     async fn due(&self, now: DateTime<Utc>) -> Result<Vec<AutomationTrigger>, String> {
         let rows = sqlx::query_as::<_, Row>(
             "SELECT id, project_member_id, connector_id, source_config, filter,
@@ -117,6 +122,7 @@ impl AutomationTriggersStore for PgAutomationTriggersStore {
         Ok(rows.into_iter().map(row_to_trigger).collect())
     }
 
+    // intentional: system-wide sweep, resolves engagement per-row
     async fn mark_polled(
         &self,
         id: Uuid,
@@ -137,13 +143,19 @@ impl AutomationTriggersStore for PgAutomationTriggersStore {
         .map_err(|e| e.to_string())
     }
 
-    async fn get(&self, id: Uuid) -> Result<Option<AutomationTrigger>, String> {
+    async fn get(
+        &self,
+        id: Uuid,
+        engagement_id: Uuid,
+    ) -> Result<Option<AutomationTrigger>, String> {
         let row = sqlx::query_as::<_, Row>(
             "SELECT id, project_member_id, connector_id, source_config, filter,
                     poll_interval_secs, cursor, last_polled_at, enabled
-             FROM automation_triggers WHERE id = $1",
+             FROM automation_triggers WHERE id = $1
+               AND EXISTS (SELECT 1 FROM project_members m JOIN projects p ON p.id = m.project_id WHERE m.id = automation_triggers.project_member_id AND p.engagement_id = $2)",
         )
         .bind(id)
+        .bind(engagement_id)
         .fetch_optional(&self.pool)
         .await
         .map_err(|e| e.to_string())?;
@@ -173,33 +185,48 @@ impl AutomationTriggersStore for PgAutomationTriggersStore {
     async fn update(
         &self,
         id: Uuid,
+        engagement_id: Uuid,
         source_config: &Value,
         filter: Option<&Value>,
         poll_interval_secs: i32,
         enabled: bool,
     ) -> Result<(), String> {
-        sqlx::query(
+        // Scope the mutation to the caller's engagement. If RETURNING yields no
+        // row (cross-tenant id / no match), surface the not-found error instead
+        // of silently succeeding.
+        let matched: Option<Uuid> = sqlx::query_scalar(
             "UPDATE automation_triggers
-             SET source_config = $2, filter = $3, poll_interval_secs = $4, enabled = $5
-             WHERE id = $1",
+             SET source_config = $3, filter = $4, poll_interval_secs = $5, enabled = $6
+             WHERE id = $1
+               AND EXISTS (SELECT 1 FROM project_members m JOIN projects p ON p.id = m.project_id WHERE m.id = automation_triggers.project_member_id AND p.engagement_id = $2)
+             RETURNING id",
         )
         .bind(id)
+        .bind(engagement_id)
         .bind(source_config)
         .bind(filter)
         .bind(poll_interval_secs)
         .bind(enabled)
-        .execute(&self.pool)
+        .fetch_optional(&self.pool)
         .await
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+        matched.map(|_| ()).ok_or_else(|| "not found".to_string())
     }
 
-    async fn delete(&self, id: Uuid) -> Result<(), String> {
-        sqlx::query("DELETE FROM automation_triggers WHERE id = $1")
-            .bind(id)
-            .execute(&self.pool)
-            .await
-            .map(|_| ())
-            .map_err(|e| e.to_string())
+    async fn delete(&self, id: Uuid, engagement_id: Uuid) -> Result<(), String> {
+        let res = sqlx::query(
+            "DELETE FROM automation_triggers
+             WHERE id = $1
+               AND EXISTS (SELECT 1 FROM project_members m JOIN projects p ON p.id = m.project_id WHERE m.id = automation_triggers.project_member_id AND p.engagement_id = $2)",
+        )
+        .bind(id)
+        .bind(engagement_id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+        if res.rows_affected() == 0 {
+            return Err("not found".to_string());
+        }
+        Ok(())
     }
 }
