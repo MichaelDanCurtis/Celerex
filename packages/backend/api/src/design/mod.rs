@@ -10,6 +10,7 @@ pub mod automations;
 pub mod codex;
 pub mod copilot;
 pub mod deploy;
+pub mod living;
 pub mod proxy;
 pub mod rituals;
 pub mod sanitize;
