@@ -222,7 +222,7 @@ async fn owned_automation(
 ) -> Result<AutomationTrigger, (StatusCode, Json<Value>)> {
     let store = PgAutomationTriggersStore::new(state.pool.clone());
     let trigger = store
-        .get(automation_id)
+        .get(automation_id, engagement_id)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e }))))?
         .ok_or((StatusCode::NOT_FOUND, Json(json!({ "error": "not found" }))))?;
@@ -260,6 +260,7 @@ pub async fn update_automation(
     if let Err(e) = store
         .update(
             automation_id,
+            claims.engagement_id,
             &b.source_config,
             b.filter.as_ref(),
             b.poll_interval_secs,
@@ -278,7 +279,7 @@ pub async fn update_automation(
     };
     let name = state
         .members
-        .get(updated.project_member_id)
+        .get(updated.project_member_id, claims.engagement_id)
         .await
         .ok()
         .flatten()
@@ -356,7 +357,7 @@ pub async fn delete_automation(
         Err((s, b)) => return (s, b).into_response(),
     };
     let store = PgAutomationTriggersStore::new(state.pool.clone());
-    if let Err(e) = store.delete(trigger.id).await {
+    if let Err(e) = store.delete(trigger.id, claims.engagement_id).await {
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e }))).into_response();
     }
     if let Err(e) = sqlx::query(

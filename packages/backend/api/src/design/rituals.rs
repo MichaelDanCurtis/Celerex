@@ -242,7 +242,7 @@ async fn owned_schedule(
 ) -> Result<Schedule, (StatusCode, Json<Value>)> {
     let store = PgSchedulesStore::new(state.pool.clone());
     let schedule = store
-        .get(ritual_id)
+        .get(ritual_id, engagement_id)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e }))))?
         .ok_or((StatusCode::NOT_FOUND, Json(json!({ "error": "not found" }))))?;
@@ -278,7 +278,7 @@ pub async fn update_ritual(
         Err(e) => return (StatusCode::BAD_REQUEST, Json(json!({ "error": e }))).into_response(),
     };
     let store = PgSchedulesStore::new(state.pool.clone());
-    if let Err(e) = store.update(ritual_id, &b.cron_expr, &b.timezone, b.enabled, next_fire_at).await {
+    if let Err(e) = store.update(ritual_id, claims.engagement_id, &b.cron_expr, &b.timezone, b.enabled, next_fire_at).await {
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e }))).into_response();
     }
     let updated = Schedule {
@@ -290,7 +290,7 @@ pub async fn update_ritual(
     };
     let name = state
         .members
-        .get(updated.project_member_id)
+        .get(updated.project_member_id, claims.engagement_id)
         .await
         .ok()
         .flatten()
@@ -371,7 +371,7 @@ pub async fn delete_ritual(
         Err((s, b)) => return (s, b).into_response(),
     };
     let store = PgSchedulesStore::new(state.pool.clone());
-    if let Err(e) = store.delete(schedule.id).await {
+    if let Err(e) = store.delete(schedule.id, claims.engagement_id).await {
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e }))).into_response();
     }
     if let Err(e) = sqlx::query(

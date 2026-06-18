@@ -111,6 +111,7 @@ pub async fn update(
         .members
         .update(
             id,
+            a.0.engagement_id,
             &b.name,
             &b.description,
             &b.graph_json,
@@ -140,7 +141,7 @@ pub async fn get(
     if engagement_id != a.0.engagement_id {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"}))).into_response();
     }
-    match s.members.get(id).await {
+    match s.members.get(id, a.0.engagement_id).await {
         Ok(Some(m)) => (StatusCode::OK, Json(m)).into_response(),
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(e) => (
@@ -170,7 +171,7 @@ pub async fn list(
     if owner != a.0.engagement_id {
         return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"}))).into_response();
     }
-    match s.members.list_for_project(project_id).await {
+    match s.members.list_for_project(project_id, a.0.engagement_id).await {
         Ok(rows) => (StatusCode::OK, Json(rows)).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -227,8 +228,9 @@ pub async fn run_manual(
     }
 
     // Pre-validate the graph before the helper tries to compile it, so callers
-    // get 400 on a malformed graph instead of 500.
-    match s.members.get(id).await {
+    // get 400 on a malformed graph instead of 500. `owner` is the member's true
+    // engagement (already verified == caller above), so scope the read to it.
+    match s.members.get(id, owner).await {
         Ok(Some(m)) => {
             if let Err(e) = graph::compile(&m.graph_json) {
                 return (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response();

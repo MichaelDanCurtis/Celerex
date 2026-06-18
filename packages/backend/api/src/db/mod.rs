@@ -111,15 +111,15 @@ pub async fn list_documents_for_engagement(
     ).bind(eng).fetch_all(pool).await
 }
 
-pub async fn get_document(pool: &PgPool, doc: Uuid) -> sqlx::Result<Option<Document>> {
+pub async fn get_document(pool: &PgPool, doc: Uuid, engagement_id: Uuid) -> sqlx::Result<Option<Document>> {
     sqlx::query_as::<_, Document>(
-        "SELECT id, engagement_id, project_id, title, created_at FROM documents WHERE id = $1"
-    ).bind(doc).fetch_optional(pool).await
+        "SELECT id, engagement_id, project_id, title, created_at FROM documents WHERE id = $1 AND engagement_id = $2"
+    ).bind(doc).bind(engagement_id).fetch_optional(pool).await
 }
 
-pub async fn delete_document(pool: &PgPool, doc: Uuid) -> sqlx::Result<u64> {
-    let r = sqlx::query("DELETE FROM documents WHERE id = $1")
-        .bind(doc).execute(pool).await?;
+pub async fn delete_document(pool: &PgPool, doc: Uuid, engagement_id: Uuid) -> sqlx::Result<u64> {
+    let r = sqlx::query("DELETE FROM documents WHERE id = $1 AND engagement_id = $2")
+        .bind(doc).bind(engagement_id).execute(pool).await?;
     Ok(r.rows_affected())
 }
 
@@ -132,35 +132,44 @@ pub struct DocBlock {
     pub created_at: DateTime<Utc>,
 }
 
-pub async fn list_blocks(pool: &PgPool, doc: Uuid) -> sqlx::Result<Vec<DocBlock>> {
+pub async fn list_blocks(pool: &PgPool, doc: Uuid, engagement_id: Uuid) -> sqlx::Result<Vec<DocBlock>> {
     sqlx::query_as::<_, DocBlock>(
         "SELECT id, document_id, position, payload, created_at
          FROM doc_blocks
          WHERE document_id = $1
+           AND EXISTS (SELECT 1 FROM documents d WHERE d.id = doc_blocks.document_id AND d.engagement_id = $2)
          ORDER BY position ASC"
-    ).bind(doc).fetch_all(pool).await
+    ).bind(doc).bind(engagement_id).fetch_all(pool).await
 }
 
 pub async fn append_block(
     pool: &PgPool,
     doc: Uuid,
+    engagement_id: Uuid,
     payload: &serde_json::Value,
 ) -> sqlx::Result<Uuid> {
-    let row: (Uuid,) = sqlx::query_as(
+    // Guard the INSERT with the documents EXISTS chain: a foreign engagement (or
+    // a non-existent doc) matches no source row, so nothing is inserted and we
+    // surface the store's not-found error rather than silently writing.
+    let row: Option<(Uuid,)> = sqlx::query_as(
         "INSERT INTO doc_blocks (document_id, position, payload)
-         VALUES ($1, COALESCE((SELECT MAX(position) + 1 FROM doc_blocks WHERE document_id = $1), 0), $2)
+         SELECT $1, COALESCE((SELECT MAX(position) + 1 FROM doc_blocks WHERE document_id = $1), 0), $3
+         WHERE EXISTS (SELECT 1 FROM documents d WHERE d.id = $1 AND d.engagement_id = $2)
          RETURNING id"
-    ).bind(doc).bind(payload).fetch_one(pool).await?;
-    Ok(row.0)
+    ).bind(doc).bind(engagement_id).bind(payload).fetch_optional(pool).await?;
+    row.map(|r| r.0).ok_or(sqlx::Error::RowNotFound)
 }
 
 pub async fn replace_block(
     pool: &PgPool,
     block_id: Uuid,
+    engagement_id: Uuid,
     payload: &serde_json::Value,
 ) -> sqlx::Result<u64> {
-    let r = sqlx::query("UPDATE doc_blocks SET payload = $2 WHERE id = $1")
-        .bind(block_id).bind(payload).execute(pool).await?;
+    let r = sqlx::query(
+        "UPDATE doc_blocks SET payload = $2 WHERE id = $1
+           AND EXISTS (SELECT 1 FROM documents d WHERE d.id = doc_blocks.document_id AND d.engagement_id = $3)"
+    ).bind(block_id).bind(payload).bind(engagement_id).execute(pool).await?;
     Ok(r.rows_affected())
 }
 
