@@ -212,7 +212,7 @@ async fn list_blocks_returns_blocks_in_position_order() {
 }
 
 #[tokio::test]
-async fn cross_engagement_get_doc_returns_403() {
+async fn cross_engagement_get_doc_returns_404() {
     let db = common::start_test_db().await;
     let app = celerex_api::build_app(db.pool.clone());
     let server = axum_test::TestServer::new(app).unwrap();
@@ -235,15 +235,17 @@ async fn cross_engagement_get_doc_returns_403() {
         .json::<serde_json::Value>();
     let doc_id = doc["id"].as_str().unwrap().to_string();
 
-    // B tries to fetch A's doc
+    // B tries to fetch A's doc. With store-layer engagement scoping (A2 P2 T4),
+    // the doc is invisible to B — `get_document` returns None, so the handler
+    // answers 404 (not 403), leaking no existence signal across tenants.
     let resp = server.get(&format!("/api/docs/{doc_id}"))
         .add_header("authorization", format!("Bearer {t_b}"))
         .await;
-    resp.assert_status(axum::http::StatusCode::FORBIDDEN);
+    resp.assert_status(axum::http::StatusCode::NOT_FOUND);
 
-    // And B can't list A's blocks
+    // And B can't list A's blocks (same store-scoped invisibility -> 404).
     let blocks = server.get(&format!("/api/docs/{doc_id}/blocks"))
         .add_header("authorization", format!("Bearer {t_b}"))
         .await;
-    blocks.assert_status(axum::http::StatusCode::FORBIDDEN);
+    blocks.assert_status(axum::http::StatusCode::NOT_FOUND);
 }

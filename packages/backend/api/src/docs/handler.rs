@@ -103,7 +103,7 @@ impl Handler for DocHandler {
                 if !text.trim().is_empty() {
                     let payload = json!({ "type": "markdown", "text": text });
                     block_id = Some(
-                        db::append_block(&self.pool, doc.id, &payload)
+                        db::append_block(&self.pool, doc.id, engagement_id, &payload)
                             .await
                             .map_err(|e| handler_err(format!("doc create-block: {e}")))?,
                     );
@@ -117,9 +117,13 @@ impl Handler for DocHandler {
             }
             "append" => {
                 let doc_id = parse_uuid(&config, "document_id")?;
+                // `engagement_id` is injected into every doc node by
+                // `apply_doc_engagement` (the run's TRUE engagement), so the
+                // store guard scopes the write to the run's tenant.
+                let engagement_id = parse_uuid(&config, "engagement_id")?;
                 let text = extract_text(&inputs);
                 let payload = json!({ "type": "markdown", "text": text });
-                let block_id = db::append_block(&self.pool, doc_id, &payload)
+                let block_id = db::append_block(&self.pool, doc_id, engagement_id, &payload)
                     .await
                     .map_err(|e| handler_err(format!("doc append: {e}")))?;
                 Ok(json!({
@@ -131,7 +135,8 @@ impl Handler for DocHandler {
             }
             "read" => {
                 let doc_id = parse_uuid(&config, "document_id")?;
-                let blocks = db::list_blocks(&self.pool, doc_id)
+                let engagement_id = parse_uuid(&config, "engagement_id")?;
+                let blocks = db::list_blocks(&self.pool, doc_id, engagement_id)
                     .await
                     .map_err(|e| handler_err(format!("doc read: {e}")))?;
                 let mut text = String::new();

@@ -44,11 +44,14 @@ async fn block_append_replace_enforce_engagement_ownership() {
     let doc_id = create.json::<serde_json::Value>()["id"].as_str().unwrap().to_string();
 
     // ---- append_block ----
-    // B appends a block to A's doc → 403.
+    // B appends a block to A's doc → 404. With store-layer engagement scoping
+    // (A2 P2 T4) the append handler's `get_document` lookup is engagement-scoped,
+    // so A's doc is invisible to B and the handler answers 404 (not 403) — no
+    // cross-tenant existence leak.
     let b_append = server.post(&format!("/api/docs/{doc_id}/blocks"))
         .add_header("authorization", format!("Bearer {token_b}"))
         .json(&json!({ "type": "paragraph", "text": "intruder" })).await;
-    b_append.assert_status(axum::http::StatusCode::FORBIDDEN);
+    b_append.assert_status(axum::http::StatusCode::NOT_FOUND);
 
     // A appends a block → 201 (no regression).
     let a_append = server.post(&format!("/api/docs/{doc_id}/blocks"))
