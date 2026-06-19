@@ -18,7 +18,7 @@
 //! The graph is intentionally runnable as-is and obviously editable: the `fill`
 //! node is the one seam the user is expected to rewire.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 /// Build the starter delivery graph for a live template. `slots` is the
@@ -33,7 +33,11 @@ pub fn scaffold_live_flow(
     template_html: &str,
     slots: &Value,
 ) -> Value {
-    let slots = if slots.is_array() { slots.clone() } else { json!([]) };
+    let slots = if slots.is_array() {
+        slots.clone()
+    } else {
+        json!([])
+    };
     json!({
         "nodes": [
             {
@@ -78,6 +82,10 @@ pub fn scaffold_live_flow(
                 "type": "outbound",
                 "config": {
                     "execution": "doc",
+                    // CREATE a fresh delivered document each run; without an explicit
+                    // op the DocHandler defaults to `append`, which requires a
+                    // document_id and fails ("missing document_id") on a scheduled run.
+                    "op": "create",
                     "title": title,
                     "inputs": { "markdown": "{{steps.review.outputs.content}}" }
                 }
@@ -101,15 +109,28 @@ mod tests {
     fn scaffolded_flow_compiles() {
         let slots = json!([{ "name": "headline", "type": "text", "required": true }]);
         let tid = Uuid::new_v4();
-        let g = scaffold_live_flow(tid, "Weekly Digest", "mjml", "<h1>{{slot:headline}}</h1>", &slots);
+        let g = scaffold_live_flow(
+            tid,
+            "Weekly Digest",
+            "mjml",
+            "<h1>{{slot:headline}}</h1>",
+            &slots,
+        );
         // It must satisfy the real graph schema + compile to executable steps.
         graph::validate(&g).expect("scaffold must be a valid graph");
         let steps = graph::compile(&g).expect("scaffold must compile to steps");
         assert_eq!(steps.len(), 5);
         // The render node carries the template inline so it renders standalone.
-        let render = g["nodes"].as_array().unwrap()
-            .iter().find(|n| n["id"] == "render").unwrap();
-        assert_eq!(render["config"]["template_html"], "<h1>{{slot:headline}}</h1>");
+        let render = g["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|n| n["id"] == "render")
+            .unwrap();
+        assert_eq!(
+            render["config"]["template_html"],
+            "<h1>{{slot:headline}}</h1>"
+        );
         assert_eq!(render["config"]["engine"], "mjml");
         assert_eq!(render["config"]["slots"], slots);
     }
@@ -118,31 +139,78 @@ mod tests {
     fn fill_node_is_slot_fill_carrying_template_id() {
         let tid = Uuid::new_v4();
         let g = scaffold_live_flow(tid, "X", "html", "<p>{{slot:body}}</p>", &json!([]));
-        let fill = g["nodes"].as_array().unwrap()
-            .iter().find(|n| n["id"] == "fill").unwrap();
+        let fill = g["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|n| n["id"] == "fill")
+            .unwrap();
         assert_eq!(fill["config"]["execution"], "slot_fill");
         assert_eq!(fill["config"]["template_id"], tid.to_string());
         // The render node reads the fill node's whole output as its `data`, which
         // the slot_fill handler emits as a flat `{slot: value}` object.
-        let render = g["nodes"].as_array().unwrap()
-            .iter().find(|n| n["id"] == "render").unwrap();
+        let render = g["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|n| n["id"] == "render")
+            .unwrap();
         assert_eq!(render["config"]["inputs"]["data"], "{{steps.fill.outputs}}");
     }
 
     #[test]
     fn review_gate_precedes_delivery() {
-        let g = scaffold_live_flow(Uuid::new_v4(), "X", "html", "<p>{{slot:body}}</p>", &json!([]));
+        let g = scaffold_live_flow(
+            Uuid::new_v4(),
+            "X",
+            "html",
+            "<p>{{slot:body}}</p>",
+            &json!([]),
+        );
         let edges = g["edges"].as_array().unwrap();
         // deliver depends on review (no path that ships before a human approves).
-        assert!(edges.iter().any(|e| e["from"] == "review" && e["to"] == "deliver"));
-        assert!(edges.iter().any(|e| e["from"] == "render" && e["to"] == "review"));
+        assert!(
+            edges
+                .iter()
+                .any(|e| e["from"] == "review" && e["to"] == "deliver")
+        );
+        assert!(
+            edges
+                .iter()
+                .any(|e| e["from"] == "render" && e["to"] == "review")
+        );
+    }
+
+    #[test]
+    fn deliver_node_creates_a_document() {
+        // The deliver node MUST set op=create; the DocHandler default is `append`,
+        // which needs a document_id and fails an unattended scheduled run.
+        let g = scaffold_live_flow(
+            Uuid::new_v4(),
+            "X",
+            "html",
+            "<p>{{slot:body}}</p>",
+            &json!([]),
+        );
+        let deliver = g["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|n| n["id"] == "deliver")
+            .unwrap();
+        assert_eq!(deliver["config"]["execution"], "doc");
+        assert_eq!(deliver["config"]["op"], "create");
     }
 
     #[test]
     fn non_array_slots_default_empty() {
         let g = scaffold_live_flow(Uuid::new_v4(), "X", "html", "<p>x</p>", &Value::Null);
-        let render = g["nodes"].as_array().unwrap()
-            .iter().find(|n| n["id"] == "render").unwrap();
+        let render = g["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|n| n["id"] == "render")
+            .unwrap();
         assert_eq!(render["config"]["slots"], json!([]));
     }
 }
