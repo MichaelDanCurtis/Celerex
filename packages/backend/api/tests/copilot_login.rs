@@ -8,10 +8,22 @@ struct Claims {
     sub: String,
     engagement_id: String,
     project_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    scope: Option<String>,
     exp: usize,
 }
 
 fn token(eng: Uuid) -> String {
+    encode_token(eng, None)
+}
+
+/// Mint a token carrying an explicit capability `scope` (e.g. the daemon's
+/// `design.device` pairing scope).
+fn scoped_token(eng: Uuid, scope: &str) -> String {
+    encode_token(eng, Some(scope.to_string()))
+}
+
+fn encode_token(eng: Uuid, scope: Option<String>) -> String {
     // SAFETY: single-process test
     unsafe {
         std::env::set_var("CELEREX_JWT_SECRET", "test-secret");
@@ -20,6 +32,7 @@ fn token(eng: Uuid) -> String {
         sub: "u".into(),
         engagement_id: eng.to_string(),
         project_id: None,
+        scope,
         exp: (chrono::Utc::now().timestamp() + 3600) as usize,
     };
     jsonwebtoken::encode(
@@ -114,4 +127,56 @@ async fn copilot_device_flow_vaults_token_and_is_isolated() {
     // Unauthenticated start → 401.
     let anon = server.post("/api/design/copilot/login/start").await;
     assert_eq!(anon.status_code(), axum::http::StatusCode::UNAUTHORIZED);
+}
+
+/// The local daemon drives this flow with its engagement-scoped `design.device`
+/// pairing token. The routes are guarded by `DeviceAuth`, so that scope must be
+/// accepted (it was rejected by the old `AuthClaims` guard), while an unrelated
+/// capability scope must still be refused.
+#[tokio::test]
+async fn copilot_login_accepts_device_scope_rejects_foreign_scope() {
+    let db = common::start_test_db().await;
+    let server = axum_test::TestServer::new(celerex_api::build_app(db.pool.clone())).unwrap();
+
+    let a: Uuid = sqlx::query_scalar("INSERT INTO engagements (name) VALUES ('A') RETURNING id")
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+
+    // status reads only the DB (no GitHub call), so it cleanly exercises the
+    // extractor's scope policy across all three DeviceAuth branches.
+
+    // (1) A full, unscoped session token must STILL be accepted (the web-direct
+    // path keeps working after the AuthClaims -> DeviceAuth change).
+    let session = server
+        .get("/api/design/copilot/login/status")
+        .add_header("authorization", format!("Bearer {}", token(a)))
+        .await;
+    session.assert_status_ok();
+
+    // (2) The daemon's engagement-scoped `design.device` pairing token must be
+    // accepted (it was rejected by the old `AuthClaims` guard).
+    let device = server
+        .get("/api/design/copilot/login/status")
+        .add_header(
+            "authorization",
+            format!("Bearer {}", scoped_token(a, "design.device")),
+        )
+        .await;
+    device.assert_status_ok();
+    assert_eq!(
+        device.json::<serde_json::Value>()["connected"],
+        serde_json::json!(false)
+    );
+
+    // A foreign capability scope must still be rejected (403), so a leaked
+    // narrowly-scoped credential can't manage Copilot logins.
+    let foreign = server
+        .get("/api/design/copilot/login/status")
+        .add_header(
+            "authorization",
+            format!("Bearer {}", scoped_token(a, "some.other.scope")),
+        )
+        .await;
+    assert_eq!(foreign.status_code(), axum::http::StatusCode::FORBIDDEN);
 }
