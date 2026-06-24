@@ -15,7 +15,9 @@ export function useCollaboration(docId: string) {
 
   const connect = useCallback(() => {
     try {
-      const ws = new WebSocket("ws://localhost:3001/ws");
+      // Same-origin WS so collaboration follows wherever the app is served.
+      const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const ws = new WebSocket(`${wsProto}//${window.location.host}/ws`);
       wsRef.current = ws;
 
       ws.onopen = () => {

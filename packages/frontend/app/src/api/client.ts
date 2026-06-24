@@ -2,7 +2,10 @@
 // Celerex Frontend – API client for the Rust backend
 // ---------------------------------------------------------------------------
 
-export const API_BASE = "http://localhost:3001/api";
+// Same-origin by default: the Agent serves this SPA and the API on one server,
+// so "/api" hits the very server that served the page. A dev Vite server can
+// override with VITE_API_BASE (e.g. http://localhost:3001/api) + a proxy.
+export const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) || "/api";
 
 // ---- Response types matching the Rust API --------------------------------
 

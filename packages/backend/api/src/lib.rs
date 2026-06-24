@@ -25,6 +25,20 @@ use axum::{Router, routing::{any, get, patch, post, put}, Json, extract::State};
 use serde_json::json;
 use sqlx::PgPool;
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::services::{ServeDir, ServeFile};
+
+/// Serve the built OmniVyx web app (one service: this Agent serves the SPA AND
+/// the API on one origin). Static assets are served from `CELEREX_WEB_DIR`
+/// (baked into the image); any unmatched path falls back to `index.html` so the
+/// client-side router handles deep links. When the dir is absent (e.g. a bare
+/// `cargo run` with no built frontend), this simply 404s the SPA while every
+/// `/api/*` route keeps working.
+fn web_service() -> ServeDir<ServeFile> {
+    let dir = std::env::var("CELEREX_WEB_DIR")
+        .unwrap_or_else(|_| "/usr/local/share/celerex-web".to_string());
+    let index = format!("{}/index.html", dir.trim_end_matches('/'));
+    ServeDir::new(dir).fallback(ServeFile::new(index))
+}
 
 use crate::plugins::credentials::{CredentialStore, LocalAeadStore};
 use crate::project_members::store::{MembersStore, PgMembersStore};
@@ -399,6 +413,8 @@ fn build_app_with_dispatcher_inner(
             provider_keys,
             hub_admin_engagements: hub_admin_engagements(),
         })
+        // Serve the SPA for any non-API path (one server, one service).
+        .fallback_service(web_service())
         .layer(cors)
 }
 

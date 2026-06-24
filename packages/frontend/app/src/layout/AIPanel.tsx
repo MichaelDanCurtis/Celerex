@@ -206,7 +206,13 @@ export function AIPanel() {
     let cancelled = false;
     getCopilotStatus(token)
       .then((s) => {
-        if (!cancelled) setCopilotConnected(s.connected || s.status === "connected");
+        if (cancelled) return;
+        const connected = s.connected || s.status === "connected";
+        setCopilotConnected(connected);
+        // If Copilot is already authorized and nothing else is selected, default
+        // the Co-Pilot to it so a reload doesn't silently fall back to a provider
+        // with no key. (The backend "house" list is often empty per-engagement.)
+        if (connected) setBackendProviderId((cur) => cur ?? "copilot");
       })
       .catch(() => {
         /* status hiccup — leave the Connect button available */

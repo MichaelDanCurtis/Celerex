@@ -41,6 +41,17 @@ rsync -a "${EXCL[@]}" "$GALVO_ENGINE/" "$STAGE/lucidity/Galvo/engine/"
 # Lean context.
 cp "$CELEREX_ROOT/deploy/docker/.dockerignore" "$STAGE/.dockerignore"
 
+# One service: stage the built OmniVyx web app so the Agent image serves the SPA
+# itself (CELEREX_WEB_DIR). Built locally beforehand via `bun run build`.
+WEB_DIST="$CELEREX_ROOT/packages/frontend/app/dist"
+mkdir -p "$STAGE/web-dist"   # always present so the Dockerfile COPY never fails
+if [[ -d "$WEB_DIST" ]]; then
+  rsync -a "$WEB_DIST/" "$STAGE/web-dist/"
+  echo "Staged web app from $WEB_DIST"
+else
+  echo "WARNING: $WEB_DIST not found — image will serve API only (run 'bun run build' in packages/frontend/app first)." >&2
+fi
+
 echo "Building $IMAGE from staged context $STAGE ..."
 docker build -f "$CELEREX_ROOT/deploy/docker/agent.Dockerfile" -t "$IMAGE" "$STAGE"
 echo "Built $IMAGE"

@@ -30,9 +30,13 @@ pub trait Provider: Send + Sync {
     ) -> BoxStream<'a, Result<String, String>> {
         let fut = async move {
             let c = self.complete(model, messages, tools).await?;
-            // Try to extract text from the raw response (Anthropic shape:
-            // { content: [{ type: "text", text: "..." }, ...] }).
-            let text = c
+            // Extract text across provider response shapes. Providers that don't
+            // override complete_stream (Copilot, Codex, OpenAI, Kimi, …) reach
+            // here, so we must handle BOTH the Anthropic shape
+            // ({ content: [{ text }] }) AND the OpenAI/Copilot shape
+            // ({ choices: [{ message: { content } }] }) — otherwise the streamed
+            // delta is empty and the chat UI shows a blank reply.
+            let anthropic = c
                 .raw
                 .get("content")
                 .and_then(|a| a.as_array())
@@ -44,8 +48,17 @@ pub trait Provider: Send + Sync {
                                 .map(|s| s.to_string())
                         })
                         .reduce(|a, b| a + &b)
-                })
-                .unwrap_or_default();
+                });
+            let openai = c
+                .raw
+                .get("choices")
+                .and_then(|a| a.as_array())
+                .and_then(|arr| arr.first())
+                .and_then(|c0| c0.get("message"))
+                .and_then(|m| m.get("content"))
+                .and_then(|t| t.as_str())
+                .map(|s| s.to_string());
+            let text = anthropic.or(openai).unwrap_or_default();
             Ok::<String, String>(text)
         };
         stream::once(fut).boxed()

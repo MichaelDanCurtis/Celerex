@@ -22,5 +22,8 @@ FROM debian:bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /celerex-api /usr/local/bin/celerex-api
+# One service: the built OmniVyx web app, served by the Agent at the default
+# CELEREX_WEB_DIR. Staged into the context by build-image.sh (no-op if absent).
+COPY web-dist/ /usr/local/share/celerex-web/
 EXPOSE 3001
 CMD ["celerex-api"]
