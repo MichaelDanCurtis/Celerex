@@ -3,7 +3,7 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use serde_json::{Value, json};
 
-use crate::auth::extractors::AuthClaims;
+use crate::auth::extractors::DeviceAuth;
 use crate::llm::copilot::{CopilotOAuthClient, PollOutcome};
 use crate::{AppState, db};
 
@@ -20,8 +20,13 @@ fn oauth_client() -> CopilotOAuthClient {
 /// `POST /api/design/copilot/login/start` — kick off the GitHub device flow and
 /// spawn a background poller that vaults the resulting OAuth token (`ghu_…`)
 /// under the `copilot` provider id for this engagement.
+///
+/// Device-paired credential management (same family as `design/codex.rs`,
+/// rituals, and automations), so `DeviceAuth` — not `AuthClaims` — guards it.
+/// This lets the local daemon drive the flow with its engagement-scoped
+/// `design.device` pairing token; a full session token still works too.
 pub async fn start(
-    AuthClaims(claims): AuthClaims,
+    DeviceAuth(claims): DeviceAuth,
     State(state): State<AppState>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
     let client = oauth_client();
@@ -94,7 +99,7 @@ pub async fn start(
 /// `GET /api/design/copilot/login/status` — report the device-flow status row plus
 /// whether a `copilot` token is actually vaulted for this engagement.
 pub async fn status(
-    AuthClaims(claims): AuthClaims,
+    DeviceAuth(claims): DeviceAuth,
     State(state): State<AppState>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
     let row = db::get_copilot_login(&state.pool, claims.engagement_id)
