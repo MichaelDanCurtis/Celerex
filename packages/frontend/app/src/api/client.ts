@@ -68,6 +68,26 @@ export async function login(email: string, password: string): Promise<LoginRespo
   });
 }
 
+/**
+ * Exchange a WorkOS authorization `code` for the Agent's engagement session. The
+ * Agent does the confidential code→token exchange server-side (the browser can't:
+ * it needs the client secret and the endpoint isn't CORS-enabled). The result is
+ * the same `LoginResponse` every other sign-in path yields — one service, one
+ * session.
+ */
+export async function exchangeWorkosCode(code: string): Promise<LoginResponse> {
+  const res = await fetch(`${API_BASE}/auth/workos/exchange`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`WorkOS sign-in failed (${res.status})${body ? `: ${body}` : ""}`);
+  }
+  return res.json() as Promise<LoginResponse>;
+}
+
 /** Create an account (provisioning the named workspace if new) and sign in. */
 export async function signup(
   email: string,
@@ -640,6 +660,41 @@ export async function listProviders(token: string): Promise<string[]> {
   if (!r.ok) throw new Error(`listProviders: ${r.status}`);
   const body = await r.json();
   return body.providers ?? [];
+}
+
+// ---- GitHub Copilot OAuth (device flow) ----------------------------------
+//
+// Copilot authorizes as an AI provider through the Agent's device flow: start
+// returns a code the user enters at github.com/login/device; the Agent polls in
+// the background and vaults the `ghu_` token for the engagement. Once connected,
+// the Co-Pilot can send `provider_id: "copilot"` to /api/assistant/chat.
+
+export interface CopilotLoginStart {
+  user_code: string;
+  verification_uri: string;
+  interval: number;
+}
+export interface CopilotLoginStatus {
+  status: string;
+  connected: boolean;
+}
+
+export async function startCopilotLogin(token: string): Promise<CopilotLoginStart> {
+  const r = await fetch(`${API_BASE}/design/copilot/login/start`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", authorization: `Bearer ${token}` },
+    body: "{}",
+  });
+  if (!r.ok) throw new Error(`startCopilotLogin: ${r.status}`);
+  return r.json() as Promise<CopilotLoginStart>;
+}
+
+export async function getCopilotStatus(token: string): Promise<CopilotLoginStatus> {
+  const r = await fetch(`${API_BASE}/design/copilot/login/status`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!r.ok) throw new Error(`getCopilotStatus: ${r.status}`);
+  return r.json() as Promise<CopilotLoginStatus>;
 }
 
 // ---- Per-engagement provider keys ----------------------------------------

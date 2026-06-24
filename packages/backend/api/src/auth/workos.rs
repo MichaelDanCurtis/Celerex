@@ -49,6 +49,58 @@ pub async fn verify_access_token(http: &reqwest::Client, token: &str) -> Result<
     verify_with_jwks(token, &jwks)
 }
 
+/// The WorkOS user returned by the authorization-code exchange.
+#[derive(Debug, Deserialize)]
+pub struct WorkosUser {
+    pub id: String,
+    #[serde(default)]
+    pub email: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct AuthenticateResponse {
+    user: WorkosUser,
+}
+
+/// Exchange a hosted-AuthKit authorization `code` for the WorkOS user, SERVER-SIDE.
+/// The browser cannot do this: `/user_management/authenticate` requires the
+/// confidential client secret (`WORKOS_API_KEY`) and is not CORS-enabled. This is
+/// the single-service login — the SPA only forwards the code; the Agent (which
+/// holds the secret) performs the exchange and returns the identity.
+pub async fn exchange_authorization_code(
+    http: &reqwest::Client,
+    code: &str,
+) -> Result<WorkosUser, String> {
+    let client_id = client_id()?;
+    let client_secret =
+        std::env::var("WORKOS_API_KEY").map_err(|_| "WORKOS_API_KEY not set".to_string())?;
+    let base = std::env::var("WORKOS_API_BASE").unwrap_or_else(|_| "https://api.workos.com".to_string());
+    let res = http
+        .post(format!(
+            "{}/user_management/authenticate",
+            base.trim_end_matches('/')
+        ))
+        .json(&serde_json::json!({
+            "grant_type": "authorization_code",
+            "code": code,
+            "client_id": client_id,
+            "client_secret": client_secret,
+        }))
+        .send()
+        .await
+        .map_err(|e| format!("workos authenticate failed: {e}"))?;
+    if !res.status().is_success() {
+        let status = res.status();
+        let body = res.text().await.unwrap_or_default();
+        return Err(format!("workos authenticate status {status}: {body}"));
+    }
+    let body: AuthenticateResponse = res
+        .json()
+        .await
+        .map_err(|e| format!("workos authenticate parse: {e}"))?;
+    Ok(body.user)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

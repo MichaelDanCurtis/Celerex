@@ -10,6 +10,8 @@ import {
 import {
   assistantChatStream,
   listProviders,
+  startCopilotLogin,
+  getCopilotStatus,
 } from "../api/client";
 import {
   selectedModelAtom,
@@ -190,6 +192,61 @@ export function AIPanel() {
   const [backendProviderId, setBackendProviderId] = useState<string | undefined>(undefined);
   const [modelOverride, setModelOverride] = useState<string>("");
 
+  // GitHub Copilot authorize-as-provider (device flow). Once connected, "copilot"
+  // becomes a selectable provider that the Co-Pilot sends to /api/assistant/chat.
+  const [copilotConnected, setCopilotConnected] = useState(false);
+  const [copilotCode, setCopilotCode] = useState<string | null>(null);
+  const [copilotVerifyUrl, setCopilotVerifyUrl] = useState<string | null>(null);
+  const [copilotBusy, setCopilotBusy] = useState(false);
+  const [copilotError, setCopilotError] = useState<string | null>(null);
+
+  // Reflect an already-authorized Copilot on load so it can be selected.
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    getCopilotStatus(token)
+      .then((s) => {
+        if (!cancelled) setCopilotConnected(s.connected || s.status === "connected");
+      })
+      .catch(() => {
+        /* status hiccup — leave the Connect button available */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  const connectCopilot = useCallback(async () => {
+    if (!token) return;
+    setCopilotBusy(true);
+    setCopilotError(null);
+    setCopilotCode(null);
+    try {
+      const start = await startCopilotLogin(token);
+      setCopilotCode(start.user_code);
+      setCopilotVerifyUrl(start.verification_uri);
+      const delay = start.interval > 0 ? start.interval * 1000 : 2500;
+      for (let i = 0; i < 200; i++) {
+        const s = await getCopilotStatus(token);
+        if (s.connected || s.status === "connected") {
+          setCopilotConnected(true);
+          setCopilotCode(null);
+          setBackendProviderId("copilot");
+          break;
+        }
+        if (s.status === "denied" || s.status === "expired" || s.status === "error") {
+          setCopilotError(`GitHub login ${s.status}.`);
+          break;
+        }
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    } catch (e) {
+      setCopilotError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setCopilotBusy(false);
+    }
+  }, [token]);
+
   // Load backend providers once we have a token. Failures are ignored — the
   // backend will use "default" when no provider_id is sent.
   useEffect(() => {
@@ -270,7 +327,14 @@ export function AIPanel() {
     const apiMessages = [{ role: "user", content: promptWithContext }];
 
     const providerArg = backendProviderId || undefined;
-    const modelArg = modelOverride.trim() ? modelOverride.trim() : (selectedModel || undefined);
+    // GitHub Copilot uses OpenAI-style model slugs; default to gpt-4o so the
+    // Claude default doesn't get sent to Copilot (which would reject it).
+    const isCopilot = backendProviderId === "copilot";
+    const modelArg = modelOverride.trim()
+      ? modelOverride.trim()
+      : isCopilot
+        ? "gpt-4o"
+        : (selectedModel || undefined);
 
     // Tear down any prior in-flight stream and arm a new abort controller for
     // the Stop button.
@@ -368,6 +432,12 @@ export function AIPanel() {
 
   const isDisabled = input.trim().length === 0 || loading;
 
+  // Providers the Co-Pilot can send: the backend's list plus GitHub Copilot
+  // once it's authorized for this workspace.
+  const providerOptions = Array.from(
+    new Set([...backendProviders, ...(copilotConnected ? ["copilot"] : [])]),
+  );
+
   return (
     <aside
       style={{
@@ -414,11 +484,11 @@ export function AIPanel() {
         <select
           value={backendProviderId ?? ""}
           onChange={(e) => setBackendProviderId(e.target.value || undefined)}
-          disabled={backendProviders.length === 0}
+          disabled={providerOptions.length === 0}
           title={
-            backendProviders.length === 0
-              ? "No providers configured on backend — using default"
-              : "Backend-configured providers from /api/providers"
+            providerOptions.length === 0
+              ? "No providers configured — using default"
+              : "Provider the Co-Pilot sends to the assistant"
           }
           style={{
             padding: "3px 6px",
@@ -430,12 +500,12 @@ export function AIPanel() {
             outline: "none",
           }}
         >
-          {backendProviders.length === 0 ? (
+          {providerOptions.length === 0 ? (
             <option value="">default</option>
           ) : (
-            backendProviders.map((p) => (
+            providerOptions.map((p) => (
               <option key={p} value={p}>
-                {p}
+                {p === "copilot" ? "GitHub Copilot" : p}
               </option>
             ))
           )}
@@ -458,6 +528,52 @@ export function AIPanel() {
             fontFamily: "monospace",
           }}
         />
+      </div>
+
+      {/* GitHub Copilot: authorize as an AI provider for this workspace */}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 8,
+          alignItems: "center",
+          padding: "6px 16px",
+          borderBottom: "1px solid var(--celerex-border)",
+          fontSize: 11,
+        }}
+      >
+        <span style={{ color: "var(--celerex-text-secondary)" }}>GitHub Copilot:</span>
+        {copilotConnected ? (
+          <span style={{ color: "#22c55e", fontWeight: 600 }}>✓ authorized</span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void connectCopilot()}
+            disabled={copilotBusy || !token}
+            style={{
+              padding: "3px 8px",
+              borderRadius: 4,
+              border: "1px solid var(--celerex-border)",
+              background: "var(--celerex-bg-secondary)",
+              color: "var(--celerex-text-primary)",
+              fontSize: 11,
+              cursor: copilotBusy ? "wait" : "pointer",
+              opacity: copilotBusy ? 0.6 : 1,
+            }}
+          >
+            {copilotBusy ? "Waiting for GitHub…" : "Connect GitHub Copilot"}
+          </button>
+        )}
+        {copilotCode ? (
+          <span style={{ color: "var(--celerex-text-secondary)" }}>
+            Go to{" "}
+            <a href={copilotVerifyUrl ?? "https://github.com/login/device"} target="_blank" rel="noreferrer" style={{ color: "var(--celerex-accent)" }}>
+              github.com/login/device
+            </a>{" "}
+            and enter <strong style={{ color: "var(--celerex-text-primary)" }}>{copilotCode}</strong>
+          </span>
+        ) : null}
+        {copilotError ? <span style={{ color: "#f87171" }}>{copilotError}</span> : null}
       </div>
 
       {/* Messages Area */}

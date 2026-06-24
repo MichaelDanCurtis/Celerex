@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSetAtom } from "jotai";
-import { login, signup } from "../api/client";
+import { login, signup, exchangeWorkosCode } from "../api/client";
 import { tokenAtom, authEngagementAtom, activeViewAtom } from "../state/atoms";
+import { consumeWorkosCode, workosSignIn } from "../auth/workos";
 
 /**
- * Real auth: email + password. New users sign up (which also provisions their
- * workspace/engagement); returning users sign in. The session JWT is persisted
- * via `tokenAtom`, so a refresh keeps the session. Shown when `tokenAtom` is
- * empty (see App.tsx).
+ * Sign in to OmniVyx. WorkOS is the primary identity login: the hosted AuthKit
+ * flow returns a WorkOS access token, which the Agent exchanges for the same
+ * session JWT (persisted via `tokenAtom`) that email/password yields — one
+ * service, one session. Shown when `tokenAtom` is empty (see App.tsx).
  */
 export function LoginPage() {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
@@ -15,10 +16,33 @@ export function LoginPage() {
   const [pw, setPw] = useState("");
   const [engagementName, setEngagementName] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [workosBusy, setWorkosBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const setToken = useSetAtom(tokenAtom);
   const setAuthEngagement = useSetAtom(authEngagementAtom);
   const setActiveView = useSetAtom(activeViewAtom);
+  const exchangedRef = useRef(false);
+
+  // Complete sign-in on the AuthKit return leg: read the ?code= and have the
+  // Agent exchange it for the engagement session, then drop into the workspace.
+  useEffect(() => {
+    const code = consumeWorkosCode();
+    if (!code || exchangedRef.current) return;
+    exchangedRef.current = true;
+    setWorkosBusy(true);
+    setError(null);
+    exchangeWorkosCode(code)
+      .then((resp) => {
+        setToken(resp.token);
+        setAuthEngagement(resp.engagement);
+        setActiveView("dashboard");
+      })
+      .catch((e) => {
+        exchangedRef.current = false;
+        setError(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => setWorkosBusy(false));
+  }, [setToken, setAuthEngagement, setActiveView]);
 
   const isSignup = mode === "signup";
   const canSubmit =
@@ -96,6 +120,34 @@ export function LoginPage() {
           <p style={{ fontSize: 13, color: "var(--celerex-text-secondary)", margin: "4px 0 0 0" }}>
             {isSignup ? "Create your account" : "Sign in to your workspace"}
           </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            setError(null);
+            void workosSignIn();
+          }}
+          disabled={workosBusy || submitting}
+          style={{
+            padding: "10px 14px",
+            fontSize: 14,
+            fontWeight: 600,
+            borderRadius: 6,
+            border: "none",
+            cursor: workosBusy ? "wait" : "pointer",
+            background: "var(--celerex-accent)",
+            color: "#fff",
+            opacity: workosBusy || submitting ? 0.6 : 1,
+          }}
+        >
+          {workosBusy ? "Completing sign-in…" : "Sign in with WorkOS"}
+        </button>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 10, opacity: 0.6 }}>
+          <span style={{ flex: 1, height: 1, background: "var(--celerex-border)" }} />
+          <span style={{ fontSize: 11, color: "var(--celerex-text-secondary)" }}>or email & password</span>
+          <span style={{ flex: 1, height: 1, background: "var(--celerex-border)" }} />
         </div>
 
         <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>

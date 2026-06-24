@@ -151,3 +151,48 @@ pub async fn workos_login(
         engagement: LoginEngagement { id: engagement_id, name: engagement_name },
     }))
 }
+
+#[derive(Deserialize)]
+pub struct WorkosExchangeRequest {
+    /// The authorization `code` from the hosted-AuthKit redirect (?code=…).
+    pub code: String,
+}
+
+/// `POST /api/auth/workos/exchange` — PUBLIC. The single-service WorkOS login for
+/// SPA clients that have no server of their own: the browser forwards the
+/// authorization `code`, the Agent exchanges it server-side (confidential client
+/// secret), find-or-provisions the personal engagement keyed to the WorkOS user
+/// id, and mints the SAME session JWT as every other sign-in path.
+pub async fn workos_exchange(
+    State(state): State<AppState>,
+    Json(body): Json<WorkosExchangeRequest>,
+) -> Result<Json<LoginResponse>, (StatusCode, String)> {
+    let http = reqwest::Client::new();
+    let user = crate::auth::workos::exchange_authorization_code(&http, &body.code)
+        .await
+        .map_err(|e| (StatusCode::UNAUTHORIZED, e))?;
+
+    let (engagement_id, engagement_name) =
+        match db::find_engagement_by_workos_user(&state.pool, &user.id)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        {
+            Some(found) => found,
+            None => {
+                let name = format!("{}'s workspace", user.email.trim());
+                let eng = db::create_engagement(&state.pool, &name)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                db::create_workos_user(&state.pool, user.email.trim(), &user.id, eng.id)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                (eng.id, eng.name)
+            }
+        };
+
+    let token = jwt::mint(engagement_id, &user.id, SESSION_TTL_SECS);
+    Ok(Json(LoginResponse {
+        token,
+        engagement: LoginEngagement { id: engagement_id, name: engagement_name },
+    }))
+}

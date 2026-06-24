@@ -88,6 +88,7 @@ fn route_chain() -> Router<AppState> {
         .route("/api/auth/login", post(auth::routes::login))
         .route("/api/auth/signup", post(auth::routes::signup))
         .route("/api/auth/workos", post(auth::routes::workos_login))
+        .route("/api/auth/workos/exchange", post(auth::routes::workos_exchange))
         .route("/api/engagements", get(engagements::list).post(engagements::create))
         .route("/api/projects", get(projects::list).post(projects::create))
         .route("/api/docs", post(docs::create))
