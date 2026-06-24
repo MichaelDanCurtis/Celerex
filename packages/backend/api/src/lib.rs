@@ -25,6 +25,7 @@ use axum::{Router, routing::{any, get, patch, post, put}, Json, extract::State};
 use serde_json::json;
 use sqlx::PgPool;
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::services::{ServeDir, ServeFile};
 
 use crate::plugins::credentials::{CredentialStore, LocalAeadStore};
 use crate::project_members::store::{MembersStore, PgMembersStore};
@@ -80,6 +81,19 @@ fn build_provider_keys_store(pool: PgPool) -> Arc<dyn ProviderKeysStore> {
         PgProviderKeysStore::from_env(pool)
             .expect("CELEREX_CRED_KEY must be set for provider_keys store"),
     )
+}
+
+/// Serve the OmniVyx Design static export (the one client) from the same server
+/// as the API — this is the "one server, one service" half. The directory is the
+/// Designer's `next build` (`output: 'export'`) output; `CELEREX_WEB_DIR` points at
+/// it (baked into the image, or a local `out/`). Any non-API path falls back to
+/// `index.html` so the SPA's client routes (e.g. `/callback`) resolve. When the
+/// dir is absent (e.g. `cargo run` with no built frontend) the API still serves;
+/// the SPA paths just 404.
+fn web_service() -> ServeDir<ServeFile> {
+    let dir = std::env::var("CELEREX_WEB_DIR").unwrap_or_else(|_| "web".to_string());
+    let index = format!("{}/index.html", dir.trim_end_matches('/'));
+    ServeDir::new(&dir).fallback(ServeFile::new(index))
 }
 
 fn route_chain() -> Router<AppState> {
@@ -176,6 +190,8 @@ fn route_chain() -> Router<AppState> {
         .route("/api/assistant/chat/stream", post(assistant::chat_stream))
         .route("/api/metrics/summary", get(metrics::summary))
         .route("/api/settings", get(settings::get_settings).put(settings::put_settings))
+        // Everything that isn't an API route is the OmniVyx Design SPA — one server.
+        .fallback_service(web_service())
 }
 
 pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>) -> Router {
