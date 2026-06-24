@@ -127,25 +127,59 @@ pub async fn workos_login(
         .await
         .map_err(|e| (StatusCode::UNAUTHORIZED, e))?;
 
+    provision_and_mint(&state, &claims.sub, body.email.trim()).await
+}
+
+#[derive(Deserialize)]
+pub struct WorkosExchangeRequest {
+    /// The WorkOS AuthKit authorization `code` returned to the SPA's redirect URI.
+    pub code: String,
+}
+
+/// `POST /api/auth/workos/exchange` — PUBLIC. The static Designer SPA cannot do
+/// the WorkOS `code → token` exchange itself (it needs the confidential client
+/// secret and WorkOS's authenticate endpoint is not CORS-enabled), so it forwards
+/// the `code` here. The single backend exchanges it server-side, then
+/// find-or-provisions the personal engagement and mints the session JWT — the
+/// one login for the unified service.
+pub async fn workos_exchange(
+    State(state): State<AppState>,
+    Json(body): Json<WorkosExchangeRequest>,
+) -> Result<Json<LoginResponse>, (StatusCode, String)> {
+    let http = reqwest::Client::new();
+    let user = crate::auth::workos::exchange_code(&http, body.code.trim())
+        .await
+        .map_err(|e| (StatusCode::UNAUTHORIZED, e))?;
+    provision_and_mint(&state, &user.sub, user.email.trim()).await
+}
+
+/// Shared: find-or-provision the personal engagement keyed to a WorkOS user id
+/// (`sub`) and mint the session JWT. Identity is the WorkOS `sub`; `email` is a
+/// display label only. Used by both WorkOS entry points (token + code exchange).
+async fn provision_and_mint(
+    state: &AppState,
+    sub: &str,
+    email: &str,
+) -> Result<Json<LoginResponse>, (StatusCode, String)> {
     let (engagement_id, engagement_name) =
-        match db::find_engagement_by_workos_user(&state.pool, &claims.sub)
+        match db::find_engagement_by_workos_user(&state.pool, sub)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         {
             Some(found) => found,
             None => {
-                let name = format!("{}'s workspace", body.email.trim());
+                let name = format!("{}'s workspace", email);
                 let eng = db::create_engagement(&state.pool, &name)
                     .await
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-                db::create_workos_user(&state.pool, body.email.trim(), &claims.sub, eng.id)
+                db::create_workos_user(&state.pool, email, sub, eng.id)
                     .await
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
                 (eng.id, eng.name)
             }
         };
 
-    let token = jwt::mint(engagement_id, &claims.sub, SESSION_TTL_SECS);
+    let token = jwt::mint(engagement_id, sub, SESSION_TTL_SECS);
     Ok(Json(LoginResponse {
         token,
         engagement: LoginEngagement { id: engagement_id, name: engagement_name },
