@@ -56,6 +56,10 @@ pub struct AppState {
     /// + retrieval. Actual override-at-call-time wiring into the LlmHandler
     /// is a follow-up.
     pub provider_keys: Arc<dyn ProviderKeysStore>,
+    /// Pending provider-plane design-chat runs, keyed by run id. `POST /api/runs`
+    /// registers; `GET /api/runs/{id}/events` consumes (single-shot). See
+    /// `runs::design_chat`.
+    pub design_runs: crate::runs::design_chat::DesignRuns,
     /// Engagements permitted to drive Galvo Hub federation (register/invoke/
     /// status). Parsed once at boot from `CELEREX_HUB_ADMIN_ENGAGEMENTS`;
     /// empty/unset = deny all.
@@ -126,7 +130,7 @@ fn route_chain() -> Router<AppState> {
         )
         .route("/api/projects/{project_id}/members", get(project_members::routes::list))
         .route("/api/project_members/{id}/run", post(project_members::routes::run_manual))
-        .route("/api/runs", get(runs::routes::list))
+        .route("/api/runs", get(runs::routes::list).post(runs::design_chat::create))
         .route("/api/runs/recent", get(runs::routes::recent))
         .route("/api/runs/{run_id}/steps", get(runs::routes::steps))
         .route("/api/runs/{run_id}/events", get(runs::sse::stream))
@@ -413,6 +417,7 @@ fn build_app_with_dispatcher_inner(
             providers: Arc::new(provider_ids),
             providers_registry,
             provider_keys,
+            design_runs: runs::design_chat::new_registry(),
             hub_admin_engagements: hub_admin_engagements(),
         })
         .layer(cors)
