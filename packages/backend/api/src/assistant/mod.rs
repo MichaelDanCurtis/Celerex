@@ -1,4 +1,4 @@
-use crate::auth::extractors::AuthClaims;
+use crate::auth::extractors::DeviceAuth;
 use crate::llm::{
     anthropic::AnthropicClient, gemini::GeminiProvider, kimi::KimiProvider, openai::OpenAiProvider,
 };
@@ -106,7 +106,7 @@ pub struct ChatResponse {
 }
 
 pub async fn chat(
-    a: AuthClaims,
+    a: DeviceAuth,
     State(state): State<crate::AppState>,
     Json(body): Json<ChatRequest>,
 ) -> Result<Json<ChatResponse>, (StatusCode, String)> {
@@ -157,7 +157,7 @@ pub async fn chat(
 ///
 /// Browser KeepAlive ping at 15s to keep proxies/CDNs from closing idle conns.
 pub async fn chat_stream(
-    a: AuthClaims,
+    a: DeviceAuth,
     State(state): State<crate::AppState>,
     Json(body): Json<ChatRequest>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, (StatusCode, String)> {
