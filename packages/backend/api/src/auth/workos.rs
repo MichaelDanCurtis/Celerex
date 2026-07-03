@@ -49,6 +49,69 @@ pub async fn verify_access_token(http: &reqwest::Client, token: &str) -> Result<
     verify_with_jwks(token, &jwks)
 }
 
+/// The validated identity returned by a WorkOS authorization-code exchange.
+#[derive(Debug, Clone)]
+pub struct WorkosUser {
+    /// Stable WorkOS user id — the identity we key the engagement to (the `sub`).
+    pub sub: String,
+    /// Display email from the WorkOS user object.
+    pub email: String,
+}
+
+fn api_base() -> String {
+    std::env::var("WORKOS_API_BASE").unwrap_or_else(|_| "https://api.workos.com".to_string())
+}
+
+/// The confidential WorkOS API key (client secret). Server-only; required for the
+/// authorization-code exchange — a browser can't hold it and WorkOS's
+/// `/user_management/authenticate` is not CORS-enabled, so the exchange MUST run here.
+fn api_key() -> Result<String, String> {
+    std::env::var("WORKOS_API_KEY").map_err(|_| "WORKOS_API_KEY not set".to_string())
+}
+
+#[derive(Debug, Deserialize)]
+struct AuthenticateUser {
+    id: String,
+    #[serde(default)]
+    email: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct AuthenticateResponse {
+    user: AuthenticateUser,
+}
+
+/// Exchange a WorkOS AuthKit authorization `code` for the authenticated user,
+/// server-side (client_id + client_secret). This is the leg a static-export SPA
+/// cannot perform itself. Returns the stable user id + email.
+pub async fn exchange_code(http: &reqwest::Client, code: &str) -> Result<WorkosUser, String> {
+    let url = format!("{}/user_management/authenticate", api_base().trim_end_matches('/'));
+    let res = http
+        .post(&url)
+        .json(&serde_json::json!({
+            "client_id": client_id()?,
+            "client_secret": api_key()?,
+            "grant_type": "authorization_code",
+            "code": code,
+        }))
+        .send()
+        .await
+        .map_err(|e| format!("workos authenticate request failed: {e}"))?;
+    if !res.status().is_success() {
+        let status = res.status();
+        let body = res.text().await.unwrap_or_default();
+        return Err(format!("workos authenticate status {status}: {body}"));
+    }
+    let parsed: AuthenticateResponse = res
+        .json()
+        .await
+        .map_err(|e| format!("workos authenticate parse failed: {e}"))?;
+    Ok(WorkosUser {
+        sub: parsed.user.id,
+        email: parsed.user.email,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

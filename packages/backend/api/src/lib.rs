@@ -25,6 +25,7 @@ use axum::{Router, routing::{any, get, patch, post, put}, Json, extract::State};
 use serde_json::json;
 use sqlx::PgPool;
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::services::{ServeDir, ServeFile};
 
 use crate::plugins::credentials::{CredentialStore, LocalAeadStore};
 use crate::project_members::store::{MembersStore, PgMembersStore};
@@ -55,6 +56,10 @@ pub struct AppState {
     /// + retrieval. Actual override-at-call-time wiring into the LlmHandler
     /// is a follow-up.
     pub provider_keys: Arc<dyn ProviderKeysStore>,
+    /// Pending provider-plane design-chat runs, keyed by run id. `POST /api/runs`
+    /// registers; `GET /api/runs/{id}/events` consumes (single-shot). See
+    /// `runs::design_chat`.
+    pub design_runs: crate::runs::design_chat::DesignRuns,
     /// Engagements permitted to drive Galvo Hub federation (register/invoke/
     /// status). Parsed once at boot from `CELEREX_HUB_ADMIN_ENGAGEMENTS`;
     /// empty/unset = deny all.
@@ -82,12 +87,26 @@ fn build_provider_keys_store(pool: PgPool) -> Arc<dyn ProviderKeysStore> {
     )
 }
 
+/// Serve the OmniVyx Design static export (the one client) from the same server
+/// as the API — this is the "one server, one service" half. The directory is the
+/// Designer's `next build` (`output: 'export'`) output; `CELEREX_WEB_DIR` points at
+/// it (baked into the image, or a local `out/`). Any non-API path falls back to
+/// `index.html` so the SPA's client routes (e.g. `/callback`) resolve. When the
+/// dir is absent (e.g. `cargo run` with no built frontend) the API still serves;
+/// the SPA paths just 404.
+fn web_service() -> ServeDir<ServeFile> {
+    let dir = std::env::var("CELEREX_WEB_DIR").unwrap_or_else(|_| "web".to_string());
+    let index = format!("{}/index.html", dir.trim_end_matches('/'));
+    ServeDir::new(&dir).fallback(ServeFile::new(index))
+}
+
 fn route_chain() -> Router<AppState> {
     Router::new()
         .route("/api/health", get(|| async { Json(json!({ "ok": true })) }))
         .route("/api/auth/login", post(auth::routes::login))
         .route("/api/auth/signup", post(auth::routes::signup))
         .route("/api/auth/workos", post(auth::routes::workos_login))
+        .route("/api/auth/workos/exchange", post(auth::routes::workos_exchange))
         .route("/api/engagements", get(engagements::list).post(engagements::create))
         .route("/api/projects", get(projects::list).post(projects::create))
         .route("/api/docs", post(docs::create))
@@ -111,7 +130,7 @@ fn route_chain() -> Router<AppState> {
         )
         .route("/api/projects/{project_id}/members", get(project_members::routes::list))
         .route("/api/project_members/{id}/run", post(project_members::routes::run_manual))
-        .route("/api/runs", get(runs::routes::list))
+        .route("/api/runs", get(runs::routes::list).post(runs::design_chat::create))
         .route("/api/runs/recent", get(runs::routes::recent))
         .route("/api/runs/{run_id}/steps", get(runs::routes::steps))
         .route("/api/runs/{run_id}/events", get(runs::sse::stream))
@@ -175,6 +194,8 @@ fn route_chain() -> Router<AppState> {
         .route("/api/assistant/chat/stream", post(assistant::chat_stream))
         .route("/api/metrics/summary", get(metrics::summary))
         .route("/api/settings", get(settings::get_settings).put(settings::put_settings))
+        // Everything that isn't an API route is the OmniVyx Design SPA — one server.
+        .fallback_service(web_service())
 }
 
 pub fn build_app_with_store(pool: PgPool, credentials: Arc<dyn CredentialStore>) -> Router {
@@ -396,6 +417,7 @@ fn build_app_with_dispatcher_inner(
             providers: Arc::new(provider_ids),
             providers_registry,
             provider_keys,
+            design_runs: runs::design_chat::new_registry(),
             hub_admin_engagements: hub_admin_engagements(),
         })
         .layer(cors)

@@ -13,6 +13,16 @@ pub async fn stream(
     Path(run_id): Path<Uuid>,
 ) -> axum::response::Response {
     use axum::response::IntoResponse;
+    // Provider-plane design-chat run? Serve the web `consumeDaemonRun` event
+    // vocabulary instead of the flow-canvas `RunEvent` frames. Single-shot:
+    // taking the entry both starts the completion and prevents a second
+    // consumer (or the flow lookup below) from matching this id.
+    if let Some(pending) = s.design_runs.lock().await.remove(&run_id) {
+        if pending.engagement_id != a.0.engagement_id {
+            return (axum::http::StatusCode::FORBIDDEN, "forbidden").into_response();
+        }
+        return crate::runs::design_chat::stream_pending(s.clone(), pending).into_response();
+    }
     match crate::db::engagement_for_run(&s.pool, run_id).await {
         Ok(Some(eng)) if eng == a.0.engagement_id => {}
         Ok(Some(_)) => return (axum::http::StatusCode::FORBIDDEN, "forbidden").into_response(),

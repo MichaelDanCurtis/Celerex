@@ -1,4 +1,5 @@
 pub mod bus;
+pub mod design_chat;
 pub mod routes;
 pub mod sse;
 
