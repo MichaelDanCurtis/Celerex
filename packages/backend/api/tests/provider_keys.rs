@@ -57,6 +57,7 @@ fn build_router(pool: PgPool) -> Router {
         providers_registry: Arc::new(ProviderRegistry::new()),
         provider_keys,
         hub_admin_engagements: Default::default(),
+        design_runs: celerex_api::runs::design_chat::new_registry(),
     };
     Router::new()
         .route(

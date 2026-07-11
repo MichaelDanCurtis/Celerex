@@ -59,6 +59,7 @@ async fn celerex_to_celerex_a2a_round_trip_through_hub() {
         data_dir: dir.path().into(),
         bootstrap_token: token.clone(),
         issuer_seed_hex: None,
+        require_executor_signatures: false,
         plaintext_ws_port: Some(ws_port),
         plaintext_api_port: None,
     };
@@ -128,6 +129,7 @@ async fn invoke_without_trust_elevation_is_rejected() {
         data_dir: dir.path().into(),
         bootstrap_token: token.clone(),
         issuer_seed_hex: None,
+        require_executor_signatures: false,
         plaintext_ws_port: None,
         plaintext_api_port: None,
     };

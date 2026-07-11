@@ -65,6 +65,7 @@ fn build_state(
         providers_registry: registry,
         provider_keys,
         hub_admin_engagements: Default::default(),
+        design_runs: celerex_api::runs::design_chat::new_registry(),
     }
 }
 
