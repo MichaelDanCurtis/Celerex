@@ -6,3 +6,4 @@ pub mod handler;
 pub mod kimi;
 pub mod openai;
 pub mod openai_compat;
+pub mod xai;
