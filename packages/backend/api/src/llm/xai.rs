@@ -210,4 +210,66 @@ mod device_tests {
     async fn client_id_is_the_pinned_public_value() {
         assert_eq!(XAI_CLIENT_ID, "b1a00492-073a-47ea-816f-4c329264a828");
     }
+
+    #[tokio::test]
+    async fn poll_maps_slow_down() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/oauth2/token"))
+            .respond_with(ResponseTemplate::new(400).set_body_json(json!({ "error": "slow_down" })))
+            .mount(&server)
+            .await;
+        assert_eq!(
+            XaiOAuthClient::with_base(server.uri()).poll_token("dc").await,
+            PollOutcome::SlowDown
+        );
+    }
+
+    #[tokio::test]
+    async fn poll_maps_expired_token() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/oauth2/token"))
+            .respond_with(
+                ResponseTemplate::new(400).set_body_json(json!({ "error": "expired_token" })),
+            )
+            .mount(&server)
+            .await;
+        assert_eq!(
+            XaiOAuthClient::with_base(server.uri()).poll_token("dc").await,
+            PollOutcome::Expired
+        );
+    }
+
+    #[tokio::test]
+    async fn poll_pending_then_success_progression() {
+        let server = MockServer::start().await;
+        // Mounted FIRST so it takes priority while it still has allowance
+        // (wiremock 0.6: earlier-mounted matching mocks win until exhausted).
+        Mock::given(method("POST"))
+            .and(path("/oauth2/token"))
+            .respond_with(
+                ResponseTemplate::new(400)
+                    .set_body_json(json!({ "error": "authorization_pending" })),
+            )
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/oauth2/token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "access_token": "xai_at2",
+                "refresh_token": "xai_rt2",
+                "expires_in": 7200
+            })))
+            .mount(&server)
+            .await;
+
+        let c = XaiOAuthClient::with_base(server.uri());
+        assert_eq!(c.poll_token("dc").await, PollOutcome::Pending);
+        assert_eq!(
+            c.poll_token("dc").await,
+            PollOutcome::Token("xai_at2".into(), "xai_rt2".into(), 7200)
+        );
+    }
 }
