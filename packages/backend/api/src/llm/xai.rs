@@ -10,7 +10,7 @@
 //! NOT a secret.
 
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::Value;
 
 /// Public desktop-client OAuth client_id for the xAI (Grok) device flow.
 pub const XAI_CLIENT_ID: &str = "b1a00492-073a-47ea-816f-4c329264a828";
@@ -137,9 +137,148 @@ impl Default for XaiOAuthClient {
     }
 }
 
+use async_trait::async_trait;
+use celerex_orchestrator::llm::provider::{Completion, Provider};
+use std::sync::Mutex;
+
+use crate::llm::openai_compat::OpenAiCompatProvider;
+
+/// The vaulted xAI credential (stored as a JSON string under provider id `xai`).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct XaiCredential {
+    pub access_token: String,
+    pub refresh_token: String,
+    #[serde(default)]
+    pub expires_at: i64, // unix seconds
+}
+
+#[derive(Debug, Deserialize)]
+struct RefreshResp {
+    access_token: String,
+    #[serde(default)]
+    refresh_token: Option<String>,
+    #[serde(default)]
+    expires_in: Option<i64>,
+}
+
+impl XaiOAuthClient {
+    /// Exchange a refresh_token for a fresh access_token (+ maybe a rotated
+    /// refresh_token). Returns (access_token, rotated_refresh, expires_at_unix).
+    pub async fn refresh(
+        &self,
+        refresh_token: &str,
+    ) -> Result<(String, Option<String>, i64), String> {
+        let res = self
+            .http
+            .post(format!("{}/oauth2/token", self.auth_base))
+            .header("accept", "application/json")
+            .form(&[
+                ("grant_type", "refresh_token"),
+                ("refresh_token", refresh_token),
+                ("client_id", XAI_CLIENT_ID),
+            ])
+            .send()
+            .await
+            .map_err(|e| format!("xai refresh failed: {e}"))?;
+        if !res.status().is_success() {
+            return Err(format!("xai refresh status {}", res.status()));
+        }
+        let r: RefreshResp = res
+            .json()
+            .await
+            .map_err(|e| format!("xai refresh parse: {e}"))?;
+        let exp = chrono::Utc::now().timestamp() + r.expires_in.unwrap_or(3600);
+        Ok((r.access_token, r.refresh_token, exp))
+    }
+}
+
+/// A per-engagement xAI (Grok) provider built from the vaulted credential blob.
+/// `persist` is invoked after a refresh so the new blob is written back to the vault.
+pub struct XaiProvider {
+    cred: Mutex<XaiCredential>,
+    auth: XaiOAuthClient,
+    /// OpenAI-compatible chat base (version path included); real = XAI_API_BASE.
+    chat_base: String,
+    #[allow(clippy::type_complexity)]
+    persist: Option<Box<dyn Fn(XaiCredential) + Send + Sync>>,
+}
+
+impl XaiProvider {
+    /// Production: parse the vaulted JSON blob; chat at the real xAI base.
+    pub fn from_blob(blob: &str) -> Result<Self, String> {
+        let cred: XaiCredential =
+            serde_json::from_str(blob).map_err(|e| format!("xai cred parse: {e}"))?;
+        Ok(Self {
+            cred: Mutex::new(cred),
+            auth: XaiOAuthClient::new(),
+            chat_base: XAI_API_BASE.to_string(),
+            persist: None,
+        })
+    }
+    /// Test factory: point refresh + chat at stubs.
+    #[allow(dead_code)]
+    pub fn with_bases(cred: XaiCredential, auth_base: String, chat_base: String) -> Self {
+        Self {
+            cred: Mutex::new(cred),
+            auth: XaiOAuthClient::with_base(auth_base),
+            chat_base: chat_base.trim_end_matches('/').to_string(),
+            persist: None,
+        }
+    }
+    #[allow(dead_code)]
+    pub fn with_persist(mut self, f: Box<dyn Fn(XaiCredential) + Send + Sync>) -> Self {
+        self.persist = Some(f);
+        self
+    }
+
+    /// Return a valid access token, refreshing if within 60s of expiry. The
+    /// credential mutex is never held across the `.await` on refresh.
+    async fn access(&self) -> Result<String, String> {
+        let now = chrono::Utc::now().timestamp();
+        let (access, refresh, exp) = {
+            let c = self.cred.lock().unwrap();
+            (c.access_token.clone(), c.refresh_token.clone(), c.expires_at)
+        };
+        if exp - 60 > now {
+            return Ok(access);
+        }
+        let (new_access, new_refresh, new_exp) = self.auth.refresh(&refresh).await?;
+        let updated = {
+            let mut c = self.cred.lock().unwrap();
+            c.access_token = new_access.clone();
+            if let Some(rt) = new_refresh {
+                c.refresh_token = rt;
+            }
+            c.expires_at = new_exp;
+            c.clone()
+        };
+        if let Some(p) = &self.persist {
+            p(updated);
+        }
+        Ok(new_access)
+    }
+}
+
+#[async_trait]
+impl Provider for XaiProvider {
+    async fn complete(
+        &self,
+        model: &str,
+        messages: Value,
+        tools: Value,
+    ) -> Result<Completion, String> {
+        let access = self.access().await?;
+        let model = if model.is_empty() { DEFAULT_XAI_MODEL } else { model };
+        OpenAiCompatProvider::new(self.chat_base.clone(), access)
+            .complete(model, messages, tools)
+            .await
+    }
+}
+
 #[cfg(test)]
 mod device_tests {
     use super::*;
+    use serde_json::json;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -271,5 +410,80 @@ mod device_tests {
             c.poll_token("dc").await,
             PollOutcome::Token("xai_at2".into(), "xai_rt2".into(), 7200)
         );
+    }
+}
+
+#[cfg(test)]
+mod provider_tests {
+    use super::*;
+    use celerex_orchestrator::llm::provider::Provider;
+    use serde_json::json;
+    use wiremock::matchers::{header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    fn cred(exp_offset: i64) -> XaiCredential {
+        XaiCredential {
+            access_token: "at_old".into(),
+            refresh_token: "rt_1".into(),
+            expires_at: chrono::Utc::now().timestamp() + exp_offset,
+        }
+    }
+
+    #[tokio::test]
+    async fn refreshes_when_stale_then_completes() {
+        let auth = MockServer::start().await;
+        let chat = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/oauth2/token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "access_token": "at_new",
+                "refresh_token": "rt_2",
+                "expires_in": 3600
+            })))
+            .mount(&auth)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .and(header("authorization", "Bearer at_new"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "choices": [{ "message": { "role": "assistant", "content": "pong" } }]
+            })))
+            .mount(&chat)
+            .await;
+        let chat_base = format!("{}/v1", chat.uri());
+        // expires_at in the past → must refresh before completing.
+        let p = XaiProvider::with_bases(cred(-10), auth.uri(), chat_base);
+        let out = p
+            .complete(
+                "grok-4.3",
+                json!([{"role":"user","content":"ping"}]),
+                json!([]),
+            )
+            .await
+            .unwrap();
+        assert_eq!(out.raw["choices"][0]["message"]["content"], "pong");
+    }
+
+    #[tokio::test]
+    async fn skips_refresh_when_fresh_and_defaults_model() {
+        let auth = MockServer::start().await; // must NOT be called
+        let chat = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .and(header("authorization", "Bearer at_old"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "choices": [{ "message": { "role": "assistant", "content": "hi" } }]
+            })))
+            .mount(&chat)
+            .await;
+        let chat_base = format!("{}/v1", chat.uri());
+        let p = XaiProvider::with_bases(cred(3600), auth.uri(), chat_base);
+        // empty model string → DEFAULT_XAI_MODEL is used (no assertion on it here,
+        // just that the request succeeds without hitting the refresh endpoint).
+        let out = p
+            .complete("", json!([{"role":"user","content":"hi"}]), json!([]))
+            .await
+            .unwrap();
+        assert_eq!(out.raw["choices"][0]["message"]["content"], "hi");
     }
 }
