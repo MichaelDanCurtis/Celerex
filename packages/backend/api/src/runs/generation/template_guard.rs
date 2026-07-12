@@ -26,6 +26,21 @@ static EXECUTABLE_PATTERNS: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new
             Regex::new(r"(?i)\bsrcdoc\s*=").unwrap(),
             "srcdoc attributes are not supported in live artifact previews",
         ),
+        // Widened event-handler anchor: `[\s/]on[a-z...]*=` catches on*=
+        // preceded by whitespace OR `/` (the `<svg/onload=`, `<img/onerror=`
+        // class the daemon's ported `\son...=` pattern misses — see
+        // hardening_tests::rejects_slash_separated_on_handler).
+        //
+        // KNOWN FALSE-POSITIVE CLASS: the same `/` anchor also matches
+        // ordinary URL-ish text containing `/on<word>=`, e.g.
+        // `url(/images/online=1.png)` — see hardening_tests::
+        // known_limitation_url_containing_slash_on_word_equals_is_over_rejected.
+        //
+        // TRADEOFF (deliberate, reviewed — do not "fix" by narrowing this
+        // regex without re-solving `<svg/onload=` detection first): a visible
+        // over-reject beats an executable-content miss. The Task 8 CSP is
+        // defense-in-depth, not a substitute for this guard, so it doesn't
+        // justify weakening the pattern to shrink the false-positive class.
         (
             Regex::new(r"(?i)[\s/]on[a-z][a-z0-9_-]*\s*=").unwrap(),
             "event handler attributes are not supported in live artifact previews",
@@ -76,7 +91,7 @@ pub fn render_html_template_v1(template_html: &str) -> Result<String, TemplateGu
     let mut err: Option<TemplateGuardError> = None;
     let rendered = INTERP.replace_all(template_html, |caps: &regex::Captures| {
         let binding = caps.get(1).map(|m| m.as_str().trim()).unwrap_or("");
-        if !TEMPLATE_PATH.is_match(binding) || !binding.starts_with("data") {
+        if !TEMPLATE_PATH.is_match(binding) || !binding.starts_with("data.") {
             err = Some(TemplateGuardError(format!(
                 "invalid template binding path: {binding}"
             )));
@@ -155,6 +170,48 @@ mod hardening_tests {
             render_html_template_v1("<svg><foreignObject><b>x</b></foreignObject></svg>").is_err()
         );
         assert!(render_html_template_v1("<foreignobject/>").is_err()); // case-insensitive
+    }
+
+    #[test]
+    fn known_limitation_url_containing_slash_on_word_equals_is_over_rejected() {
+        // DOCUMENTED, DELIBERATE over-reject (see the comment on the on*=
+        // pattern in EXECUTABLE_PATTERNS). `/images/online=1.png` contains
+        // `/online=`, which matches the `[\s/]on[a-z...]*=` handler pattern
+        // even though this is ordinary URL text, not an event handler.
+        // Accepted tradeoff: a visible over-reject beats missing the
+        // `<svg/onload=`-class attack this pattern exists to catch. If you
+        // ever "fix" this false positive, do it consciously — re-verify the
+        // slash-anchored on* handler class is still caught by whatever
+        // replaces this pattern.
+        let html = r#"<div style="background-image:url(/images/online=1.png)">"#;
+        assert!(render_html_template_v1(html).is_err());
+    }
+
+    #[test]
+    fn rejects_bindings_whose_first_segment_merely_starts_with_data() {
+        // Daemon parity (readTemplatePath in live-artifacts/render.ts): the
+        // accepted namespace is the literal first dot-segment `data`, not
+        // any identifier that merely has "data" as a string prefix. The raw
+        // `starts_with("data")` check over-accepted `database.foo`,
+        // `dataset.x`, `dataXYZ.foo`, and bare `data` (no further segment).
+        // The daemon rejects all four: the first three via
+        // `segments.shift() !== 'data'`, and bare `data` via its separate
+        // "must resolve to a scalar" check (readTemplatePath returns the
+        // whole `dataJson` object for a path with zero further segments).
+        assert!(render_html_template_v1("<p>{{ database.foo }}</p>").is_err());
+        assert!(render_html_template_v1("<p>{{ dataset.x }}</p>").is_err());
+        assert!(render_html_template_v1("<p>{{ dataXYZ.foo }}</p>").is_err());
+        assert!(render_html_template_v1("<p>{{ data }}</p>").is_err());
+    }
+
+    #[test]
+    fn accepts_literal_data_dot_segment_binding() {
+        // `data.x` — literal `data` first segment plus one further segment —
+        // stays accepted (dataJson is always {} so it resolves to "").
+        assert_eq!(
+            render_html_template_v1("<p>{{ data.x }}</p>").unwrap(),
+            "<p></p>"
+        );
     }
 
     #[test]
