@@ -19,11 +19,15 @@ static EXECUTABLE_PATTERNS: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new
             "iframe elements are not supported in live artifact previews",
         ),
         (
+            Regex::new(r"(?i)<\s*foreignObject\b").unwrap(),
+            "foreignObject is not supported in live artifact previews",
+        ),
+        (
             Regex::new(r"(?i)\bsrcdoc\s*=").unwrap(),
             "srcdoc attributes are not supported in live artifact previews",
         ),
         (
-            Regex::new(r"(?i)\son[a-z][a-z0-9_-]*\s*=").unwrap(),
+            Regex::new(r"(?i)[\s/]on[a-z][a-z0-9_-]*\s*=").unwrap(),
             "event handler attributes are not supported in live artifact previews",
         ),
         (
@@ -127,5 +131,38 @@ mod tests {
             render_html_template_v1("<title>{{ data.title }}</title>").unwrap(),
             "<title></title>"
         );
+    }
+}
+
+#[cfg(test)]
+mod hardening_tests {
+    use super::*;
+
+    #[test]
+    fn rejects_slash_separated_on_handler() {
+        // Gap 1: `/` (not whitespace) before `on`. The ported `\son...=` pattern
+        // misses this; the hardened `[\s/]on...=` catches the `<svg/onload>` class.
+        assert!(render_html_template_v1("<svg/onload=alert(1)></svg>").is_err());
+        assert!(render_html_template_v1("<img/onerror=alert(1)>").is_err());
+        // Whitespace-anchored handlers stay rejected (no regression).
+        assert!(render_html_template_v1("<button onclick=\"x()\">b</button>").is_err());
+    }
+
+    #[test]
+    fn rejects_foreign_object() {
+        // The HTML-in-SVG bridge — no legitimate static-chart use.
+        assert!(
+            render_html_template_v1("<svg><foreignObject><b>x</b></foreignObject></svg>").is_err()
+        );
+        assert!(render_html_template_v1("<foreignobject/>").is_err()); // case-insensitive
+    }
+
+    #[test]
+    fn hardening_keeps_parity_for_legit_animated_svg_chart() {
+        // Parity invariant: a representative animated inline-SVG chart (SMIL
+        // <animate> + <text> labels, no handlers, no foreignObject) is returned
+        // byte-for-byte unchanged — output === input for clean templates.
+        let chart = "<svg viewBox=\"0 0 100 50\"><rect x=\"0\" y=\"10\" width=\"20\" height=\"40\"><animate attributeName=\"height\" from=\"0\" to=\"40\" dur=\"1s\"/></rect><text x=\"0\" y=\"48\">92%</text></svg>";
+        assert_eq!(render_html_template_v1(chart).unwrap(), chart);
     }
 }
