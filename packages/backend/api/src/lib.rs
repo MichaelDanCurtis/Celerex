@@ -134,6 +134,8 @@ fn route_chain() -> Router<AppState> {
         .route("/api/runs/recent", get(runs::routes::recent))
         .route("/api/runs/{run_id}/steps", get(runs::routes::steps))
         .route("/api/runs/{run_id}/events", get(runs::sse::stream))
+        .route("/api/live-artifacts/{artifact_id}", get(runs::generation::artifact_routes::get_artifact_meta))
+        .route("/api/live-artifacts/{artifact_id}/preview", get(runs::generation::artifact_routes::get_artifact_preview))
         .route("/api/approvals", get(reviews::list_approvals))
         .route("/api/runs/{run_id}/review", post(reviews::submit_review))
         .route("/api/design/ingest", post(design::ingest))

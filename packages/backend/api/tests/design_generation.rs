@@ -49,3 +49,99 @@ async fn insert_then_get_roundtrips_scoped_by_engagement() {
             .is_none()
     );
 }
+
+// --- artifact route tests -------------------------------------------------
+use axum::body::Body;
+use axum::http::{Request, StatusCode};
+use tower::util::ServiceExt;
+
+#[tokio::test]
+async fn preview_route_serves_rendered_html_scoped_to_engagement() {
+    let db = common::start_test_db().await;
+    let (app, eng) = common::build_app_for_generation_tests(db.pool.clone()).await;
+    let aid = generate_artifact_id("Page");
+    insert_artifact(&db.pool, eng, "proj-1", &aid, "Page", "<h1>t</h1>", "<h1>rendered</h1>", Uuid::new_v4()).await.unwrap();
+    let token = common::mint_token(eng);
+
+    let resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/api/live-artifacts/{aid}/preview?projectId=proj-1&variant=rendered"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), 1 << 20).await.unwrap();
+    assert_eq!(&body[..], b"<h1>rendered</h1>");
+}
+
+#[tokio::test]
+async fn meta_route_404s_for_other_engagement() {
+    let db = common::start_test_db().await;
+    let (app, eng) = common::build_app_for_generation_tests(db.pool.clone()).await;
+    let other = sqlx::query_scalar::<_, Uuid>("INSERT INTO engagements (name) VALUES ('Other') RETURNING id")
+        .fetch_one(&db.pool).await.unwrap();
+    let aid = generate_artifact_id("Page");
+    insert_artifact(&db.pool, eng, "proj-1", &aid, "Page", "<h1>t</h1>", "<h1>t</h1>", Uuid::new_v4()).await.unwrap();
+    let token = common::mint_token(other);
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/api/live-artifacts/{aid}?projectId=proj-1"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn preview_route_sets_csp_parity_headers_matching_daemon() {
+    // Serve-layer CSP parity with the daemon's setLiveArtifactPreviewHeaders
+    // (celerex-design/apps/daemon/src/server.ts:3610-3630). The stored rendered
+    // HTML deliberately carries a guard-gap payload (`<svg/onload=...>`): this
+    // serve does NOT re-run the Task 3 guard, so `script-src 'none'` + the
+    // script-less `sandbox` are the enforcement boundary that makes it inert.
+    let db = common::start_test_db().await;
+    let (app, eng) = common::build_app_for_generation_tests(db.pool.clone()).await;
+    let aid = generate_artifact_id("Page");
+    insert_artifact(&db.pool, eng, "proj-1", &aid, "Page", "<h1>t</h1>", "<svg/onload=alert(1)></svg>", Uuid::new_v4()).await.unwrap();
+    let token = common::mint_token(eng);
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/api/live-artifacts/{aid}/preview?projectId=proj-1&variant=rendered"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let h = resp.headers();
+    // Byte-for-byte CSP parity (server.ts:3615-3630), directive order preserved.
+    assert_eq!(
+        h.get("content-security-policy").unwrap().to_str().unwrap(),
+        "default-src 'none'; base-uri 'none'; script-src 'none'; object-src 'none'; connect-src 'none'; form-action 'none'; frame-ancestors 'self'; img-src 'self' data: blob:; font-src 'self' data:; style-src 'unsafe-inline'; sandbox allow-same-origin"
+    );
+    // The load-bearing controls the guard story depends on (spec §5.2/§5.4.1).
+    let csp = h.get("content-security-policy").unwrap().to_str().unwrap();
+    assert!(csp.contains("script-src 'none'"));
+    assert!(csp.contains("sandbox allow-same-origin") && !csp.contains("allow-scripts"));
+    assert!(csp.contains("img-src 'self' data: blob:"));
+    assert!(csp.contains("connect-src 'none'"));
+    assert_eq!(h.get("x-content-type-options").unwrap().to_str().unwrap(), "nosniff");
+    assert_eq!(h.get("referrer-policy").unwrap().to_str().unwrap(), "no-referrer");
+    assert_eq!(h.get("cache-control").unwrap().to_str().unwrap(), "no-store");
+    // Content-Type stays owned by Html (server.ts:3611), not overridden by the prefix.
+    assert_eq!(h.get("content-type").unwrap().to_str().unwrap(), "text/html; charset=utf-8");
+}
