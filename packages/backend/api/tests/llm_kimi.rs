@@ -3,8 +3,8 @@ use celerex_orchestrator::llm::provider::Provider;
 use futures_util::StreamExt;
 use serde_json::json;
 use wiremock::{
-    matchers::{header, method, path},
     Mock, MockServer, ResponseTemplate,
+    matchers::{header, method, path},
 };
 
 #[tokio::test]
@@ -50,8 +50,7 @@ async fn kimi_provider_sends_bearer_header() {
         .mount(&server)
         .await;
 
-    let provider =
-        KimiProvider::with_base_url(server.uri(), "secret-kimi-key".into());
+    let provider = KimiProvider::with_base_url(server.uri(), "secret-kimi-key".into());
     let completion = provider
         .complete(
             "moonshot-v1-8k",
@@ -64,6 +63,39 @@ async fn kimi_provider_sends_bearer_header() {
     assert_eq!(completion.raw["ok"], true);
     // Drop server to trigger wiremock's expect(1) verification.
     drop(server);
+}
+
+#[tokio::test]
+async fn kimi_provider_omits_tools_key_when_empty() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/chat/completions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id": "chatcmpl-kimi-2",
+            "choices": [{
+                "message": { "role": "assistant", "content": "ok" }
+            }]
+        })))
+        .mount(&server)
+        .await;
+
+    let provider = KimiProvider::with_base_url(server.uri(), "test-key".into());
+    provider
+        .complete(
+            "moonshot-v1-8k",
+            json!([{ "role": "user", "content": "hi" }]),
+            json!([]),
+        )
+        .await
+        .expect("complete should succeed");
+
+    let requests = server.received_requests().await.expect("recording enabled");
+    assert_eq!(requests.len(), 1);
+    let body: serde_json::Value = requests[0].body_json().expect("valid JSON body");
+    assert!(
+        body.get("tools").is_none(),
+        "empty tools array must be omitted from the request body entirely, got: {body}"
+    );
 }
 
 #[tokio::test]

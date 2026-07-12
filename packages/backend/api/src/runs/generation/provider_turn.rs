@@ -96,7 +96,11 @@ pub fn normalize_raw_completion(raw: &Value) -> ProviderTurnResult {
                     .and_then(|f| f.get("arguments"))
                     .and_then(|v| v.as_str())
                 {
-                    Some(s) => serde_json::from_str::<Value>(s).unwrap_or(json!({})),
+                    // Daemon parity (provider-turn.ts catch branch): an
+                    // unparseable `arguments` string preserves the raw string
+                    // as the args value instead of silently discarding it.
+                    Some(s) => serde_json::from_str::<Value>(s)
+                        .unwrap_or_else(|_| Value::String(s.to_string())),
                     None => json!({}),
                 };
                 out.tool_calls.push(ToolCall { id, name, args });
@@ -144,7 +148,10 @@ pub fn normalize_raw_completion(raw: &Value) -> ProviderTurnResult {
 /// Perform ONE LLM turn against the in-process provider. Builds the wire tool
 /// envelope, calls `provider.complete` directly (no HTTP hop), normalizes the
 /// raw response, and reverse-maps wire tool names back to real names. On a
-/// provider error, returns the error string WITHOUT leaking the raw body.
+/// provider error, the provider's error string propagates verbatim via `?`
+/// (some providers, e.g. `openai_compat`, embed the raw upstream response
+/// body in that string) — callers own the policy for how much of it to
+/// surface.
 pub async fn run_provider_turn(
     provider: &dyn Provider,
     model: &str,
@@ -188,6 +195,22 @@ mod tests {
         );
         assert_eq!(out.input_tokens, Some(10));
         assert_eq!(out.output_tokens, Some(4));
+    }
+
+    #[test]
+    fn malformed_tool_call_arguments_preserve_raw_string() {
+        // Daemon parity (provider-turn.ts catch branch): when a tool call's
+        // `arguments` string fails to parse as JSON, the raw string is kept as
+        // the args value rather than silently discarded to `{}`.
+        let raw = json!({
+            "choices": [{ "message": {
+                "content": serde_json::Value::Null,
+                "tool_calls": [{ "id": "call_1", "type": "function", "function": { "name": "write_file", "arguments": "not valid json {" } }]
+            }}]
+        });
+        let out = normalize_raw_completion(&raw);
+        assert_eq!(out.tool_calls.len(), 1);
+        assert_eq!(out.tool_calls[0].args, json!("not valid json {"));
     }
 
     #[test]
