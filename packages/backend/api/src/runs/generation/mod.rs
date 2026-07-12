@@ -5,4 +5,5 @@
 
 pub mod file_store;
 pub mod registry;
+pub mod template_guard;
 pub mod tools;
