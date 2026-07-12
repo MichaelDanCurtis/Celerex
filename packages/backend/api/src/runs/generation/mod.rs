@@ -3,6 +3,7 @@
 //! engagement's in-process vaulted provider, writes files server-side, and
 //! streams the daemon SSE vocabulary to the unchanged web SPA.
 
+pub mod emitter;
 pub mod file_store;
 pub mod provider_turn;
 pub mod registry;
