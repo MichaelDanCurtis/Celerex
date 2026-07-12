@@ -51,6 +51,21 @@ fn build_engagement_provider(provider_id: &str, key: String) -> Option<Arc<dyn P
         "codex" => crate::llm::codex::CodexProvider::from_blob(&key)
             .ok()
             .map(|p| Arc::new(p) as Arc<dyn Provider>),
+        "xai" => crate::llm::xai::XaiProvider::from_blob(&key)
+            .ok()
+            .map(|p| Arc::new(p) as Arc<dyn Provider>),
+        "kimi-code" => Some(Arc::new(
+            crate::llm::openai_compat::OpenAiCompatProvider::new(
+                "https://api.kimi.com/coding/v1".to_string(),
+                key,
+            ),
+        )),
+        "glm" => Some(Arc::new(
+            crate::llm::openai_compat::OpenAiCompatProvider::new(
+                "https://api.z.ai/api/coding/paas/v4".to_string(),
+                key,
+            ),
+        )),
         _ => None,
     }
 }
