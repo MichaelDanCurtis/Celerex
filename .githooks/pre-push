@@ -1,0 +1,15 @@
+#!/bin/bash
+# Committed local CI gate — Celerex. Install once per clone:
+#   git config core.hooksPath .githooks
+# Runs before every push; blocks the push on compile errors. $0, no runners, no daemons.
+set -uo pipefail
+echo "[pre-push] cargo compile check (tests included)…"
+OUT=$(cargo test -p celerex-api --no-run 2>&1)
+if echo "$OUT" | grep -qE '^error'; then
+  echo "$OUT" | grep -E '^error' | head -10
+  echo "[pre-push] BLOCKED: compile errors above. (bypass: git push --no-verify)"
+  exit 1
+fi
+echo "[pre-push] lib unit tests…"
+cargo test -p celerex-api --lib 2>&1 | tail -3 || { echo "[pre-push] BLOCKED: unit tests failed"; exit 1; }
+echo "[pre-push] ok"
