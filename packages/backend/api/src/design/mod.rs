@@ -17,6 +17,7 @@ pub mod sanitize;
 pub mod scaffold;
 pub mod slot_fill_handler;
 pub mod slot_fills;
+pub mod xai;
 
 use axum::{
     Json,

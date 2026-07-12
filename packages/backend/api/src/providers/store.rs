@@ -26,8 +26,9 @@ use uuid::Uuid;
 
 /// Provider ids we currently support per-engagement keys for. Anything not in
 /// this list is rejected at the route layer with 400.
-pub const SUPPORTED_PROVIDERS: &[&str] =
-    &["anthropic", "openai", "kimi", "gemini", "copilot", "codex"];
+pub const SUPPORTED_PROVIDERS: &[&str] = &[
+    "anthropic", "openai", "kimi", "gemini", "copilot", "codex", "xai", "kimi-code", "glm",
+];
 
 /// Safe-to-render metadata about a stored provider key. The plaintext key is
 /// intentionally not part of this struct.
@@ -263,5 +264,15 @@ mod tests {
         // 8 chars >= threshold; head=4, tail=3
         let p = key_preview("åäöabcdefgh");
         assert_eq!(p, "åäöa...fgh");
+    }
+
+    #[test]
+    fn supported_providers_includes_new_first_run_ids() {
+        for id in ["xai", "kimi-code", "glm"] {
+            assert!(
+                SUPPORTED_PROVIDERS.contains(&id),
+                "{id} must be allow-listed for per-engagement keys"
+            );
+        }
     }
 }

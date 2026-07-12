@@ -135,6 +135,7 @@ fn build_app(
         providers_registry: registry,
         provider_keys,
         hub_admin_engagements: Default::default(),
+        design_runs: celerex_api::runs::design_chat::new_registry(),
     };
     Router::new()
         .route(
