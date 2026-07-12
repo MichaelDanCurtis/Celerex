@@ -17,7 +17,10 @@ use serde_json::json;
 #[tokio::test]
 #[ignore = "live: requires a real vaulted xAI token blob in XAI_LIVE_BLOB"]
 async fn xai_live_completes() {
-    let blob = std::env::var("XAI_LIVE_BLOB").expect("set XAI_LIVE_BLOB");
+    let Ok(blob) = std::env::var("XAI_LIVE_BLOB") else {
+        eprintln!("skip: XAI_LIVE_BLOB not set — this live test needs real creds");
+        return;
+    };
     let p = celerex_api::llm::xai::XaiProvider::from_blob(&blob).expect("blob parses");
     let out = p
         .complete(
@@ -33,7 +36,10 @@ async fn xai_live_completes() {
 #[tokio::test]
 #[ignore = "live: requires KIMI_CODE_API_KEY (Kimi for Coding plan)"]
 async fn kimi_code_live_completes() {
-    let key = std::env::var("KIMI_CODE_API_KEY").expect("set KIMI_CODE_API_KEY");
+    let Ok(key) = std::env::var("KIMI_CODE_API_KEY") else {
+        eprintln!("skip: KIMI_CODE_API_KEY not set — this live test needs real creds");
+        return;
+    };
     let p = celerex_api::llm::openai_compat::OpenAiCompatProvider::new(
         "https://api.kimi.com/coding/v1".into(),
         key,
@@ -52,7 +58,10 @@ async fn kimi_code_live_completes() {
 #[tokio::test]
 #[ignore = "live: requires GLM_API_KEY (GLM Coding Plan key)"]
 async fn glm_live_completes() {
-    let key = std::env::var("GLM_API_KEY").expect("set GLM_API_KEY");
+    let Ok(key) = std::env::var("GLM_API_KEY") else {
+        eprintln!("skip: GLM_API_KEY not set — this live test needs real creds");
+        return;
+    };
     let p = celerex_api::llm::openai_compat::OpenAiCompatProvider::new(
         "https://api.z.ai/api/coding/paas/v4".into(),
         key,
