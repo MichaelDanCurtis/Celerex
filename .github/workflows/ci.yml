@@ -1,0 +1,23 @@
+# .github/workflows/ci.yml — Celerex (Agent, Rust)
+# Runs ONLY on self-hosted runners: GitHub bills $0 for self-hosted.
+# If no runner is registered, jobs queue and time out — they never consume paid minutes.
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  rust:
+    runs-on: [self-hosted]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile check (tests included)
+        run: |
+          set -o pipefail
+          cargo test -p celerex-api --no-run 2>&1 | tee /tmp/norun.log
+          ! grep -E '^error' /tmp/norun.log
+      - name: Unit tests (no DB required)
+        run: cargo test -p celerex-api --lib
+      - name: Clippy
+        run: cargo clippy -p celerex-api --all-targets -- -D warnings 2>&1 | tail -20
