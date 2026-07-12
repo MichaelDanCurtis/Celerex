@@ -4,6 +4,7 @@
 //! streams the daemon SSE vocabulary to the unchanged web SPA.
 
 pub mod file_store;
+pub mod provider_turn;
 pub mod registry;
 pub mod template_guard;
 pub mod tools;
