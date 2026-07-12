@@ -53,19 +53,25 @@ fn build_engagement_provider(
             key,
         ))),
         "copilot" => Some(Arc::new(crate::llm::copilot::CopilotProvider::new(key))),
-        "codex" => crate::llm::codex::CodexProvider::from_blob(&key).ok().map(|p| {
-            Arc::new(p.with_persist(persist_blob::<crate::llm::codex::CodexCredential>(
-                provider_keys,
-                engagement_id,
-                "codex",
-            ))) as Arc<dyn Provider>
-        }),
+        "codex" => crate::llm::codex::CodexProvider::from_blob(&key)
+            .ok()
+            .map(|p| {
+                Arc::new(
+                    p.with_persist(persist_blob::<crate::llm::codex::CodexCredential>(
+                        provider_keys,
+                        engagement_id,
+                        "codex",
+                    )),
+                ) as Arc<dyn Provider>
+            }),
         "xai" => crate::llm::xai::XaiProvider::from_blob(&key).ok().map(|p| {
-            Arc::new(p.with_persist(persist_blob::<crate::llm::xai::XaiCredential>(
-                provider_keys,
-                engagement_id,
-                "xai",
-            ))) as Arc<dyn Provider>
+            Arc::new(
+                p.with_persist(persist_blob::<crate::llm::xai::XaiCredential>(
+                    provider_keys,
+                    engagement_id,
+                    "xai",
+                )),
+            ) as Arc<dyn Provider>
         }),
         "kimi-code" => Some(Arc::new(
             crate::llm::openai_compat::OpenAiCompatProvider::new(
