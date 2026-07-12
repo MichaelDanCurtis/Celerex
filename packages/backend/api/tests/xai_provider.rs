@@ -149,7 +149,10 @@ async fn new_providers_built_only_when_key_vaulted() {
         .fetch_one(&db.pool)
         .await
         .unwrap();
-    store.set(kc, "kimi-code", "sk-kimi-test").await.expect("vault kimi-code key");
+    store
+        .set(kc, "kimi-code", "sk-kimi-test")
+        .await
+        .expect("vault kimi-code key");
     assert_eq!(
         chat(&app, kc, "kimi-code").await,
         StatusCode::BAD_GATEWAY,
@@ -161,7 +164,10 @@ async fn new_providers_built_only_when_key_vaulted() {
         .fetch_one(&db.pool)
         .await
         .unwrap();
-    store.set(gl, "glm", "glm-test-key").await.expect("vault glm key");
+    store
+        .set(gl, "glm", "glm-test-key")
+        .await
+        .expect("vault glm key");
     assert_eq!(
         chat(&app, gl, "glm").await,
         StatusCode::BAD_GATEWAY,
