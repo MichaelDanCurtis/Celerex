@@ -168,6 +168,8 @@ fn route_chain() -> Router<AppState> {
         .route("/api/design/copilot/login/status", get(design::copilot::status))
         .route("/api/design/codex/credential", post(design::codex::put_credential))
         .route("/api/design/codex/status", get(design::codex::status))
+        .route("/api/design/xai/login/start", post(design::xai::start))
+        .route("/api/design/xai/login/status", get(design::xai::status))
         .route("/api/design/tokens", post(design::mint_token))
         .route("/api/design/pair/start", post(design::pair_start))
         .route("/api/design/pair/approve", post(design::pair_approve))
