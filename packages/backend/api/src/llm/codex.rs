@@ -337,4 +337,43 @@ data: {\"type\":\"response.completed\",\"response\":{}}\n\n",
             .unwrap();
         assert_eq!(out.raw["choices"][0]["message"]["content"], "hi");
     }
+
+    #[tokio::test]
+    async fn persists_rotated_refresh_token() {
+        use std::sync::{Arc, Mutex};
+        let auth = MockServer::start().await;
+        let chat = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/oauth/token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "access_token": "at_new",
+                "refresh_token": "rt_2",
+                "expires_in": 864000
+            })))
+            .mount(&auth)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/backend-api/codex/responses"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(
+                "data: {\"type\":\"response.output_text.delta\",\"delta\":\"ok\"}\n\n\
+data: {\"type\":\"response.completed\",\"response\":{}}\n\n",
+            ))
+            .mount(&chat)
+            .await;
+        let seen: Arc<Mutex<Option<CodexCredential>>> = Arc::new(Mutex::new(None));
+        let sink = seen.clone();
+        // stale cred → must refresh before completing.
+        let p = CodexProvider::with_bases(cred(-10), auth.uri(), chat.uri())
+            .with_persist(Box::new(move |c: CodexCredential| {
+                *sink.lock().unwrap() = Some(c);
+            }));
+        p.complete("gpt-5.4-mini", json!([{"role":"user","content":"ping"}]), json!([]))
+            .await
+            .unwrap();
+        let got = seen.lock().unwrap().clone().expect("persist must fire after refresh");
+        assert_eq!(got.access_token, "at_new");
+        assert_eq!(got.refresh_token, "rt_2", "rotated refresh_token must be persisted");
+        assert_eq!(got.account_id, "acc_1", "account_id must be retained across refresh");
+        assert!(got.expires_at > chrono::Utc::now().timestamp());
+    }
 }

@@ -486,4 +486,84 @@ mod provider_tests {
             .unwrap();
         assert_eq!(out.raw["choices"][0]["message"]["content"], "hi");
     }
+
+    #[tokio::test]
+    async fn persists_rotated_refresh_token() {
+        use std::sync::{Arc, Mutex};
+        let auth = MockServer::start().await;
+        let chat = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/oauth2/token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "access_token": "at_new",
+                "refresh_token": "rt_2",
+                "expires_in": 3600
+            })))
+            .mount(&auth)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "choices": [{ "message": { "role": "assistant", "content": "ok" } }]
+            })))
+            .mount(&chat)
+            .await;
+        let chat_base = format!("{}/v1", chat.uri());
+        let seen: Arc<Mutex<Option<XaiCredential>>> = Arc::new(Mutex::new(None));
+        let sink = seen.clone();
+        // stale cred (cred(-10)) → access() must refresh before completing.
+        let p = XaiProvider::with_bases(cred(-10), auth.uri(), chat_base)
+            .with_persist(Box::new(move |c: XaiCredential| {
+                *sink.lock().unwrap() = Some(c);
+            }));
+        p.complete("grok-4.3", json!([{"role":"user","content":"ping"}]), json!([]))
+            .await
+            .unwrap();
+        let got = seen.lock().unwrap().clone().expect("persist must fire after refresh");
+        assert_eq!(got.access_token, "at_new");
+        assert_eq!(got.refresh_token, "rt_2", "rotated refresh_token must be persisted");
+        assert!(
+            got.expires_at > chrono::Utc::now().timestamp(),
+            "expiry must be pushed forward on refresh"
+        );
+    }
+
+    #[tokio::test]
+    async fn persist_retains_refresh_token_when_response_omits_it() {
+        use std::sync::{Arc, Mutex};
+        let auth = MockServer::start().await;
+        let chat = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/oauth2/token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "access_token": "at_new",
+                "expires_in": 3600
+                // no refresh_token → rotation absent; the prior rt_1 must be retained.
+            })))
+            .mount(&auth)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "choices": [{ "message": { "role": "assistant", "content": "ok" } }]
+            })))
+            .mount(&chat)
+            .await;
+        let chat_base = format!("{}/v1", chat.uri());
+        let seen: Arc<Mutex<Option<XaiCredential>>> = Arc::new(Mutex::new(None));
+        let sink = seen.clone();
+        let p = XaiProvider::with_bases(cred(-10), auth.uri(), chat_base)
+            .with_persist(Box::new(move |c: XaiCredential| {
+                *sink.lock().unwrap() = Some(c);
+            }));
+        p.complete("grok-4.3", json!([{"role":"user","content":"ping"}]), json!([]))
+            .await
+            .unwrap();
+        let got = seen.lock().unwrap().clone().expect("persist must fire after refresh");
+        assert_eq!(got.access_token, "at_new");
+        assert_eq!(
+            got.refresh_token, "rt_1",
+            "an absent refresh_token must retain the prior vaulted token"
+        );
+    }
 }
