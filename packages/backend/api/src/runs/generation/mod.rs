@@ -5,7 +5,9 @@
 
 pub mod emitter;
 pub mod file_store;
+pub mod loop_core;
 pub mod provider_turn;
 pub mod registry;
+pub mod system_prompt;
 pub mod template_guard;
 pub mod tools;
