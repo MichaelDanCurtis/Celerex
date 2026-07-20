@@ -85,8 +85,21 @@ fn error_frame(message: &str) -> (&'static str, Value) {
     ("error", json!({ "message": message }))
 }
 
-fn end_frame(status: &str, code: i32) -> (&'static str, Value) {
-    ("end", json!({ "status": status, "code": code }))
+/// `resumable` is hardcoded `false`: daemon parity is `run.resumable ?? false`
+/// (`apps/daemon/src/runs.ts::finish`), and `run.resumable` is only ever set
+/// `true` by the CLI-spawn retry-decision heuristic
+/// (`finishWithRetryDecision` in `server.ts`) — a mechanism specific to
+/// child-process-driven runs that this HTTP-turn-loop port does not have and
+/// is out of scope to add. `signal` IS a real parameter (not hardcoded)
+/// because `StopReason::Canceled` already exists as a loop outcome; today
+/// every caller passes `None` since v1 wires no cancellation (see
+/// `run_generation`'s doc comment), but the wire shape is ready for when it
+/// does.
+fn end_frame(status: &str, code: i32, signal: Option<&str>) -> (&'static str, Value) {
+    (
+        "end",
+        json!({ "status": status, "code": code, "signal": signal, "resumable": false }),
+    )
 }
 
 /// Pure builder of the (event-name, json-body) pair — single source of truth
@@ -149,8 +162,15 @@ impl RunEventEmitter {
         self.send(name, data).await;
     }
 
-    pub async fn end(&self, status: &str, code: i32) {
-        let (name, data) = end_frame(status, code);
+    /// Terminal frame. Carries `signal`/`resumable` alongside `status`/`code`
+    /// — the daemon's `bus.finish`/`bus.fail` shape
+    /// (`apps/daemon/src/runs.ts`), which the shipped web SPA
+    /// (`celerex-design/apps/web/src/providers/daemon.ts`, `endResumable` /
+    /// `markErrorResumable`) reads to decide whether to offer a "Continue"
+    /// affordance on a failed run. See `end_frame` for why `resumable` is
+    /// always `false` here.
+    pub async fn end(&self, status: &str, code: i32, signal: Option<&str>) {
+        let (name, data) = end_frame(status, code, signal);
         self.send(name, data).await;
     }
 }
@@ -305,9 +325,26 @@ mod tests {
 
     #[test]
     fn end_frame_matches_vocabulary() {
-        let (name, data) = end_frame("succeeded", 0);
+        let (name, data) = end_frame("succeeded", 0, None);
         assert_eq!(name, "end");
-        assert_eq!(data, json!({ "status": "succeeded", "code": 0 }));
+        assert_eq!(
+            data,
+            json!({ "status": "succeeded", "code": 0, "signal": null, "resumable": false })
+        );
+    }
+
+    #[test]
+    fn end_frame_includes_signal_when_some() {
+        // Daemon parity: `bus.finish(run, 'canceled', null, 'SIGTERM')`. No
+        // production caller passes `Some` yet (v1 wires no cancellation — see
+        // `run_generation`'s doc comment), but the builder itself must carry
+        // the value through correctly once a future caller does.
+        let (name, data) = end_frame("canceled", 1, Some("SIGTERM"));
+        assert_eq!(name, "end");
+        assert_eq!(
+            data,
+            json!({ "status": "canceled", "code": 1, "signal": "SIGTERM", "resumable": false })
+        );
     }
 
     // --- Public-API integration ------------------------------------------
@@ -329,7 +366,7 @@ mod tests {
         em.live_artifact("proj-1", "la-x", "Title").await;
         em.status("artifact-error", Some("script elements are not supported"))
             .await;
-        em.end("succeeded", 0).await;
+        em.end("succeeded", 0, None).await;
         drop(em);
         // Assert we sent 8 frames (one per call), proving none silently dropped.
         let received = collect(rx).await;
