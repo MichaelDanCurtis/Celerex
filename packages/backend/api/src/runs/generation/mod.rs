@@ -131,8 +131,30 @@ pub async fn run_generation(
     {
         Ok(r) => r,
         Err(message) => {
-            // Provider/loop failure: generic client-facing message, then failed.
-            emitter.error_event(&message).await;
+            // Provider/loop failure: `message` may embed the raw upstream
+            // response body verbatim — some providers (`openai_compat.rs`,
+            // `copilot.rs`) format their non-2xx errors as
+            // `"... status {status}: {raw}"`, and that string propagates
+            // unchanged via `?` all the way up from `Provider::complete`
+            // through `run_provider_turn`/`run_generation_loop` (see
+            // `provider_turn.rs`'s doc comment: "callers own the policy for
+            // how much of it to surface"). This IS that policy boundary, so
+            // log the full detail server-side only and put a fixed, generic
+            // message on the client-visible SSE `error` frame — daemon parity:
+            // `ProviderTurnError` in
+            // apps/daemon/src/api-generation/provider-turn.ts discards the
+            // response body entirely (`Agent generation failed (status
+            // ${status})` — status only, no body). We don't attempt to
+            // re-extract a status code from the string here: its shape isn't
+            // structured and varies per provider, so a best-effort parse would
+            // be fragile — a constant message is preferable to a leak.
+            tracing::warn!(
+                engagement = %engagement_id,
+                run_id = %run_id,
+                error = %message,
+                "design run: provider/loop turn failed"
+            );
+            emitter.error_event("generation failed").await;
             emitter.end("failed", 1, None).await;
             return;
         }

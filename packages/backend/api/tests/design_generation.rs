@@ -692,3 +692,79 @@ async fn run_generation_truncated_fragment_emits_truncation_status_literal() {
     let events = drain_events(rx).await;
     assert!(event_contains(&events, "prompt-fragment-truncated"));
 }
+
+// --- Task 11 regression: sanitized error frame (daemon parity) ------------
+// Task 10's parity pass empirically proved (via a temporary diagnostic probe,
+// not committed — see task-10-report.md) that `run_generation`'s failure
+// branch forwarded a `Provider::complete` error string verbatim onto the
+// client-visible SSE `error` frame. Some providers (`openai_compat.rs`,
+// `copilot.rs`) format that string as `"... status {status}: {raw}"`,
+// embedding the FULL upstream response body. This test recreates that
+// diagnostic as a permanent regression: a `Provider` whose error carries a
+// recognizable fake secret must never let that secret reach ANY emitted
+// frame, while the run still terminates failed.
+
+struct CanaryLeakProvider;
+
+#[async_trait::async_trait]
+impl celerex_orchestrator::llm::Provider for CanaryLeakProvider {
+    async fn complete(
+        &self,
+        _model: &str,
+        _messages: serde_json::Value,
+        _tools: serde_json::Value,
+    ) -> Result<celerex_orchestrator::llm::Completion, String> {
+        // Shape mirrors the real bug: `openai_compat.rs`'s
+        // `format!("openai-compat status {status}: {raw}")`, with the raw
+        // upstream JSON body embedding a fake secret.
+        Err(
+            "openai-compat status 401: {\"error\":{\"message\":\"invalid api key: sk-live-CANARY-do-not-leak\"}}"
+                .to_string(),
+        )
+    }
+}
+
+#[tokio::test]
+async fn run_generation_never_leaks_upstream_error_body_onto_error_frame() {
+    let db = common::start_test_db().await;
+    let eng = sqlx::query_scalar::<_, Uuid>(
+        "INSERT INTO engagements (name) VALUES ('CANARY') RETURNING id",
+    )
+    .fetch_one(&db.pool)
+    .await
+    .unwrap();
+    let provider = Arc::new(CanaryLeakProvider);
+    let (tx, rx) = tokio::sync::mpsc::channel(64);
+    run_generation(
+        &tx,
+        provider,
+        "openai-compat",
+        "grok",
+        eng,
+        "proj-1",
+        Uuid::new_v4(),
+        "x",
+        &db.pool,
+        20,
+        &[],
+    )
+    .await;
+    let events = drain_events(rx).await;
+
+    // The run still terminates as failed (matching
+    // `run_generation_forwards_provider_failure_as_failed_end`'s discriminator).
+    assert!(event_contains(&events, "failed"));
+    assert!(!event_contains(&events, "succeeded"));
+
+    // The canary secret must NOT appear on ANY emitted frame, bare-word (no
+    // embedded quotes — Debug escapes `"` as `\"`, see `event_contains`'s doc
+    // comment above).
+    assert!(
+        !event_contains(&events, "sk-live-CANARY-do-not-leak"),
+        "upstream provider error body leaked onto an SSE frame: {events:?}"
+    );
+    // Belt-and-suspenders: the raw status-embedding shape itself must not
+    // surface either, only whatever generic message the failure boundary
+    // constructs.
+    assert!(!event_contains(&events, "invalid api key"));
+}

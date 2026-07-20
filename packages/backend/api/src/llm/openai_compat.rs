@@ -10,7 +10,7 @@
 
 use async_trait::async_trait;
 use celerex_orchestrator::llm::provider::{Completion, Provider};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 pub struct OpenAiCompatProvider {
     base_url: String,
@@ -89,13 +89,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn omits_tools_key_when_empty() {
+        // Mirrors `openai_provider_omits_tools_key_when_empty` in
+        // tests/llm_openai.rs / `kimi_provider_omits_tools_key_when_empty` in
+        // tests/llm_kimi.rs — `openai_compat` and `copilot` lacked this direct
+        // coverage even though both implement the same `if !tools.is_empty()`
+        // gating (see `complete` above).
+        let srv = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "choices": [{ "message": { "role": "assistant", "content": "ok" } }]
+            })))
+            .mount(&srv)
+            .await;
+        let base = format!("{}/v1", srv.uri());
+        let p = OpenAiCompatProvider::new(base, "sk-test".into());
+        p.complete("grok", json!([{"role":"user","content":"hi"}]), json!([]))
+            .await
+            .unwrap();
+
+        let requests = srv.received_requests().await.expect("recording enabled");
+        assert_eq!(requests.len(), 1);
+        let body: Value = requests[0].body_json().expect("valid JSON body");
+        assert!(
+            body.get("tools").is_none(),
+            "empty tools array must be omitted from the request body entirely, got: {body}"
+        );
+    }
+
+    #[tokio::test]
     async fn non_2xx_is_a_provider_error() {
         let srv = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/v1/chat/completions"))
-            .respond_with(
-                ResponseTemplate::new(401).set_body_json(json!({ "error": "bad key" })),
-            )
+            .respond_with(ResponseTemplate::new(401).set_body_json(json!({ "error": "bad key" })))
             .mount(&srv)
             .await;
         let base = format!("{}/v1", srv.uri());
@@ -104,6 +132,9 @@ mod tests {
             .complete("grok", json!([{"role":"user","content":"hi"}]), json!([]))
             .await
             .unwrap_err();
-        assert!(err.contains("401"), "error should carry the upstream status: {err}");
+        assert!(
+            err.contains("401"),
+            "error should carry the upstream status: {err}"
+        );
     }
 }
