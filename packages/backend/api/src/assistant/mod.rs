@@ -144,7 +144,10 @@ pub(crate) async fn resolve_engagement_provider(
 /// (`tests/design_generation_live.rs`) is compiled as a separate crate and
 /// needs to build a real provider from a real vaulted key without going
 /// through a full `AppState`/HTTP route — this is the narrowest existing seam
-/// that does that.
+/// that does that. `#[doc(hidden)]` keeps this test-only seam out of the
+/// crate's rendered docs without narrowing the visibility the test needs
+/// (`#[cfg(test)]` cannot reach a `tests/` integration binary).
+#[doc(hidden)]
 pub async fn resolve_engagement_provider_with(
     provider_keys: &Arc<dyn crate::providers::store::ProviderKeysStore>,
     engagement_id: Uuid,
