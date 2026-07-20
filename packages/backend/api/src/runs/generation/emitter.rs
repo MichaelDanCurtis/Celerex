@@ -91,10 +91,11 @@ fn error_frame(message: &str) -> (&'static str, Value) {
 /// (`finishWithRetryDecision` in `server.ts`) — a mechanism specific to
 /// child-process-driven runs that this HTTP-turn-loop port does not have and
 /// is out of scope to add. `signal` IS a real parameter (not hardcoded)
-/// because `StopReason::Canceled` already exists as a loop outcome; today
-/// every caller passes `None` since v1 wires no cancellation (see
-/// `run_generation`'s doc comment), but the wire shape is ready for when it
-/// does.
+/// because `StopReason::Canceled` is a reachable loop outcome: the loop
+/// cancels when a frame send fails (the SSE receiver dropped, i.e. the client
+/// disconnected), and `run_generation` maps that to the daemon-parity triple
+/// `end("canceled", 1, Some("SIGTERM"))`. Every other stop reason passes
+/// `None`.
 fn end_frame(status: &str, code: i32, signal: Option<&str>) -> (&'static str, Value) {
     (
         "end",
