@@ -336,10 +336,11 @@ mod tests {
 
     #[test]
     fn end_frame_includes_signal_when_some() {
-        // Daemon parity: `bus.finish(run, 'canceled', null, 'SIGTERM')`. No
-        // production caller passes `Some` yet (v1 wires no cancellation — see
-        // `run_generation`'s doc comment), but the builder itself must carry
-        // the value through correctly once a future caller does.
+        // Daemon parity: `bus.finish(run, 'canceled', null, 'SIGTERM')`. This
+        // is the shape a real production caller emits: `run_generation`'s
+        // `terminal_end_params` maps `StopReason::Canceled` (reached when a
+        // frame send fails, i.e. the client disconnected) to exactly this
+        // triple.
         let (name, data) = end_frame("canceled", 1, Some("SIGTERM"));
         assert_eq!(name, "end");
         assert_eq!(
