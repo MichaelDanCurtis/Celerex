@@ -103,3 +103,85 @@ pub async fn get_artifact(
         },
     ))
 }
+
+/// Sibling to `get_artifact`, scoped by `(project_id, artifact_id)` ONLY —
+/// deliberately WITHOUT `engagement_id`. Exists solely for
+/// `artifact_routes::get_artifact_preview`'s anonymous same-origin-iframe
+/// path, which by construction has no claims to scope by (see that
+/// handler's doc comment for the full security rationale). Do not call this
+/// from any Bearer-authenticated call site — use `get_artifact` there.
+pub async fn get_artifact_by_project(
+    pool: &PgPool,
+    project_id: &str,
+    artifact_id: &str,
+) -> Result<Option<DesignArtifactRow>, String> {
+    let row: Option<(String, String, String, String)> = sqlx::query_as(
+        "SELECT artifact_id, title, template_html, rendered_html
+         FROM design_artifacts
+         WHERE project_id = $1 AND artifact_id = $2",
+    )
+    .bind(project_id)
+    .bind(artifact_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(row.map(
+        |(artifact_id, title, template_html, rendered_html)| DesignArtifactRow {
+            artifact_id,
+            title,
+            template_html,
+            rendered_html,
+        },
+    ))
+}
+
+/// Row shape for the LIST route (`GET /api/live-artifacts`) — deliberately
+/// narrower than `DesignArtifactRow`: a workspace-tab listing has no need for
+/// the (potentially large) `template_html`/`rendered_html` blobs, only enough
+/// to build the SPA's `LiveArtifactSummary` shape (`@celerex/contracts`'s
+/// `api/live-artifacts.ts`). `slug` is derived here (via the same `slugify`
+/// used to build the artifact id itself) so `artifact_routes.rs` stays purely
+/// about HTTP/JSON shaping.
+#[derive(Debug, Clone)]
+pub struct DesignArtifactSummaryRow {
+    pub artifact_id: String,
+    pub title: String,
+    pub slug: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// `GET /api/live-artifacts?projectId=...` — every artifact for one
+/// `(engagement_id, project_id)`, most-recently-created first. Engagement-
+/// scoped like `get_artifact`: this path stays Bearer-gated
+/// (`artifact_routes::list_live_artifacts` keeps `AuthClaims` mandatory), so
+/// there is no anonymous-access reason to loosen the scoping the way
+/// `get_artifact_by_project` deliberately does for `/preview`.
+pub async fn list_artifacts(
+    pool: &PgPool,
+    engagement_id: Uuid,
+    project_id: &str,
+) -> Result<Vec<DesignArtifactSummaryRow>, String> {
+    let rows: Vec<(String, String, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
+        "SELECT artifact_id, title, created_at
+         FROM design_artifacts
+         WHERE engagement_id = $1 AND project_id = $2
+         ORDER BY created_at DESC",
+    )
+    .bind(engagement_id)
+    .bind(project_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(rows
+        .into_iter()
+        .map(|(artifact_id, title, created_at)| {
+            let slug = slugify(&title);
+            DesignArtifactSummaryRow {
+                artifact_id,
+                title,
+                slug,
+                created_at,
+            }
+        })
+        .collect())
+}

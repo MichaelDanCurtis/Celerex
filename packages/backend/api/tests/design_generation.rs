@@ -768,3 +768,338 @@ async fn run_generation_never_leaks_upstream_error_body_onto_error_frame() {
     // constructs.
     assert!(!event_contains(&events, "invalid api key"));
 }
+
+// --- Task 13 (merge-blocking review fixes) --------------------------------
+// Three findings from the whole-branch review, closed together:
+//   CRITICAL 1 — GET /api/live-artifacts (list) was never ported. The SPA
+//     opens the workspace tab SOLELY from this array (`ProjectView.tsx:3284-
+//     3289` -> `fetchLiveArtifacts` -> `registry.ts:1454-1462`), never from
+//     the `live_artifact` SSE payload alone.
+//   CRITICAL 2 — /preview is consumed as `<iframe src>` (confirmed against
+//     `FileViewer.tsx:1551-1557`: a raw `src` attribute, not fetch+blob/
+//     srcdoc), which cannot carry a Bearer header. It must be loadable
+//     credential-less for a same-origin embed, while staying rejected for
+//     any cross-site load.
+//   IMPORTANT 3 — store errors on these routes must not leak raw sqlx/
+//     postgres internals (table/column names) onto the client-visible body.
+
+use celerex_api::plugins::credentials::LocalAeadStore;
+use celerex_orchestrator::tool_dispatch::Dispatcher;
+
+/// Build the FULL route_chain (not the trimmed two-route test harness in
+/// `common::build_app_for_generation_tests`) so the new list route — mounted
+/// in `lib.rs`, not in the test-only router — is actually reachable. Mirrors
+/// the exact setup `tests/e2e_bob_researcher.rs` uses for the same reason.
+fn full_app(pool: sqlx::PgPool) -> axum::Router {
+    let dispatcher = Arc::new(Dispatcher::new());
+    let creds =
+        Arc::new(LocalAeadStore::from_env().expect("CELEREX_CRED_KEY set by start_test_db"));
+    celerex_api::build_app_with_dispatcher(pool, creds, dispatcher)
+}
+
+#[tokio::test]
+async fn list_live_artifacts_returns_project_scoped_artifacts_with_csp_parity_headers() {
+    let db = common::start_test_db().await;
+    let eng = sqlx::query_scalar::<_, Uuid>(
+        "INSERT INTO engagements (name) VALUES ('List Eng') RETURNING id",
+    )
+    .fetch_one(&db.pool)
+    .await
+    .unwrap();
+    let other = sqlx::query_scalar::<_, Uuid>(
+        "INSERT INTO engagements (name) VALUES ('List Other') RETURNING id",
+    )
+    .fetch_one(&db.pool)
+    .await
+    .unwrap();
+
+    let aid1 = generate_artifact_id("Landing Page");
+    insert_artifact(
+        &db.pool,
+        eng,
+        "proj-1",
+        &aid1,
+        "Landing Page",
+        "<h1>a</h1>",
+        "<h1>a</h1>",
+        Uuid::new_v4(),
+    )
+    .await
+    .unwrap();
+    let aid2 = generate_artifact_id("Pricing Page");
+    insert_artifact(
+        &db.pool,
+        eng,
+        "proj-1",
+        &aid2,
+        "Pricing Page",
+        "<h1>b</h1>",
+        "<h1>b</h1>",
+        Uuid::new_v4(),
+    )
+    .await
+    .unwrap();
+    // Different project, same engagement: must NOT appear.
+    let aid3 = generate_artifact_id("Other Project Page");
+    insert_artifact(
+        &db.pool,
+        eng,
+        "proj-2",
+        &aid3,
+        "Other Project Page",
+        "<h1>c</h1>",
+        "<h1>c</h1>",
+        Uuid::new_v4(),
+    )
+    .await
+    .unwrap();
+    // Different engagement, same project id string: must NOT appear (isolation).
+    let aid4 = generate_artifact_id("Someone Elses Page");
+    insert_artifact(
+        &db.pool,
+        other,
+        "proj-1",
+        &aid4,
+        "Someone Elses Page",
+        "<h1>d</h1>",
+        "<h1>d</h1>",
+        Uuid::new_v4(),
+    )
+    .await
+    .unwrap();
+
+    let app = full_app(db.pool.clone());
+    let token = common::mint_token(eng);
+
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/live-artifacts?projectId=proj-1")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // Same CSP-parity header source as the sibling meta/preview routes.
+    let h = resp.headers();
+    assert_eq!(
+        h.get("content-security-policy").unwrap().to_str().unwrap(),
+        "default-src 'none'; base-uri 'none'; script-src 'none'; object-src 'none'; connect-src 'none'; form-action 'none'; frame-ancestors 'self'; img-src 'self' data: blob:; font-src 'self' data:; style-src 'unsafe-inline'; sandbox allow-same-origin"
+    );
+    assert_eq!(
+        h.get("cache-control").unwrap().to_str().unwrap(),
+        "no-store"
+    );
+    assert_eq!(
+        h.get("content-type").unwrap().to_str().unwrap(),
+        "application/json"
+    );
+
+    let body = axum::body::to_bytes(resp.into_body(), 1 << 20)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    // Top-level shape matches `fetchLiveArtifacts`'s parse (`registry.ts:1458-1462`):
+    // `{ artifacts: LiveArtifactSummary[] }` (the daemon-parity key; the SPA's
+    // `liveArtifacts` fallback key is never actually populated by either server).
+    let artifacts = json["artifacts"]
+        .as_array()
+        .expect("body must have a top-level `artifacts` array");
+    assert_eq!(
+        artifacts.len(),
+        2,
+        "must include only proj-1's two artifacts for THIS engagement: {artifacts:?}"
+    );
+
+    let first = artifacts
+        .iter()
+        .find(|a| a["id"] == aid1)
+        .expect("aid1 must be present");
+    // Field-for-field match against `LiveArtifactSummary`
+    // (`@celerex/contracts` `api/live-artifacts.ts:129-131`) as consumed by
+    // `liveArtifactSummaryToWorkspaceEntry` (`registry.ts:198-217`).
+    assert_eq!(first["projectId"], "proj-1");
+    assert_eq!(first["title"], "Landing Page");
+    assert_eq!(first["preview"]["type"], "html");
+    assert_eq!(first["preview"]["entry"], "index.html");
+    assert_eq!(first["refreshStatus"], "idle");
+    assert_eq!(first["status"], "active");
+    assert_eq!(first["pinned"], false);
+    assert_eq!(first["hasDocument"], true);
+    assert!(first["slug"].as_str().unwrap().contains("landing-page"));
+    assert!(first["updatedAt"].is_string());
+}
+
+#[tokio::test]
+async fn list_live_artifacts_requires_bearer_auth() {
+    let db = common::start_test_db().await;
+    let app = full_app(db.pool.clone());
+
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/live-artifacts?projectId=proj-1")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+// --- CRITICAL 2: /preview must be loadable from a bare <iframe src> -------
+// Confirmed premise: `FileViewer.tsx:1551-1557` renders
+// `<iframe sandbox="allow-scripts allow-popups allow-downloads" src={previewUrl}>`
+// — a plain `src` attribute (not `srcdoc`, not a fetch+blob URL). Per the
+// HTML spec, a browser cannot attach a custom `Authorization` header to that
+// navigation, so gating unconditionally on `AuthClaims` 401s inside every
+// frame.
+
+#[tokio::test]
+async fn preview_route_serves_same_origin_iframe_request_without_bearer_token() {
+    let db = common::start_test_db().await;
+    let (app, eng) = common::build_app_for_generation_tests(db.pool.clone()).await;
+    let aid = generate_artifact_id("Frame Page");
+    insert_artifact(
+        &db.pool,
+        eng,
+        "proj-1",
+        &aid,
+        "Frame Page",
+        "<h1>t</h1>",
+        "<h1>framed</h1>",
+        Uuid::new_v4(),
+    )
+    .await
+    .unwrap();
+
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/api/live-artifacts/{aid}/preview?projectId=proj-1&variant=rendered"
+                ))
+                // Deliberately NO authorization header — a browser iframe
+                // navigation cannot send one.
+                .header("sec-fetch-site", "same-origin")
+                .header("sec-fetch-dest", "iframe")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let h = resp.headers();
+    assert_eq!(
+        h.get("content-security-policy").unwrap().to_str().unwrap(),
+        "default-src 'none'; base-uri 'none'; script-src 'none'; object-src 'none'; connect-src 'none'; form-action 'none'; frame-ancestors 'self'; img-src 'self' data: blob:; font-src 'self' data:; style-src 'unsafe-inline'; sandbox allow-same-origin"
+    );
+    let body = axum::body::to_bytes(resp.into_body(), 1 << 20)
+        .await
+        .unwrap();
+    assert_eq!(&body[..], b"<h1>framed</h1>");
+}
+
+#[tokio::test]
+async fn preview_route_rejects_cross_site_request_without_bearer_token() {
+    let db = common::start_test_db().await;
+    let (app, eng) = common::build_app_for_generation_tests(db.pool.clone()).await;
+    let aid = generate_artifact_id("Frame Page 2");
+    insert_artifact(
+        &db.pool,
+        eng,
+        "proj-1",
+        &aid,
+        "Frame Page 2",
+        "<h1>t</h1>",
+        "<h1>framed</h1>",
+        Uuid::new_v4(),
+    )
+    .await
+    .unwrap();
+
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/api/live-artifacts/{aid}/preview?projectId=proj-1&variant=rendered"
+                ))
+                .header("sec-fetch-site", "cross-site")
+                .header("sec-fetch-dest", "iframe")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn preview_route_same_origin_iframe_unknown_id_404s() {
+    let db = common::start_test_db().await;
+    let (app, _eng) = common::build_app_for_generation_tests(db.pool.clone()).await;
+
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(
+                    "/api/live-artifacts/la-does-not-exist-000000000000/preview?projectId=proj-1&variant=rendered",
+                )
+                .header("sec-fetch-site", "same-origin")
+                .header("sec-fetch-dest", "iframe")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+// --- IMPORTANT 3: store errors must not leak sqlx/postgres internals -----
+
+#[tokio::test]
+async fn meta_route_store_error_yields_generic_body_with_no_sqlx_internals() {
+    let db = common::start_test_db().await;
+    let (app, eng) = common::build_app_for_generation_tests(db.pool.clone()).await;
+    let token = common::mint_token(eng);
+
+    // Force a REAL sqlx error (the table is gone) rather than asserting
+    // against a contrived string — this exercises the actual map_err path.
+    sqlx::query("DROP TABLE design_artifacts")
+        .execute(&db.pool)
+        .await
+        .unwrap();
+
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/live-artifacts/la-whatever-000000000000?projectId=proj-1")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let body = axum::body::to_bytes(resp.into_body(), 1 << 20)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8_lossy(&body).to_lowercase();
+    assert!(
+        !body_str.contains("design_artifacts"),
+        "client body must not leak the table name: {body_str}"
+    );
+    assert!(
+        !body_str.contains("relation"),
+        "client body must not leak raw postgres/sqlx internals: {body_str}"
+    );
+}
