@@ -31,13 +31,13 @@ explicitly rather than silently repeated.
 | `system_prompt.rs` | `PromptFragment`, `FragmentSlot`, `MAX_PROMPT_FRAGMENT_CHARS`, `compose_system_prompt`, `build_system_prompt` — the base prompt plus the ordered (Brand → Motion → Task) fragment composer. |
 | `emitter.rs` | `RunEventEmitter` — the only place that builds SSE frame JSON. Every event is a pure `*_frame(...)` builder function plus a thin async `send` wrapper; see §3. |
 | `artifact_store.rs` | `DesignArtifactRow`, `generate_artifact_id`, `insert_artifact` (upsert), `get_artifact` — the `design_artifacts` Postgres access layer. |
-| `artifact_routes.rs` | `get_artifact_meta`, `get_artifact_preview` — the two `GET /api/live-artifacts/...` handlers, including the CSP-parity security headers. |
+| `artifact_routes.rs` | `list_live_artifacts`, `get_artifact_meta`, `get_artifact_preview` — the three `GET /api/live-artifacts...` handlers, including the CSP-parity security headers. |
 
 Not in this directory but load-bearing to how it's wired:
 
 - `packages/backend/api/src/runs/design_chat.rs` — `POST /api/runs` registers a `PendingDesignRun`; `GET /api/runs/{id}/events` (via `runs/sse.rs`) calls `stream_pending`, which resolves the provider and calls `run_generation`.
-- `packages/backend/api/src/runs/sse.rs` — the single SSE-stream entry point; dispatches to `design_chat::stream_pending` for a pending design run, or to the unrelated flow-canvas `RunBus`/`RunEvent` path otherwise (two entirely different run types share one route).
-- `packages/backend/api/src/lib.rs` — mounts `/api/live-artifacts/{artifact_id}` and `/api/live-artifacts/{artifact_id}/preview` (lines ~137–138).
+- `packages/backend/api/src/runs/sse.rs` — the single SSE-stream entry point; dispatches to `design_chat::stream_pending` for a pending design run, or to the unrelated flow-canvas `RunBus`/`RunEvent` path otherwise (two entirely different run types share one route). `claim_pending_design_run` authorizes BEFORE removing the single-shot entry (checked under one lock acquisition) — a caller from a different engagement holding/guessing a valid v4 UUID gets `403` without destroying the legitimate owner's pending run; an earlier version removed first and checked after, so a wrong-engagement probe still 404'd the real owner's own subsequent connect.
+- `packages/backend/api/src/lib.rs` — mounts `/api/live-artifacts`, `/api/live-artifacts/{artifact_id}`, and `/api/live-artifacts/{artifact_id}/preview` (lines ~137–139).
 - `packages/backend/api/src/db/migrations/0024_design_artifacts.sql` — the one schema addition (additive only; 0023 was the prior highest).
 - `packages/backend/api/src/assistant/mod.rs` — `resolve_engagement_provider` / `resolve_engagement_provider_with`, the vaulted-key → `Arc<dyn Provider>` resolution `design_chat.rs` calls before handing off to `run_generation`.
 
@@ -51,10 +51,13 @@ POST /api/runs (design_chat::create)
      in AppState.design_runs (in-memory map), returns { run_id }
      (a 60s TTL sweep reclaims it if no one ever opens the SSE stream)
 
-GET /api/runs/{run_id}/events (runs/sse.rs::stream)
-  -> removes the pending entry (single-shot; race-free by construction —
-     the completion cannot start before a consumer is subscribed)
-  -> 403 if the streaming caller's engagement doesn't match the creator's
+GET /api/runs/{run_id}/events (runs/sse.rs::stream -> claim_pending_design_run)
+  -> 403 if a pending entry exists but the caller's engagement doesn't match
+     the creator's — checked BEFORE removal, so a wrong-engagement probe
+     cannot destroy the legitimate owner's pending run as a side effect
+  -> otherwise removes the pending entry (single-shot; race-free by
+     construction — the completion cannot start before a consumer is
+     subscribed), both checked and removed under one lock acquisition
   -> design_chat::stream_pending(state, run_id, pending)
        -> sends the `start` frame directly (not via RunEventEmitter)
        -> resolve_engagement_provider(state, engagement_id, provider_id)
@@ -71,13 +74,17 @@ GET /api/runs/{run_id}/events (runs/sse.rs::stream)
                  dispatches tool calls through ToolRegistry -> FileStore
             -> validates+persists produced_html (§5), emits live_artifact or artifact-error
             -> emits `reached step limit` status if MaxTurns
-            -> emits terminal `end` (always "succeeded" unless the loop/provider itself errored)
+            -> emits terminal `end`: "succeeded" (natural stop or MaxTurns),
+               "failed" (the loop/provider itself errored), or "canceled"
+               (the SSE consumer disconnected mid-run — §3, §7)
 
+GET /api/live-artifacts?projectId=...                          (artifact_routes::list_live_artifacts)
 GET /api/live-artifacts/{artifact_id}?projectId=...            (artifact_routes::get_artifact_meta)
 GET /api/live-artifacts/{artifact_id}/preview?projectId=...&variant=...  (artifact_routes::get_artifact_preview)
-  -> both AuthClaims-gated, both scoped by (engagement_id, project_id, artifact_id)
-     in the same SQL WHERE clause (a cross-engagement request 404s; it never
-     gets a 403 that would confirm the row exists elsewhere)
+  -> all three AuthClaims-gated; the list route scopes by the query bind,
+     the other two by (engagement_id, project_id, artifact_id) in the same
+     SQL WHERE clause (a cross-engagement request 404s; it never gets a 403
+     that would confirm the row exists elsewhere)
 ```
 
 `max_turns` is currently a hardcoded `20`, set at the one production call site
@@ -103,7 +110,7 @@ compatibility contract this engine must not break:
 Two things the list above doesn't spell out, verified against the shipped code
 on both sides (`emitter.rs` here; `daemon.ts` in `celerex-design`):
 
-- **`end` actually carries two more keys**: `{ "status", "code", "signal", "resumable": false }`. `resumable` is always hardcoded `false` (nothing in this HTTP-turn-loop port can ever set it `true` — the daemon's `true` case is a CLI-spawn retry heuristic with no equivalent here). `signal` is always `None`/`null` today (v1 wires no cancellation). Both keys exist because the shipped SPA (`daemon.ts` lines ~1063–1089) reads `event.data.signal` / `event.data.resumable` off the `end` frame to decide whether to offer a "Continue" affordance on a failed run — omitting them would silently break that affordance, not just leave it inert.
+- **`end` actually carries two more keys**: `{ "status", "code", "signal", "resumable": false }`. `resumable` is always hardcoded `false` (nothing in this HTTP-turn-loop port can ever set it `true` — the daemon's `true` case is a CLI-spawn retry heuristic with no equivalent here). `signal` is `None`/`null` for `"succeeded"`/`"failed"`, and `Some("SIGTERM")` for `"canceled"` — `mod.rs::terminal_end_params` is the one place that maps a loop `StopReason` to this `(status, code, signal)` triple. Both keys exist because the shipped SPA (`daemon.ts` lines ~1063–1089) reads `event.data.signal` / `event.data.resumable` off the `end` frame to decide whether to offer a "Continue" affordance on a failed run — omitting them would silently break that affordance, not just leave it inert. That same SPA code treats `status: "canceled"` as a graceful completion (`handlers.onDone(...)`, not `onError`) — fitting, since a canceled run's own `end` frame typically fails to actually reach anyone: see the cancellation note in §7.
 - **The `error` event has two different valid shapes**, depending on which failure path emits it, and the SPA is written to accept both (`daemon.ts`: `String(data.error?.message ?? data.message ?? 'daemon error')`):
   - **Nested** `{ "error": { "message": <string> } }` — emitted by `design_chat.rs::send_error`, used only for *pre-loop* failures (no vaulted key, key-store error) before `run_generation`/the emitter even exists.
   - **Flat** `{ "message": <string> }` — emitted by `RunEventEmitter::error_event`, used for *mid-loop* failures (a provider/loop turn failed inside `run_generation`). This matches the daemon's own `run-event-emitter.ts` `errorEvent()` exactly; the nested shape belongs to the daemon's separate terminal `bus.fail()` path.
@@ -124,13 +131,14 @@ exercised by `emitter.rs`'s own unit test.
 
 **Persisted artifact — `design_artifacts` (Postgres, migration `0024_design_artifacts.sql`).** One row per successfully-guarded artifact: `(engagement_id, project_id, artifact_id, title, template_html, rendered_html, created_by_run_id, created_at)`, unique on `(engagement_id, project_id, artifact_id)`, `ON DELETE CASCADE` on the engagement FK. `artifact_store::insert_artifact` is an upsert (`ON CONFLICT ... DO UPDATE`); `title` comes from `derive_title(user_message)` in `mod.rs` (whitespace-collapsed, first 80 chars, or `"Generated design"` if empty) and `generate_artifact_id` slugifies it (`la-<slug>-<12 hex>`, random suffix via `ring`'s `SystemRandom`).
 
-**Two GET routes (`artifact_routes.rs`), both `AuthClaims`-gated and engagement-scoped in the SQL `WHERE` clause itself:**
-- `GET /api/live-artifacts/{artifact_id}?projectId=...` — artifact metadata (`get_artifact_meta`). Returns `{ "artifact": { "id", "projectId", "title", "refreshStatus": "idle", "preview": { "type": "html", "entry": "index.html" } } }`. `refreshStatus` is a **hardcoded literal**, not backed by any real refresh mechanism.
-- `GET /api/live-artifacts/{artifact_id}/preview?projectId=...&variant=...` — the HTML the FileViewer iframes (`get_artifact_preview`). `variant=template` returns the raw author template; anything else (including `rendered`, an unrecognized value, or the param entirely absent) returns the rendered/guarded HTML.
+**Three GET routes (`artifact_routes.rs`), all `AuthClaims`-gated and engagement-scoped:**
+- `GET /api/live-artifacts?projectId=...` — every artifact for one project, most-recently-created first (`list_live_artifacts`, scoped by the query bind). This is the route the shipped web SPA actually calls to populate the artifact/workspace tab (`ProjectView.tsx` → `fetchLiveArtifacts(projectId)` → `registry.ts`'s `{ artifacts: [...] }`); the `live_artifact` SSE payload alone never opens the tab on its own.
+- `GET /api/live-artifacts/{artifact_id}?projectId=...` — artifact metadata (`get_artifact_meta`, scoped in the SQL `WHERE` clause). Returns `{ "artifact": { "id", "projectId", "title", "refreshStatus": "idle", "preview": { "type": "html", "entry": "index.html" } } }`. `refreshStatus` is a **hardcoded literal**, not backed by any real refresh mechanism.
+- `GET /api/live-artifacts/{artifact_id}/preview?projectId=...&variant=...` — the HTML the FileViewer iframes (`get_artifact_preview`, scoped in the SQL `WHERE` clause). `variant=template` returns the raw author template; anything else (including `rendered`, an unrecognized value, or the param entirely absent) returns the rendered/guarded HTML. This route is also reachable from a bare iframe load, not only an authenticated `apiFetch` — its auth posture for that case (`PreviewAuth`) is documented directly on the handler, not repeated here.
 
-Both responses carry the CSP-parity security header set (`live_artifact_security_headers()` — `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, and an 11-directive `Content-Security-Policy` that is directive-for-directive byte-identical, in the same order, to the daemon's `setLiveArtifactPreviewHeaders` — verified directly against `celerex-design/apps/daemon/src/server.ts`). This is deliberately applied to **both** routes; the daemon only applies it to the preview route. `script-src 'none'` plus the script-less `sandbox` directive are what make the guard's known denylist gaps (below) inert on serve — the CSP is defense-in-depth, not decorative.
+All three responses carry the CSP-parity security header set (`live_artifact_security_headers()` — `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, and an 11-directive `Content-Security-Policy` that is directive-for-directive byte-identical, in the same order, to the daemon's `setLiveArtifactPreviewHeaders` — verified directly against `celerex-design/apps/daemon/src/server.ts`). This is deliberately applied to **all three** routes; the daemon only applies it to the preview route. `script-src 'none'` plus the script-less `sandbox` directive are what make the guard's known denylist gaps (below) inert on serve — the CSP is defense-in-depth, not decorative.
 
-**Scope boundary, confirmed by grep, not assumed:** the web SPA's client (`apps/web/src/providers/registry.ts` in `celerex-design`) also has functions for `refreshLiveArtifact` (`POST .../refresh`), listing refreshes (`GET .../refreshes`), and `deleteLiveArtifact` (`DELETE ...`). **None of these three routes exist server-side** — only the two GET routes above are mounted in `lib.rs`. If a UI affordance ever calls one of those against this Agent, it will 404. This was the deliberate scope of the port (the brief's own storage decision: "two new engagement-authenticated GET routes... that the existing web already calls" for the *generation* flow specifically), not an oversight discovered late.
+**Scope boundary, confirmed by grep, not assumed:** the web SPA's client (`apps/web/src/providers/registry.ts` in `celerex-design`) also has functions for `refreshLiveArtifact` (`POST .../refresh`), listing refreshes (`GET .../refreshes`), and `deleteLiveArtifact` (`DELETE ...`). **None of these three routes exist server-side** — only the three GET routes above are mounted in `lib.rs`. If a UI affordance ever calls one of those against this Agent, it will 404. This remains the deliberate scope of the port (the brief's own storage decision: "engagement-authenticated GET routes... that the existing web already calls" for the *generation* flow specifically), not an oversight — unlike the list route above, which this document itself previously failed to enumerate here at all (neither as mounted nor as a gap) despite the SPA depending on it; that omission is now corrected.
 
 ## 5. The `artifact-error` → `succeeded` guard contract
 
@@ -175,7 +183,9 @@ The turn layer never makes an HTTP request to this server's own `/api/assistant/
 
 **`get_artifact_preview`'s `variant` handling collapses everything but the literal `"template"` to `rendered`** (including `"rendered-source"`, garbage, or the param being absent). The daemon 400s an unrecognized variant. Inert today because the shipped `FileViewer.tsx` only ever requests `variant=rendered` or omits it — but a new client-side variant added later would silently get `rendered` instead of an error here.
 
-**`StopReason::Canceled` is real code but unreachable from production.** `run_generation_loop` checks an `AtomicBool` at the top of every turn and does return `StopReason::Canceled` if it's already `true` (unit-tested directly: `already_canceled_stops_before_first_turn`) — but `run_generation` constructs `let canceled = AtomicBool::new(false);` fresh, local, and never shared or flipped by anything. No caller today can cancel a running generation. `emitter.end()`'s `signal: Option<&str>` parameter already exists for this (see §3); a future cancellation task needs to thread a real, externally-settable flag through `run_generation` and add a `StopReason::Canceled => emitter.end("canceled", 1, Some("SIGTERM"))` arm in `mod.rs` (deliberately not added yet — it would be an untested, currently-dead branch).
+**`StopReason::Canceled` now has a real, reachable producer: SSE-consumer disconnect (resolved — previously unreachable).** `run_generation_loop` still checks the `canceled` `AtomicBool` at the top of every turn (unit-tested: `already_canceled_stops_before_first_turn`), and `run_generation` still constructs it fresh, local, and never explicitly flips it — there is no user-initiated cancel API yet. What changed: the loop *also* checks the SSE channel's `Sender::is_closed()` at that same point (`loop_core.rs` tests `disconnected_before_loop_starts_stops_immediately_without_consuming_turns` and `disconnected_mid_flight_stops_before_next_turn_reaches_paid_provider`). A closed browser tab drops axum's SSE response body, which drops the channel's `Receiver`, making `is_closed()` true; the loop then stops with `Canceled` before placing another (billable) provider call, and `mod.rs::terminal_end_params` reports it as `end("canceled", 1, Some("SIGTERM"))` (see §3). This closes a real cost/resource leak: previously, closing the tab left the loop running silently for up to `max_turns` (20) more provider calls with nobody consuming the output.
+
+**`GET /api/runs/{runId}` — the web's status-fallback route — does not exist for design-chat runs; documented here rather than faked.** The web's `consumeDaemonRun` (`daemon.ts`'s `fetchChatRunStatus`) calls this route in two situations: after a mid-stream `error` frame (to judge whether the failure is retryable), and when the event stream ends without ever having seen a terminal `end` frame (reconnect budget exhausted, or some other stream break). This crate has no handler for a bare `GET /api/runs/{run_id}` — the three existing `/api/runs*` handlers (`runs::routes::list`, `recent`, `steps`) all read the Postgres `runs` table directly, populated only by the unrelated flow-canvas run type. Design-chat runs are never rows in that table: `PendingDesignRun` lives only in the in-memory `design_runs` registry (`AppState`), and that entry is removed the instant its SSE stream starts (single-shot — see `sse.rs`, which now checks ownership before that removal rather than after). A real implementation would need either a persisted design-chat run-status record (piggybacking on `runs`, or a new store) plus a new route registered in `lib.rs`, or comparable new state — outside this fix's file scope, and not a "cheap correct" change, so it was assessed and documented rather than implemented. Consequence: the mid-stream-`error` fallback resolves harmlessly today (a 404 there already reads as "status unreachable," which the SPA already treats as "surface the structured error" — the correct outcome anyway). The no-`end`-frame fallback is the one with a real, pre-existing cost: the SPA cannot distinguish "the run actually finished server-side but its `end` frame never arrived" from "the run is gone," so it can surface a spurious `daemon stream disconnected before run completed` error even for a run that completed cleanly. This is unrelated to, and not made worse by, the disconnect-cancellation behavior above — a client that has already disconnected was never going to be the one calling this fallback for itself.
 
 **The system-prompt fragment composer ships empty in production.** `compose_system_prompt`/`build_system_prompt`/`PromptFragment`/`FragmentSlot` (Brand → Motion → Task, `MAX_PROMPT_FRAGMENT_CHARS = 8_000`, truncate-last) are fully implemented and unit-tested, but the one production call site (`design_chat.rs`) always passes `&[]`, so the composed prompt is byte-identical to the pre-composer base prompt. This is plumbing for a future producer (e.g. a Brand Kit feature) to pass real fragments — not a bug, just not live yet. If you add a fragment producer, the `prompt-fragment-truncated` status literal is already wired end-to-end (`run_generation` checks `composed.truncated` and emits it) and has a regression test (`run_generation_truncated_fragment_emits_truncation_status_literal`).
 
@@ -186,16 +196,18 @@ The turn layer never makes an HTTP request to this server's own `/api/assistant/
 - **Guard hardening beyond the daemon's own denylist** (`template_guard.rs`): the `on*=` handler pattern is widened to match a `/` separator as well as whitespace before `on` (`[\s/]on[a-z][a-z0-9_-]*\s*=`), catching the `<svg/onload=...>` / `<img/onerror=...>` class the daemon's own `\son...=` pattern misses. This is a **known, deliberate over-reject**: it also flags ordinary URL text like `url(/images/online=1.png)` (locked in by `hardening_tests::known_limitation_url_containing_slash_on_word_equals_is_over_rejected`) — do not narrow this pattern without re-solving `<svg/onload=` detection first; a visible over-reject was judged better than an executable-content miss, and the CSP (§4) is defense-in-depth, not a reason to loosen this. `<foreignObject>` is also rejected outright (the HTML-in-SVG script bridge; no legitimate static-chart use). The `data.*` template-binding check requires the *literal* first dot-segment `data` (rejecting `database.foo`, `dataset.x`, `dataXYZ.foo`, and bare `data`), matching the daemon's actual `segments.shift() !== 'data'` semantics rather than a looser `starts_with("data")`.
 - **Path validation is stricter than the daemon on doubled separators** (`file_store.rs::validate_project_path`): the daemon's own `normalized.split('/').filter(Boolean)` drops empty segments *before* checking its forbidden-segment regex, so a raw `"a//b"` silently collapses to the accepted `"a/b"` in the daemon's actual runtime. This port checks segments *before* dropping empties, so `"a//b"` is rejected loudly instead. Strictly stricter, never looser. The daemon's separate `.live-artifacts`-segment reservation (an on-disk sentinel) is deliberately not ported — there is no on-disk state here to protect.
 - **No `requireLocalDaemonRequest` gate.** The daemon required requests to originate from its own local-network daemon process; these routes have no equivalent. This is the direct, intended consequence of the locked server-authoritative architecture (there is no local-daemon-network concept server-side) — `AuthClaims`-based engagement scoping is what replaces it, not an omission.
-- **CSP-parity headers applied to both live-artifact routes**, not just the preview route the daemon applies them to — a deliberate widening (defense-in-depth on the metadata JSON response too), not a gap.
+- **CSP-parity headers applied to all three live-artifact routes**, not just the preview route the daemon applies them to — a deliberate widening (defense-in-depth on the metadata/list JSON responses too), not a gap.
 
 ## 9. Running the tests
 
 ```bash
-# Unit tests (no external services): 144 passing as of this writing.
+# Unit tests (no external services): 151 passing as of this writing.
 cargo test -p celerex-api --lib
 
-# Integration tests (needs Docker — testcontainers spins up real Postgres):
-# 14 passing as of this writing, in tests/design_generation.rs.
+# Integration tests (needs Docker — testcontainers spins up real Postgres),
+# in tests/design_generation.rs. Count intentionally not pinned here — this
+# file gains coverage often enough that a hardcoded number goes stale fast;
+# run it locally for the current count.
 cargo test -p celerex-api --test design_generation
 
 # A single test, with output:
@@ -245,8 +257,9 @@ Agent's half of the contract):
    Do **not** set `CELEREX_HOUSE_MODE` — the design-chat path is fail-closed regardless, but leaving it unset keeps the whole environment honest to production.
 3. **Seed a real vaulted key** for your engagement via the provider-keys endpoint (or the design Settings UI): store an OpenAI-compatible provider key (e.g. `copilot`) for the engagement you'll sign in as.
 4. **Open the SPA** at `http://localhost:3001`, sign in, open/create a project, select the matching `<provider>/<model>`, and send a design prompt like *"Build a centered hero with a headline and subtitle."*
-5. **Watch the chat stream:** assistant status → text → tool-use/tool-result activity (the `agent` frames), then the artifact tab populates.
-6. **Confirm the artifact renders:** the FileViewer iframe shows the generated page. In the network panel, confirm the web fetched `GET /api/live-artifacts/{artifactId}?projectId=...` (200 JSON) and `GET /api/live-artifacts/{artifactId}/preview?projectId=...&variant=rendered` (200 HTML) from the Agent.
+5. **Watch the chat stream:** assistant status → text → tool-use/tool-result activity (the `agent` frames), then the artifact tab populates (backed by `GET /api/live-artifacts?projectId=...` — §4).
+6. **Confirm the artifact renders:** the FileViewer iframe shows the generated page. In the network panel, confirm the web fetched `GET /api/live-artifacts/{artifactId}?projectId=...` (200 JSON) and `GET /api/live-artifacts/{artifactId}/preview?projectId=...&variant=rendered` (200 HTML) from the Agent. (`/preview` is reachable from a bare iframe load, not only an authenticated `apiFetch`; its auth posture for that case is documented directly on the `get_artifact_preview` handler, not repeated here.)
 7. **Confirm the guard path:** send a prompt that coerces a `<script>` into `index.html` (or temporarily relax the system prompt). The chat should show an `artifact-error` status but the run should still finish `succeeded` (no error banner), and no artifact row should be served.
 8. **Confirm isolation:** with a second engagement that has **no** vaulted key, sending a design prompt should surface `no key configured for provider '<id>'` and finish `failed` (fail-closed, §6).
 9. **DB check:** `SELECT engagement_id, project_id, artifact_id, title FROM design_artifacts ORDER BY created_at DESC LIMIT 5;` — the successful run's row is present and scoped to your engagement.
+10. **Confirm disconnect-cancellation (§7):** send a design prompt, then close the browser tab (or otherwise abort the `GET /api/runs/{runId}/events` request) right after the first `tool_use`/`tool_result` activity appears. There is no client-visible confirmation of this — the whole point is nobody is listening any more — so watch the Agent's own terminal/logs instead: provider-call activity for that run should stop immediately rather than continuing for the full `max_turns` (20).

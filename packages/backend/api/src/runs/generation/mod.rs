@@ -65,14 +65,24 @@ fn derive_title(user_message: &str) -> String {
 /// vocabulary entirely): every `end` frame carries `signal`/`resumable`
 /// alongside `status`/`code` (see `emitter::end`), which the shipped web SPA
 /// (`celerex-design/apps/web/src/providers/daemon.ts`) reads to decide whether
-/// to offer a "Continue" affordance on a failed run. `signal` is always `None`
-/// on both branches below because v1 wires no cancellation: `canceled` is
-/// constructed fresh and never shared, so `StopReason::Canceled` can never
-/// actually be returned by the loop here. A future cancellation-wiring task
-/// must add a `StopReason::Canceled => emitter.end("canceled", 1,
-/// Some("SIGTERM"))` arm once it threads a real, externally-settable flag
-/// through — left undone deliberately rather than adding an untested,
-/// currently-unreachable branch.
+/// to offer a "Continue" affordance on a failed run. `terminal_end_params`
+/// below is the single place that maps a `StopReason` to those three values.
+///
+/// `canceled` (the `AtomicBool` passed to `run_generation_loop`) is still
+/// constructed fresh here and never flipped by anything in THIS function —
+/// there is no explicit user-initiated cancel API yet. `StopReason::Canceled`
+/// nonetheless has a real, reachable producer as of the disconnect-detection
+/// fix: `run_generation_loop` also checks the SSE sender's `is_closed()` at
+/// the top of every turn, independent of the `canceled` flag. When the
+/// browser tab closes mid-run, axum drops the SSE response body, which drops
+/// the channel's `Receiver`, which makes `is_closed()` true from that instant
+/// on — the loop notices before it would otherwise place another (billable)
+/// provider call and stops with `Canceled`. `terminal_end_params` reports
+/// that as `end("canceled", 1, Some("SIGTERM"))` (daemon parity: `bus.finish(
+/// run, 'canceled', null, 'SIGTERM')`). The frame itself typically still
+/// fails to send in exactly this case — the whole point is nobody is
+/// listening any more — but the value is in stopping wasted provider calls
+/// promptly, not in this specific frame being delivered.
 #[allow(clippy::too_many_arguments)]
 pub async fn run_generation(
     tx: &Sender<Result<Event, Infallible>>,
@@ -126,6 +136,7 @@ pub async fn run_generation(
         &file_store,
         max_turns,
         &canceled,
+        tx,
     )
     .await
     {
@@ -199,5 +210,53 @@ pub async fn run_generation(
     if matches!(result.stop_reason, StopReason::MaxTurns) {
         emitter.status("reached step limit", None).await;
     }
-    emitter.end("succeeded", 0, None).await;
+    let (status, code, signal) = terminal_end_params(result.stop_reason);
+    emitter.end(status, code, signal).await;
+}
+
+/// Pure mapping from a loop's `StopReason` to the terminal `end` frame's
+/// `(status, code, signal)`. Test-visible (mirrors `emitter.rs`'s own
+/// `*_frame` pure-builder pattern — see its module doc) since the emitted
+/// `Event` itself exposes no public getters to assert against after the
+/// fact, and this function needs no `PgPool`/`RunEventEmitter` to exercise.
+/// `Natural` and `MaxTurns` both report daemon-parity success; `MaxTurns`
+/// additionally gets the `"reached step limit"` status frame (above, not
+/// here — that is a distinct mid-stream frame, not part of the terminal
+/// triple). `Canceled` reports daemon-parity `bus.finish(run, 'canceled',
+/// null, 'SIGTERM')` — see this module's doc comment above `run_generation`
+/// for how a `Canceled` result reaches here (SSE-consumer disconnect).
+fn terminal_end_params(stop_reason: StopReason) -> (&'static str, i32, Option<&'static str>) {
+    match stop_reason {
+        StopReason::Natural | StopReason::MaxTurns => ("succeeded", 0, None),
+        StopReason::Canceled => ("canceled", 1, Some("SIGTERM")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn terminal_end_params_natural_and_max_turns_both_report_succeeded() {
+        assert_eq!(
+            terminal_end_params(StopReason::Natural),
+            ("succeeded", 0, None)
+        );
+        assert_eq!(
+            terminal_end_params(StopReason::MaxTurns),
+            ("succeeded", 0, None)
+        );
+    }
+
+    // Important 4 outcome: `Canceled` (an SSE-consumer disconnect, detected
+    // by `run_generation_loop` via the sender's `is_closed()`) must map to
+    // the daemon-parity `end("canceled", 1, Some("SIGTERM"))` triple, not to
+    // the unconditional `end("succeeded", 0, None)` this function replaced.
+    #[test]
+    fn terminal_end_params_canceled_maps_to_daemon_parity_signal() {
+        assert_eq!(
+            terminal_end_params(StopReason::Canceled),
+            ("canceled", 1, Some("SIGTERM"))
+        );
+    }
 }
