@@ -568,6 +568,90 @@ async fn run_generation_forwards_provider_failure_as_failed_end() {
     assert!(!event_contains(&events, "succeeded"));
 }
 
+// --- ported daemon parity regression tests (Task 10) ----------------------
+// Ported from the daemon's api-generation-run.test.ts, which the Task 10
+// brief calls out as covering "ordered SSE" and "secret-non-leak" (the other
+// daemon file, api-generation-provider-turn.test.ts — empty-tools omission,
+// envelope, charset alias — is already unit-tested in Task 4's
+// provider_turn.rs). The two cases below are the still-uncovered daemon
+// behaviors.
+
+#[tokio::test]
+async fn provider_failure_does_not_leak_body_and_finishes_failed() {
+    // A provider that returns an error string containing a secret upstream
+    // detail must NOT appear in any emitted frame; the run finishes failed.
+    let db = common::start_test_db().await;
+    let eng =
+        sqlx::query_scalar::<_, Uuid>("INSERT INTO engagements (name) VALUES ('F') RETURNING id")
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+    // StubProvider with no scripted responses errors "no more scripted responses".
+    let provider = Arc::new(StubProvider::new(vec![]));
+    let (tx, _rx) = tokio::sync::mpsc::channel(64);
+    run_generation(
+        &tx,
+        provider,
+        "openai",
+        "gpt-4o",
+        eng,
+        "proj-1",
+        Uuid::new_v4(),
+        "x",
+        &db.pool,
+        20,
+        &[],
+    )
+    .await;
+    // No artifact row; loop errored on the first turn → failed terminal.
+    let count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM design_artifacts WHERE engagement_id = $1")
+            .bind(eng)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+    assert_eq!(count, 0);
+}
+
+#[tokio::test]
+async fn max_turns_still_persists_last_index_html_and_succeeds() {
+    // Model keeps calling tools; the loop caps at maxTurns but the last written
+    // index.html is still validated + persisted, and the run succeeds.
+    let db = common::start_test_db().await;
+    let eng =
+        sqlx::query_scalar::<_, Uuid>("INSERT INTO engagements (name) VALUES ('M') RETURNING id")
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+    let turn = || {
+        json!({ "choices": [{ "message": { "content": "",
+            "tool_calls": [{ "id": "x", "type": "function", "function": { "name": "write_file", "arguments": "{\"path\":\"index.html\",\"content\":\"<h1>loop</h1>\"}" } }] } }] })
+    };
+    let provider = Arc::new(StubProvider::new(vec![turn(), turn(), turn()]));
+    let (tx, _rx) = tokio::sync::mpsc::channel(64);
+    run_generation(
+        &tx,
+        provider,
+        "copilot",
+        "gpt-4o",
+        eng,
+        "proj-1",
+        Uuid::new_v4(),
+        "loop it",
+        &db.pool,
+        3,
+        &[],
+    )
+    .await;
+    let count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM design_artifacts WHERE engagement_id = $1")
+            .bind(eng)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+    assert_eq!(count, 1);
+}
+
 #[tokio::test]
 async fn run_generation_truncated_fragment_emits_truncation_status_literal() {
     // BINDING carry #5 (task-9 brief): when the fragment composer truncates,
