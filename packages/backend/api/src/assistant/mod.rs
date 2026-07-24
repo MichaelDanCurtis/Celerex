@@ -40,7 +40,7 @@ fn build_engagement_provider(provider_id: &str, key: String) -> Option<Arc<dyn P
             key,
         ))),
         "kimi" => Some(Arc::new(KimiProvider::with_base_url(
-            "https://api.moonshot.cn".to_string(),
+            "https://api.moonshot.ai".to_string(),
             key,
         ))),
         "gemini" => Some(Arc::new(GeminiProvider::with_base_url(

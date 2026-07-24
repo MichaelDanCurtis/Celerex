@@ -38,7 +38,7 @@ impl Default for ProviderBases {
         Self {
             anthropic: "https://api.anthropic.com".into(),
             openai: "https://api.openai.com".into(),
-            kimi: "https://api.moonshot.cn".into(),
+            kimi: "https://api.moonshot.ai".into(),
             gemini: "https://generativelanguage.googleapis.com".into(),
         }
     }
