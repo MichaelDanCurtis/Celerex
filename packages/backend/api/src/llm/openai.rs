@@ -3,7 +3,7 @@
 
 use async_trait::async_trait;
 use futures_util::stream::{self, BoxStream, StreamExt};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use celerex_orchestrator::llm::provider::{Completion, Provider};
 
@@ -20,7 +20,11 @@ impl OpenAiProvider {
     }
 
     pub fn with_base_url(base_url: String, api_key: String) -> Self {
-        Self { base_url, api_key, http: reqwest::Client::new() }
+        Self {
+            base_url,
+            api_key,
+            http: reqwest::Client::new(),
+        }
     }
 }
 
@@ -32,11 +36,10 @@ impl Provider for OpenAiProvider {
         messages: Value,
         tools: Value,
     ) -> Result<Completion, String> {
-        let body = json!({
-            "model": model,
-            "messages": messages,
-            "tools": tools,
-        });
+        let mut body = json!({ "model": model, "messages": messages });
+        if tools.as_array().map(|a| !a.is_empty()).unwrap_or(false) {
+            body["tools"] = tools;
+        }
         let raw = self
             .http
             .post(format!("{}/v1/chat/completions", self.base_url))
@@ -57,12 +60,12 @@ impl Provider for OpenAiProvider {
         messages: Value,
         tools: Value,
     ) -> BoxStream<'a, Result<String, String>> {
-        let body = json!({
-            "model": model,
-            "messages": messages,
-            "tools": tools,
-            "stream": true,
-        });
+        // Omit `tools` entirely when empty — some OpenAI-compatible providers
+        // reject `"tools": []` (mirrors the `complete()` gate above).
+        let mut body = json!({ "model": model, "messages": messages, "stream": true });
+        if tools.as_array().map(|a| !a.is_empty()).unwrap_or(false) {
+            body["tools"] = tools;
+        }
         let url = format!("{}/v1/chat/completions", self.base_url);
         let api_key = self.api_key.clone();
         let http = self.http.clone();
@@ -149,9 +152,7 @@ impl Provider for OpenAiProvider {
                                         if trimmed == "[DONE]" {
                                             continue;
                                         }
-                                        if let Ok(v) =
-                                            serde_json::from_str::<Value>(trimmed)
-                                        {
+                                        if let Ok(v) = serde_json::from_str::<Value>(trimmed) {
                                             if let Some(text) = v
                                                 .get("choices")
                                                 .and_then(|c| c.get(0))
@@ -160,8 +161,7 @@ impl Provider for OpenAiProvider {
                                                 .and_then(|t| t.as_str())
                                             {
                                                 if !text.is_empty() {
-                                                    pending_out
-                                                        .push_back(text.to_string());
+                                                    pending_out.push_back(text.to_string());
                                                 }
                                             }
                                         }

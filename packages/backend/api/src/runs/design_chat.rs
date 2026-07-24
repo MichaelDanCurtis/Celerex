@@ -4,18 +4,20 @@
 //! consumes `GET /api/runs/{id}/events` as an SSE stream (see the web
 //! `consumeDaemonRun` in apps/web/src/providers/daemon.ts). Historically that
 //! stream was served by the local daemon, which spawned a code-agent CLI. On
-//! the one server (the Agent) a Run instead runs a completion through the
-//! unified provider plane — the same per-engagement vaulted-key resolution the
-//! assistant chat endpoint uses — and emits the same web event vocabulary
-//! (`start` -> `agent`/`text_delta` -> `end`). No daemon, no CLI.
+//! the one server (the Agent) a Run instead runs the server-side generation
+//! engine (`runs::generation::run_generation`, Task 9: an ordered tool-call
+//! loop against the per-engagement vaulted provider — the same
+//! vaulted-key resolution the assistant chat endpoint uses) and emits the
+//! same web event vocabulary (`start` -> `agent`{`text_delta`/`tool_use`/
+//! `tool_result`/`usage`/`live_artifact`} -> `end`). No daemon, no CLI.
 //!
 //! Race-free by construction: `POST` only REGISTERS the pending run and returns
-//! its id; the completion runs lazily when the client connects to the SSE
-//! stream, so a fast completion can never finish before the consumer has
-//! subscribed. The registry entry is single-shot — removed when the stream
-//! starts — so a mid-stream disconnect cannot be reattached (acceptable for a
-//! short, non-resumable completion; the web only reconnects on a dropped
-//! stream, which a one-shot completion does not produce).
+//! its id; the run starts lazily when the client connects to the SSE stream, so
+//! a fast run can never finish before the consumer has subscribed. The
+//! registry entry is single-shot — removed when the stream starts — so a
+//! mid-stream disconnect cannot be reattached (acceptable for a short,
+//! non-resumable run; the web only reconnects on a dropped stream, which a
+//! one-shot run does not produce).
 
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -39,7 +41,7 @@ use crate::assistant::resolve_engagement_provider;
 use crate::auth::extractors::AuthClaims;
 
 /// A run registered by `POST /api/runs`, awaiting its SSE consumer. Carries only
-/// what the completion needs; `engagement_id` is captured from the creator's
+/// what `run_generation` needs; `engagement_id` is captured from the creator's
 /// claims and re-checked against the streamer's claims for cross-engagement
 /// isolation.
 #[derive(Clone)]
@@ -47,8 +49,9 @@ pub struct PendingDesignRun {
     pub engagement_id: Uuid,
     pub provider_id: String,
     pub model: String,
-    /// OpenAI-style chat messages already shaped for `Provider::complete`.
-    pub messages: Value,
+    pub project_id: String,
+    /// The user's turn (flattened transcript) seeded into the generation loop.
+    pub user_message: String,
 }
 
 /// In-memory registry of pending design-chat runs, keyed by run id. Entries are
@@ -84,6 +87,12 @@ pub struct CreateRunRequest {
     pub provider_id: Option<String>,
     #[serde(default)]
     pub model: Option<String>,
+    /// Client-supplied logical project identifier for this generation run
+    /// (persisted on `design_artifacts` + used to scope live-artifact
+    /// lookups). Falls back to the run id when absent, so every run still
+    /// gets a stable, unique project scope.
+    #[serde(default)]
+    pub project_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -119,23 +128,29 @@ pub async fn create(
     }
 
     // The flattened transcript is the richest context; fall back to the latest
-    // user turn, then empty. Shaped as a single OpenAI-style user message — the
-    // exact shape `/api/assistant/chat` proves works across every provider.
+    // user turn, then empty. Seeded as the user turn in `run_generation`'s
+    // conversation — the exact shape `/api/assistant/chat` proves works across
+    // every provider.
     let content = body
         .message
         .filter(|m| !m.trim().is_empty())
         .or(body.current_prompt)
         .unwrap_or_default();
-    let messages = json!([{ "role": "user", "content": content }]);
 
     let run_id = Uuid::new_v4();
+    let project_id = body
+        .project_id
+        .filter(|p| !p.trim().is_empty())
+        .unwrap_or_else(|| run_id.to_string());
+
     state.design_runs.lock().await.insert(
         run_id,
         PendingDesignRun {
             engagement_id: claims.engagement_id,
             provider_id,
             model,
-            messages,
+            project_id,
+            user_message: content,
         },
     );
 
@@ -153,11 +168,14 @@ pub async fn create(
     }))
 }
 
-/// Drive a registered run to completion through the provider plane and stream
-/// the result over the web `consumeDaemonRun` event vocabulary. Called from
-/// `runs::sse::stream` once it has matched (and engagement-checked) the run id.
+/// Drive a registered run to completion through the server-side generation
+/// engine (Task 9 `run_generation`: the ordered tool-call loop, port of the
+/// daemon's `api-generation/index.ts`) and stream the result over the web
+/// `consumeDaemonRun` event vocabulary. Called from `runs::sse::stream` once
+/// it has matched (and engagement-checked) the run id.
 pub fn stream_pending(
     state: AppState,
+    run_id: Uuid,
     pending: PendingDesignRun,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let (tx, rx) = tokio::sync::mpsc::channel::<Result<Event, Infallible>>(32);
@@ -165,7 +183,10 @@ pub fn stream_pending(
     tokio::spawn(async move {
         let bin = format!("{}/{}", pending.provider_id, pending.model);
         if tx
-            .send(Ok(named("start", json!({ "bin": bin }))))
+            .send(Ok(named(
+                "start",
+                json!({ "bin": bin, "projectId": pending.project_id, "model": pending.model }),
+            )))
             .await
             .is_err()
         {
@@ -207,28 +228,20 @@ pub fn stream_pending(
                 }
             };
 
-        match provider
-            .complete(&pending.model, pending.messages.clone(), json!([]))
-            .await
-        {
-            Ok(completion) => {
-                let text = completion_text(&completion.raw);
-                if !text.is_empty() {
-                    let _ = tx
-                        .send(Ok(named(
-                            "agent",
-                            json!({ "type": "text_delta", "delta": text }),
-                        )))
-                        .await;
-                }
-                let _ = tx
-                    .send(Ok(named("end", json!({ "status": "succeeded", "code": 0 }))))
-                    .await;
-            }
-            Err(e) => {
-                send_error(&tx, format!("provider error ({}): {}", pending.provider_id, e)).await;
-            }
-        }
+        crate::runs::generation::run_generation(
+            &tx,
+            provider,
+            &pending.provider_id,
+            &pending.model,
+            pending.engagement_id,
+            &pending.project_id,
+            run_id,
+            &pending.user_message,
+            &state.pool,
+            20,
+            &[], // v1: system-prompt fragment composer ships EMPTY (Brand Kit is the first producer)
+        )
+        .await;
     });
 
     let sse_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
@@ -242,37 +255,25 @@ fn named(name: &str, data: Value) -> Event {
 }
 
 /// Emit the terminal failure pair the web understands: a structured `error`
-/// frame followed by a `failed` `end` frame.
+/// frame followed by a `failed` `end` frame. Used only for the pre-loop
+/// failures above (no engagement key / key-store error) — once
+/// `run_generation` takes over, ITS OWN terminal `end` frame (via
+/// `RunEventEmitter::end`) is what ends the stream. The `end` body here
+/// carries the same `signal`/`resumable` keys `run_generation`'s does (always
+/// `null`/`false` — no cancellation applies before the loop even starts), so
+/// the shipped web SPA's resume affordance behaves identically regardless of
+/// which stage the run failed in.
 async fn send_error(tx: &tokio::sync::mpsc::Sender<Result<Event, Infallible>>, message: String) {
     let _ = tx
-        .send(Ok(named("error", json!({ "error": { "message": message } }))))
+        .send(Ok(named(
+            "error",
+            json!({ "error": { "message": message } }),
+        )))
         .await;
     let _ = tx
-        .send(Ok(named("end", json!({ "status": "failed", "code": 1 }))))
+        .send(Ok(named(
+            "end",
+            json!({ "status": "failed", "code": 1, "signal": null, "resumable": false }),
+        )))
         .await;
-}
-
-/// Best-effort completion-text extraction across provider response shapes —
-/// mirrors the web's `completionText` (OpenAI/Copilot `choices[0].message
-/// .content`, Anthropic `content[].text`).
-fn completion_text(raw: &Value) -> String {
-    if let Some(s) = raw
-        .get("choices")
-        .and_then(|c| c.get(0))
-        .and_then(|c| c.get("message"))
-        .and_then(|m| m.get("content"))
-        .and_then(|c| c.as_str())
-    {
-        return s.to_string();
-    }
-    if let Some(arr) = raw.get("content").and_then(|c| c.as_array()) {
-        let joined: String = arr
-            .iter()
-            .filter_map(|b| b.get("text").and_then(|t| t.as_str()))
-            .collect();
-        if !joined.is_empty() {
-            return joined;
-        }
-    }
-    String::new()
 }
