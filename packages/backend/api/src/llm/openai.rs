@@ -60,12 +60,12 @@ impl Provider for OpenAiProvider {
         messages: Value,
         tools: Value,
     ) -> BoxStream<'a, Result<String, String>> {
-        let body = json!({
-            "model": model,
-            "messages": messages,
-            "tools": tools,
-            "stream": true,
-        });
+        // Omit `tools` entirely when empty — some OpenAI-compatible providers
+        // reject `"tools": []` (mirrors the `complete()` gate above).
+        let mut body = json!({ "model": model, "messages": messages, "stream": true });
+        if tools.as_array().map(|a| !a.is_empty()).unwrap_or(false) {
+            body["tools"] = tools;
+        }
         let url = format!("{}/v1/chat/completions", self.base_url);
         let api_key = self.api_key.clone();
         let http = self.http.clone();
