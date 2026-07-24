@@ -17,7 +17,9 @@ impl KimiProvider {
     pub fn from_env() -> anyhow::Result<Self> {
         let key = std::env::var("MOONSHOT_API_KEY")
             .or_else(|_| std::env::var("KIMI_API_KEY"))?;
-        Ok(Self::with_base_url("https://api.moonshot.cn".into(), key))
+        // Global endpoint (api.moonshot.ai). The China host (api.moonshot.cn)
+        // silently 401s international keys — use the global host by default.
+        Ok(Self::with_base_url("https://api.moonshot.ai".into(), key))
     }
 
     pub fn with_base_url(base_url: String, api_key: String) -> Self {
